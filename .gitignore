@@ -1,15 +1,18 @@
 # Dependencies
 node_modules/
 npm-debug.log*
+pnpm-debug.log*
 
 # Build outputs
 dist/
 build/
 .cache/
+result
 
 # Environment
 .env
-.env.*
+.env.local
+!infra/docker/.env.dev
 
 # OS
 .DS_Store
@@ -22,4 +25,13 @@ Thumbs.db
 
 # direnv
 .direnv
-.envrc
+
+# Docker volumes
+docker-data/
+
+# Nix
+result
+result-*
+
+# TypeScript
+*.tsbuildinfo
