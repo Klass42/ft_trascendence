@@ -1,8 +1,8 @@
 # David (@dacs-dev) — Interaction
 
 > **Your file.** Working brief. Read `../../AGENTS.md` for shared conventions and `./README.md`
-> for the methodology. Work on branch **`david`** (based on `main`); merge to `staging` before
-> `main`.
+> for the methodology. Work on branch **`david`** (based on `master`); merge to `staging` before
+> `master`.
 >
 > Note: DevOps/infra is now **Ale's** job. You are a full-stack app developer — you no longer own
 > Docker/CI/monitoring. Focus on the interaction features below.

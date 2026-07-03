@@ -1,8 +1,8 @@
 # Jorge (@SrJorgeG) — Identity & Access · Tech Lead
 
 > **Your file.** This is your working brief. Read `../../AGENTS.md` for shared conventions and
-> `./README.md` for the methodology. Work on branch **`jorge`** (based on `main`); merge to
-> `staging` before `main`.
+> `./README.md` for the methodology. Work on branch **`jorge`** (based on `master`); merge to
+> `staging` before `master`.
 
 **Theme:** who a user is and what they can do — auth, OAuth, users, organizations, permissions.
 As Tech Lead you are the **Prisma schema steward** and review auth/permissions PRs.

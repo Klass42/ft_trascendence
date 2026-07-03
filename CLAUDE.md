@@ -28,8 +28,8 @@ AGENTS.md wins.
 - **Ale Pinto** → [`docs/planning/Ale.md`](./docs/planning/Ale.md) · **DevOps/Infra** · branch `ale`
 
 If you're working as one of them, that file is your brief. **App devs never touch `infra/`,
-`.github/`, `scripts/`, `Makefile`, `flake.nix` — that's Ale's.** Trunk is `main`; work on your
-branch and merge **personal → `staging` → `main`** (never straight to `main`). Combined plan +
+`.github/`, `scripts/`, `Makefile`, `flake.nix` — that's Ale's.** Trunk is `master`; work on your
+branch and merge **personal → `staging` → `master`** (never straight to `master`). Combined plan +
 directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
 ## Locked decisions (don't relitigate without the user)
