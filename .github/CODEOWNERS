@@ -1,0 +1,47 @@
+# ============================================================================
+#  CODEOWNERS — auto-requests reviewers by path. Last matching rule wins.
+#  Team: Jorge=@SrJorgeG, Aloiki=@illia, David=@dacs-dev, Ale=@TODO-ale-handle.
+#  NOTE: replace @TODO-ale-handle with Ale Pinto's real GitHub handle, and add
+#  him as a collaborator with Write access.
+# ============================================================================
+
+# Default — any change gets a look from the 3 app devs
+*                                @SrJorgeG @illia @dacs-dev
+
+# ── Identity & Access — Jorge ──
+/apps/backend/src/auth/          @SrJorgeG
+/apps/backend/src/users/         @SrJorgeG
+/apps/backend/src/organizations/ @SrJorgeG
+/apps/backend/src/common/        @SrJorgeG
+/apps/backend/prisma/            @SrJorgeG
+/apps/frontend/src/features/auth/  @SrJorgeG
+/apps/frontend/src/features/admin/ @SrJorgeG
+/apps/frontend/src/features/org/   @SrJorgeG
+
+# ── Content & UX — Aloiki ──
+/apps/backend/src/courses/       @illia
+/apps/backend/src/files/         @illia
+/apps/frontend/src/app/          @illia
+/apps/frontend/src/components/   @illia
+/apps/frontend/src/lib/          @illia
+/apps/frontend/src/features/courses/ @illia
+/apps/frontend/src/features/profile/ @illia
+
+# ── Interaction — David ──
+/apps/backend/src/assignments/   @dacs-dev
+/apps/backend/src/forums/        @dacs-dev
+/apps/backend/src/notifications/ @dacs-dev
+/apps/backend/src/realtime/      @dacs-dev
+/apps/frontend/src/features/gradebook/     @dacs-dev
+/apps/frontend/src/features/forums/        @dacs-dev
+/apps/frontend/src/features/notifications/ @dacs-dev
+
+# ── DevOps / Infra — Ale (uncomment after adding the handle) ──
+# /infra/                    @TODO-ale-handle
+# /.github/                  @TODO-ale-handle
+# /scripts/                  @TODO-ale-handle
+# /Makefile                  @TODO-ale-handle
+# /flake.nix                 @TODO-ale-handle
+# /apps/backend/Dockerfile   @TODO-ale-handle
+# /apps/frontend/Dockerfile  @TODO-ale-handle
+# /apps/frontend/nginx.conf  @TODO-ale-handle

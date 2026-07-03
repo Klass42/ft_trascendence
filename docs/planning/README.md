@@ -1,102 +1,112 @@
-# MVP Work Plan — ft_trascendence
+# ft_trascendence — MVP Master Plan
 
-Work plan for the **MVP phase** (~3 weeks), split across **3 developers** so we can work in
-parallel with minimal merge conflicts. Read this first, then your own file:
+Full plan for the MVP phase. This is the **combined plan**; each person also has a deep,
+task-level brief:
 
-- [`David.md`](./David.md) — **David** (`@dacs-dev`) — Ops & Interaction (DevOps/infra, evaluations, forums, real-time)
-- [`Jorge.md`](./Jorge.md) — **Jorge** (`@SrJorgeG`) — Identity & Access (auth, OAuth, RBAC, organizations)
-- [`Aloiki.md`](./Aloiki.md) — **Aloiki** (`@illia`) — Content & UX (frontend shell + design system, courses, content, files)
+- [`Jorge.md`](./Jorge.md) — **Jorge** (`@SrJorgeG`) · Identity & Access · branch `jorge`
+- [`Aloiki.md`](./Aloiki.md) — **Aloiki** (`@illia`) · Content & UX · branch `aloiki`
+- [`David.md`](./David.md) — **David** (`@dacs-dev`) · Interaction · branch `david`
+- [`Ale.md`](./Ale.md) — **Ale Pinto** · DevOps / Infra · branch `ale`
 
-> Name ↔ GitHub handle: **David** = `@dacs-dev` · **Jorge** = `@SrJorgeG` · **Aloiki** = `@illia`.
-> (Handles are what CODEOWNERS and git commits use.)
+Product context: [`../../AGENTS.md`](../../AGENTS.md) (conventions) · [`../../MVP_DESIGN.md`](../../MVP_DESIGN.md).
+Target: **14 module points** (planned ~16). Subject: `en.subject.pdf` (v21.1, free-choice).
 
-Product & module context lives in [`../../AGENTS.md`](../../AGENTS.md) and
-[`../../MVP_DESIGN.md`](../../MVP_DESIGN.md). We target **14 module points** (planned ~16).
+---
 
-> ⚠️ `MVP_DESIGN.md` was written for a 4-person team. This plan supersedes it for task
-> distribution (we are 3).
+## 1. Team & split
 
-## How the split works
-
-Each person owns a **coherent vertical** (backend module(s) + their frontend screens + tests).
-Ownership is by **directory**, so two people rarely touch the same file. Module *points* are not
-evenly split (courses/evaluations are big product features mapped to few explicit points) — but
-*workload* is roughly balanced.
-
-### Directory ownership (avoid editing outside your lane without a heads-up)
-
-| Area | Owner | Backend (`apps/backend/src/`) | Frontend (`apps/frontend/src/`) |
+| Person | Handle | Role | Owns (code) |
 |---|---|---|---|
-| Identity & Access | **Jorge** (`@SrJorgeG`) | `auth/`, `users/`, `organizations/`, `prisma/` | `features/auth/`, `features/admin/`, `features/org/` |
-| Content & UX | **Aloiki** (`@illia`) | `courses/` (+ sections/lessons/enrollments), `files/` (+ storage) | `app/` (shell/router/layout), `components/ui/` (design system), `features/courses/`, `features/profile/` |
-| Ops & Interaction | **David** (`@dacs-dev`) | `assignments/` (+ submissions), `forums/`, `notifications/`, `realtime/` | `features/gradebook/`, `features/forums/`, `features/notifications/` |
-| Infra / CI | **David** (`@dacs-dev`) | — | — |
+| **Jorge** | `@SrJorgeG` | Tech Lead · Identity & Access | `auth`, `users`, `organizations`, `common/auth`, `prisma` (steward) + their frontend |
+| **Aloiki** | `@illia` | Content & UX (frontend-lead) | frontend shell + design system, `courses`, `files`/storage + their frontend |
+| **David** | `@dacs-dev` | Interaction | `assignments`, `forums`, `notifications`, `realtime` + their frontend |
+| **Ale Pinto** | *(handle TBD)* | DevOps / Infra | `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `flake.nix`, Dockerfiles, deploy, monitoring |
 
-David (`@dacs-dev`) also owns `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `flake.nix`.
+**The 3 developers (Jorge, Aloiki, David) write the application. Ale owns everything DevOps** —
+Docker, HTTPS/proxy, S3/Garage, CI/CD, observability, deployment, backups. No app dev touches
+`infra/`, `.github/`, `scripts/`, `Makefile` or `flake.nix` — open an issue/ask Ale instead.
 
-### Shared files — coordinate before editing (announce in the team channel)
-
-- **`apps/backend/prisma/schema.prisma`** — **SrJorgeG is the steward.** Need a model/field?
-  Open a small PR or ping Jorge; don't edit in a big feature branch that sits for days. He owns
-  migrations (`make db-migrate`).
-- **`apps/backend/src/app.module.ts`** — everyone registers their Nest module here. Keep imports
-  alphabetical, land these edits in tiny PRs to avoid conflicts.
-- **`package.json` / `pnpm-lock.yaml`** — adding a dep: run `pnpm install`, commit the lockfile,
-  land fast.
-- **`apps/frontend/src/app/` router** — illia owns it; others add their route lazily and PR it in.
-
-## Git workflow (mandatory-part: commits from everyone, clean history)
-
-- Branch per task: `feat/<area>-<short>` (e.g. `feat/auth-jwt`), PR into `master`.
-- Small PRs, review by ≥1 teammate (CODEOWNERS auto-requests). No direct pushes to `master`.
-- Conventional commit prefixes already in use: `feat:`, `fix:`, `infra:`, `chore:`, `docs:`.
-- Every PR: no console errors, validation on both ends, feature reachable only by the right role
-  and scoped by `organizationId`. (Full DoD in AGENTS.md §8.)
-
-## Sprint 0 — Foundation (✅ done by dacs-dev/Opus, before the split)
-
-Landed so everyone starts on a solid, conflict-free base:
-
-- ✅ Prisma schema (`apps/backend/prisma/schema.prisma`) — validates.
-- ✅ Postgres in the dev compose; backend gets `DATABASE_URL`, auto `db push` on boot.
-- ✅ Nest foundation: global `PrismaModule`/`PrismaService`, `ConfigModule`, global
-  `ValidationPipe`, `/health` DB ping, BigInt→string JSON fix.
-- ✅ **Feature-module skeletons pre-registered in `app.module.ts`** — one empty module per owner
-  (see the ownership table). Implement *inside* your module folder; you rarely touch
-  `app.module.ts` again.
-- ✅ `scripts/ci.sh` — CI is green (infra linters + build + prisma validate blocking).
-- ✅ Repo hygiene: `.pnpm-store` untracked, CODEOWNERS, root `.env.example`.
-
-## Remaining foundation — Week 1, Days 1–2 (still unblock everyone)
-
-| Task | Owner | Unblocks |
-|---|---|---|
-| Auth API (register/login/JWT) + `JwtAuthGuard` + `@CurrentUser()` | SrJorgeG | every authenticated route |
-| Switch DB to real migrations once schema settles (`make db-migrate NAME=init`) | SrJorgeG | migration history |
-| Frontend shell: router, auth-guard, app layout, 3 design-system primitives | illia | all frontend screens |
-| `StorageService` (Garage/S3 put/get/presign) stub + Garage compose service | illia + dacs-dev | file upload, avatars, submissions |
-| Add Caddy/HTTPS reverse proxy | dacs-dev | eval requirement, everyone's PRs |
-| Socket.io gateway skeleton + auth handshake | dacs-dev | notifications, presence |
-
-## Dependency map (who waits for whom)
+## 2. Branching methodology
 
 ```
-SrJorgeG: Prisma+Auth ──► (User/session available)
-                           ├──► illia: Courses/Enrollment/Profile
-                           └──► dacs: Evaluations/Forums (need users+courses)
-illia: StorageService ──► illia: File upload ──► dacs: Submission files
-                                              └──► illia: Lesson attachments / avatars
-dacs: Socket.io gateway ─► dacs: Notifications ─► everyone emits events
-illia: Frontend shell ──► everyone's screens
+main ────────────────●───────────────●─────────►   (trunk; protected; only via staging)
+                     ▲               ▲
+staging ──●──●──●────┴────●──●──●─────┴──────────►   (integration + testing before main)
+          ▲  ▲            ▲
+jorge ────┘  │            │   (personal branches, based on main)
+aloiki ──────┘            │
+david ───────────────────┘
+ale ─────────────────────┘
 ```
 
-Rule of thumb: **Week 1** = foundations + your module's backend API; **Week 2** = wire frontend +
-cross-feature integration; **Week 3** = polish, multi-user testing, Privacy/ToS, README, demo.
+Rules:
+- **Everyone has a personal branch off `main`**: `jorge`, `aloiki`, `david`, `ale`.
+- You may create sub-branches per task (`jorge/auth-jwt`) or commit straight to your branch —
+  your call.
+- **Nothing goes straight to `main`.** Flow is always **personal → `staging` → `main`**.
+- `staging` is where branches integrate and get tested together. Merge your branch into `staging`
+  (PR), verify the combined app works, then `staging → main` via PR (reviewed).
+- Keep your branch synced: regularly merge `main` into your branch to avoid drift.
+- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`.
 
-## Definition of Done & mandatory gates
+> ⚠️ GitHub's **default branch is still `master`** (renaming needs a repo admin). A `Klass42`
+> admin should set the default to **`main`** and delete `master`. Until then, target PRs at
+> `main`/`staging` explicitly.
 
-Before the MVP is "done", these subject-mandatory items must be green (owner in parens):
-`docker compose up` single command (dacs) · HTTPS everywhere (dacs) · multi-user no races (all) ·
-email+password hashed+salted (SrJorgeG) · Privacy Policy + ToS pages (dacs) · validation front+back
-(all) · zero console errors (all) · `.env`/`.env.example` (done) · README with team roles + module
-justification (all, PO-led).
+## 3. Anti-blocking design — contracts delivered first
+
+The plan is built so **no one's task blocks another's**. The trick: every shared capability is
+delivered **Week 1 as a stable interface (with a stub/fallback)**, so consumers build against the
+contract, not the full implementation.
+
+| Contract | Provider | Consumers | Fallback so consumers never block |
+|---|---|---|---|
+| **Auth**: `@CurrentUser()`, `JwtAuthGuard`, `@Roles()`+`RolesGuard`, `AuthUser` type | Jorge (`common/auth/`) | everyone | `DevAuthGuard` reads `x-dev-user` header from the seed until real JWT lands |
+| **DB seed**: 1 org + admin/teacher/student + sample course | Jorge (`prisma/seed.ts`) | everyone | run `make db-seed`; work with real rows immediately |
+| **Storage**: `FilesService.createUpload()` / `getSignedUrl()` | Aloiki (`files/`) | David (submissions), Jorge (avatars) | local-disk driver in dev until Ale's Garage bucket is up |
+| **Frontend shell + API client + UI kit** | Aloiki (`app/`, `lib/api`, `components/ui`) | everyone (frontend) | components land Week 1; others add their routes lazily |
+| **Notifications**: `NotificationsService.emit(userId,type,payload)` + socket gateway | David (`notifications/`, `realtime/`) | everyone | `emit()` is a no-op if the gateway isn't running; nothing breaks |
+| **Reverse proxy + Garage + CI** | Ale | everyone | app runs on direct ports without the proxy in dev |
+
+**Rule of thumb:** if you need something another person owns, you code against its **interface**
+(documented in their brief) and use the fallback until their real version merges to `staging`.
+
+## 4. Module points (target 14, planned ~16)
+
+| Module | Type | Pts | Owner |
+|---|---|---|---|
+| Web: framework front **and** back | Major | 2 | shared (Aloiki FE + Jorge/David BE) |
+| Web: real-time (WebSockets) | Major | 2 | David |
+| Web: notification system | Minor | 1 | David |
+| Web: ORM | Minor | 1 | Jorge |
+| Web: file upload & management | Minor | 1 | Aloiki |
+| User Mgmt: Standard (profile/avatar/friends/status) | Major | 2 | Jorge (API) + Aloiki (UI) + David (presence) |
+| User Mgmt: Organization system | Major | 2 | Jorge |
+| User Mgmt: Advanced permissions (RBAC) | Major | 2 | Jorge |
+| User Mgmt: OAuth 2.0 | Minor | 1 | Jorge |
+| DevOps: Monitoring (Prometheus+Grafana) | Major | 2 | Ale |
+| **Core total** | | **16** | |
+
+Stretch/bonus (only after 14 is solid): custom design system (Aloiki, 1) · i18n (Aloiki, 1) ·
+analytics dashboard (David, 2) · AI Tutor RAG/LLM (2 each) · public API w/ rate-limit (David+Ale, 2).
+
+## 5. Timeline (3 weeks, parallel tracks)
+
+- **Week 1 — Contracts + your backend.** Everyone ships their Week-1 contract (above) first, then
+  builds their own domain's API. By end of week: seed works, shell renders, each API has CRUD.
+- **Week 2 — Wire frontend + integrate on `staging`.** Connect UIs to APIs; first full flows
+  (teacher creates course → student enrolls → submits → graded → notified). Daily `staging` merges.
+- **Week 3 — Polish + mandatory gates + demo.** Multi-user testing, Privacy/ToS (Ale), a11y/responsive,
+  zero console errors, README (roles + module justification), demo env (Ale).
+
+## 6. Definition of Done (per task)
+
+Works in Chrome with **no console errors** · validation **front + back** · reachable only by the
+right role and **scoped by `organizationId`** · happy-path test · responsive · reviewed by ≥1
+teammate · comes up clean under `make up`. (Full detail in `AGENTS.md` §8.)
+
+## 7. Mandatory gates (subject — rejection if missing)
+
+`docker compose up` single command (Ale) · HTTPS everywhere (Ale) · multi-user, no races (all) ·
+email+password hashed+salted (Jorge) · Privacy Policy + ToS pages (Ale builds route, Aloiki styles) ·
+validation front+back (all) · `.env`/`.env.example` (done) · README w/ team roles + modules (all).

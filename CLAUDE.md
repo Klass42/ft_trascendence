@@ -18,6 +18,20 @@ AGENTS.md wins.
 - `MVP_DESIGN.md` is partly **stale** (says 18 pts / Next.js / old module names) — don't trust
   it over AGENTS.md.
 
+## Team, branches & who does what
+
+4 people: **3 app devs + 1 DevOps.** Each has a deep task brief in `docs/planning/`:
+
+- **Jorge** `@SrJorgeG` → [`docs/planning/Jorge.md`](./docs/planning/Jorge.md) · Identity & Access · branch `jorge`
+- **Aloiki** `@illia` → [`docs/planning/Aloiki.md`](./docs/planning/Aloiki.md) · Content & UX · branch `aloiki`
+- **David** `@dacs-dev` → [`docs/planning/David.md`](./docs/planning/David.md) · Interaction · branch `david`
+- **Ale Pinto** → [`docs/planning/Ale.md`](./docs/planning/Ale.md) · **DevOps/Infra** · branch `ale`
+
+If you're working as one of them, that file is your brief. **App devs never touch `infra/`,
+`.github/`, `scripts/`, `Makefile`, `flake.nix` — that's Ale's.** Trunk is `main`; work on your
+branch and merge **personal → `staging` → `main`** (never straight to `main`). Combined plan +
+directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
+
 ## Locked decisions (don't relitigate without the user)
 
 1. Frontend is **Vite + React SPA**, not Next.js.

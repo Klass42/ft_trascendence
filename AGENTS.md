@@ -19,8 +19,22 @@ real-time, modular. The subject explicitly lists an LMS as a valid example proje
 > and **Next.js** for the frontend (we use Vite+React — see §4). Trust the subject PDF and this
 > file over MVP_DESIGN for anything about modules/points/stack.
 
-**Team**: 4 people, ~3 weeks, ~5h/day, AI-assisted. Roles (PO/PM/Tech Lead/Devs) must be
-documented in `README.md` per subject §II.
+**Team**: 4 people — **3 app developers** + **1 DevOps**:
+- **Jorge** (`@SrJorgeG`) — Tech Lead, Identity & Access (auth/RBAC/org).
+- **Aloiki** (`@illia`) — Content & UX (frontend shell + design system, courses, files).
+- **David** (`@dacs-dev`) — Interaction (evaluations, forums, notifications, real-time).
+- **Ale Pinto** (handle TBD) — **DevOps / Infra**: owns `infra/**`, `.github/**`, `scripts/**`,
+  `Makefile`, `flake.nix`, Dockerfiles, HTTPS/proxy, storage backend, CI/CD, monitoring, deploy.
+  **App devs do not touch infra.**
+
+Per-person deep task plans: `docs/planning/{Jorge,Aloiki,David,Ale}.md`;
+`docs/planning/README.md` is the combined master plan + directory-ownership map.
+
+### Branching (see docs/planning/README.md §2)
+Trunk is **`main`**. Each person has a personal branch off `main` (`jorge`/`aloiki`/`david`/`ale`);
+sub-branches per task are fine. **Nothing goes straight to `main` — flow is personal → `staging`
+→ `main`.** `staging` is where branches integrate and get tested before `main`. (GitHub default is
+still `master` until an admin switches it to `main`.)
 
 ## 2. Mandatory requirements (project is REJECTED if missing)
 
