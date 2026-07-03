@@ -15,7 +15,12 @@ services:
   backend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm --filter @ft-trascendence/backend run dev"
+    command: >
+      sh -c "corepack enable &&
+             pnpm install &&
+             pnpm --filter @ft-trascendence/backend exec prisma generate &&
+             pnpm --filter @ft-trascendence/backend exec prisma db push --skip-generate &&
+             pnpm --filter @ft-trascendence/backend run dev"
     volumes:
       - ../../:/app
       - backend_node_modules:/app/node_modules
@@ -25,10 +30,13 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - DATABASE_URL=postgresql://ft:ft@postgres:5432/ft_dev?schema=public
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=ft-backend
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
     depends_on:
+      postgres:
+        condition: service_healthy
       otel-collector:
         condition: service_started
     healthcheck:
@@ -54,6 +62,25 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - app-network
+
+  # ─── Database ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=ft
+      - POSTGRES_PASSWORD=ft
+      - POSTGRES_DB=ft_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ft -d ft_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - app-network
 
@@ -140,6 +167,7 @@ volumes:
   backend_app_node_modules:
   frontend_node_modules:
   frontend_app_node_modules:
+  postgres_data:
   prometheus_data:
   tempo_data:
   loki_data:
