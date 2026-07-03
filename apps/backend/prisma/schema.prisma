@@ -1,0 +1,385 @@
+// ============================================================================
+//  ft_trascendence — LMS · Prisma schema (MVP phase)
+// ----------------------------------------------------------------------------
+//  Conventions (see AGENTS.md §5):
+//   - English identifiers only.
+//   - `organizationId` scopes tenant data. Isolation is enforced in the APP
+//     layer (Nest guards/services), NOT Postgres RLS. Every tenant-scoped query
+//     MUST filter by organizationId (directly, or via its parent Course).
+//   - Binary content lives in object storage (Garage/S3); `File` holds only the
+//     reference (bucket + objectKey). No blobs in the DB.
+//
+//  DEFERRED to Phase 2 (do NOT add until the feature is in scope):
+//   billing (plans/subscriptions/payments), attendance, certificates, calendar
+//   events, full quiz/exam engine, tutor–guardian relations, academic periods,
+//   nested course categories, per-tenant subdomains, RLS policies.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+//  Tenancy
+// ============================================================================
+
+/// The tenant. Maps to the "Organization system" module (create/read/update,
+/// add/remove members). NOT a SaaS institution with billing/subdomains (Phase 2).
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // used in URLs; not a subdomain
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  courses Course[]
+  files   File[]
+}
+
+// ============================================================================
+//  Users, auth & social
+// ============================================================================
+
+model User {
+  id              String     @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String
+  passwordHash    String? // null when the account is OAuth-only
+  name            String
+  avatarUrl       String?
+  bio             String?
+  role            GlobalRole @default(STUDENT)
+  onlineAt        DateTime? // updated on activity; drives online status
+  emailVerifiedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  sessions          Session[]
+  oauthAccounts     OAuthAccount[]
+  enrollments       Enrollment[]
+  ownedCourses      Course[]           @relation("CourseOwner")
+  submissions       Submission[]       @relation("SubmissionAuthor")
+  gradedSubmissions Submission[]       @relation("SubmissionGrader")
+  forumThreads      ForumThread[]
+  forumPosts        ForumPost[]
+  notifications     Notification[]
+  uploadedFiles     File[]             @relation("FileUploader")
+  lessonCompletions LessonCompletion[]
+  friendsInitiated  Friendship[]       @relation("FriendRequester")
+  friendsReceived   Friendship[]       @relation("FriendAddressee")
+
+  // Email is unique WITHIN an organization (tenant-scoped), not globally.
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String   @unique // store the hash, never the raw token
+  userAgent        String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// OAuth 2.0 linked accounts (Google for the MVP).
+model OAuthAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String // 'google'
+  providerUserId String
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model Friendship {
+  id          String       @id @default(cuid())
+  requesterId String
+  requester   User         @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User         @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+}
+
+// ============================================================================
+//  Files (references to object storage)
+// ============================================================================
+
+model File {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploaderId     String?
+  uploader       User?        @relation("FileUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  bucket         String
+  objectKey      String
+  originalName   String
+  contentType    String?
+  sizeBytes      BigInt       @default(0)
+  createdAt      DateTime     @default(now())
+
+  lessonAttachments LessonAttachment[]
+  submissionFiles   SubmissionFile[]
+
+  @@unique([bucket, objectKey])
+  @@index([organizationId])
+}
+
+// ============================================================================
+//  Courses & content
+// ============================================================================
+
+model Course {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerId        String?
+  owner          User?        @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  title          String
+  description    String?
+  category       String? // simple free-text tag for the MVP (no category tree)
+  imageUrl       String?
+  accessCode     String?      @unique // self-enrolment by code
+  status         CourseStatus @default(DRAFT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  sections     Section[]
+  enrollments  Enrollment[]
+  assignments  Assignment[]
+  forumThreads ForumThread[]
+
+  @@index([organizationId])
+}
+
+model Enrollment {
+  id        String     @id @default(cuid())
+  courseId  String
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      CourseRole @default(STUDENT)
+  progress  Float      @default(0) // 0..100, % of lessons completed
+  createdAt DateTime   @default(now())
+
+  @@unique([courseId, userId])
+  @@index([userId])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  lessons Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  sectionId String
+  section   Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  title     String
+  contentMd String? // rich text as markdown
+  videoUrl  String? // embedded/external video
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  attachments LessonAttachment[]
+  completions LessonCompletion[]
+
+  @@index([sectionId])
+}
+
+model LessonAttachment {
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  fileId   String
+  file     File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, fileId])
+  @@index([fileId])
+}
+
+model LessonCompletion {
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completedAt DateTime @default(now())
+
+  @@id([lessonId, userId])
+  @@index([userId])
+}
+
+// ============================================================================
+//  Assignments, submissions & grading
+// ============================================================================
+
+model Assignment {
+  id          String    @id @default(cuid())
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueAt       DateTime?
+  maxScore    Float     @default(100)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  submissions Submission[]
+
+  @@index([courseId])
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation("SubmissionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  text         String?
+  status       SubmissionStatus @default(SUBMITTED)
+  score        Float?
+  feedback     String?
+  gradedById   String?
+  gradedBy     User?            @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+  gradedAt     DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  files SubmissionFile[]
+
+  @@unique([assignmentId, userId])
+  @@index([userId])
+}
+
+model SubmissionFile {
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([submissionId, fileId])
+  @@index([fileId])
+}
+
+// ============================================================================
+//  Forums
+// ============================================================================
+
+model ForumThread {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  title     String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  posts ForumPost[]
+
+  @@index([courseId])
+}
+
+model ForumPost {
+  id        String      @id @default(cuid())
+  threadId  String
+  thread    ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  parentId  String? // for nested replies
+  parent    ForumPost?  @relation("PostReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ForumPost[] @relation("PostReplies")
+  body      String
+  createdAt DateTime    @default(now())
+
+  @@index([threadId])
+  @@index([parentId])
+}
+
+// ============================================================================
+//  Notifications
+// ============================================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+}
+
+// ============================================================================
+//  Enums
+// ============================================================================
+
+enum GlobalRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseRole {
+  TEACHER
+  ASSISTANT
+  STUDENT
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  LATE
+  GRADED
+}
+
+enum NotificationType {
+  NEW_ASSIGNMENT
+  GRADE_PUBLISHED
+  FORUM_REPLY
+  ENROLLMENT
+  DEADLINE_REMINDER
+  FRIEND_REQUEST
+  SYSTEM
+}
