@@ -29,29 +29,27 @@ Docker, HTTPS/proxy, S3/Garage, CI/CD, observability, deployment, backups. No ap
 ## 2. Branching methodology
 
 ```
-main ────────────────●───────────────●─────────►   (trunk; protected; only via staging)
+master ──────────────●───────────────●─────────►   (trunk = GitHub default; only via staging)
                      ▲               ▲
-staging ──●──●──●────┴────●──●──●─────┴──────────►   (integration + testing before main)
+staging ──●──●──●────┴────●──●──●─────┴──────────►   (integration + testing before master)
           ▲  ▲            ▲
-jorge ────┘  │            │   (personal branches, based on main)
+jorge ────┘  │            │   (personal branches, based on master)
 aloiki ──────┘            │
 david ───────────────────┘
 ale ─────────────────────┘
 ```
 
 Rules:
-- **Everyone has a personal branch off `main`**: `jorge`, `aloiki`, `david`, `ale`.
+- **Everyone has a personal branch off `master`**: `jorge`, `aloiki`, `david`, `ale`.
 - You may create sub-branches per task (`jorge/auth-jwt`) or commit straight to your branch —
   your call.
-- **Nothing goes straight to `main`.** Flow is always **personal → `staging` → `main`**.
+- **Nothing goes straight to `master`.** Flow is always **personal → `staging` → `master`**.
 - `staging` is where branches integrate and get tested together. Merge your branch into `staging`
-  (PR), verify the combined app works, then `staging → main` via PR (reviewed).
-- Keep your branch synced: regularly merge `main` into your branch to avoid drift.
+  (PR), verify the combined app works, then `staging → master` via PR (reviewed).
+- Keep your branch synced: regularly merge `master` into your branch to avoid drift.
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`.
 
-> ⚠️ GitHub's **default branch is still `master`** (renaming needs a repo admin). A `Klass42`
-> admin should set the default to **`main`** and delete `master`. Until then, target PRs at
-> `main`/`staging` explicitly.
+> Recommended: an admin protects `master` and `staging` (require CI green + 1 review before merge).
 
 ## 3. Anti-blocking design — contracts delivered first
 

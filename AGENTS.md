@@ -31,10 +31,10 @@ Per-person deep task plans: `docs/planning/{Jorge,Aloiki,David,Ale}.md`;
 `docs/planning/README.md` is the combined master plan + directory-ownership map.
 
 ### Branching (see docs/planning/README.md §2)
-Trunk is **`main`**. Each person has a personal branch off `main` (`jorge`/`aloiki`/`david`/`ale`);
-sub-branches per task are fine. **Nothing goes straight to `main` — flow is personal → `staging`
-→ `main`.** `staging` is where branches integrate and get tested before `main`. (GitHub default is
-still `master` until an admin switches it to `main`.)
+Trunk is **`master`** (the GitHub default). Each person has a personal branch off `master`
+(`jorge`/`aloiki`/`david`/`ale`); sub-branches per task are fine. **Nothing goes straight to
+`master` — flow is personal → `staging` → `master`.** `staging` is where branches integrate and
+get tested before `master`.
 
 ## 2. Mandatory requirements (project is REJECTED if missing)
 

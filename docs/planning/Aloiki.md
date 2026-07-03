@@ -1,8 +1,8 @@
 # Aloiki (@illia) — Content & UX
 
 > **Your file.** Working brief. Read `../../AGENTS.md` for shared conventions and `./README.md`
-> for the methodology. Work on branch **`aloiki`** (based on `main`); merge to `staging` before
-> `main`.
+> for the methodology. Work on branch **`aloiki`** (based on `master`); merge to `staging` before
+> `master`.
 
 **Theme:** the product surface (frontend shell + design system) and the learning content
 (courses, lessons, files). You own the frontend foundation everyone plugs into.

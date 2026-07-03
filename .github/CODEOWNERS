@@ -1,8 +1,7 @@
 # ============================================================================
 #  CODEOWNERS — auto-requests reviewers by path. Last matching rule wins.
-#  Team: Jorge=@SrJorgeG, Aloiki=@illia, David=@dacs-dev, Ale=@TODO-ale-handle.
-#  NOTE: replace @TODO-ale-handle with Ale Pinto's real GitHub handle, and add
-#  him as a collaborator with Write access.
+#  Team: Jorge=@SrJorgeG, Aloiki=@illia, David=@dacs-dev, Ale Pinto=@Aletheios42.
+#  NOTE: Ale (@Aletheios42) still needs Write access granted by a Klass42 admin.
 # ============================================================================
 
 # Default — any change gets a look from the 3 app devs
@@ -36,12 +35,12 @@
 /apps/frontend/src/features/forums/        @dacs-dev
 /apps/frontend/src/features/notifications/ @dacs-dev
 
-# ── DevOps / Infra — Ale (uncomment after adding the handle) ──
-# /infra/                    @TODO-ale-handle
-# /.github/                  @TODO-ale-handle
-# /scripts/                  @TODO-ale-handle
-# /Makefile                  @TODO-ale-handle
-# /flake.nix                 @TODO-ale-handle
-# /apps/backend/Dockerfile   @TODO-ale-handle
-# /apps/frontend/Dockerfile  @TODO-ale-handle
-# /apps/frontend/nginx.conf  @TODO-ale-handle
+# ── DevOps / Infra — Ale Pinto ──
+/infra/                    @Aletheios42
+/.github/                  @Aletheios42
+/scripts/                  @Aletheios42
+/Makefile                  @Aletheios42
+/flake.nix                 @Aletheios42
+/apps/backend/Dockerfile   @Aletheios42
+/apps/frontend/Dockerfile  @Aletheios42
+/apps/frontend/nginx.conf  @Aletheios42

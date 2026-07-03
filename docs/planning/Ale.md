@@ -1,11 +1,11 @@
 # Ale Pinto — DevOps / Infrastructure
 
 > **Your file.** Working brief. Read `../../AGENTS.md` for shared conventions and `./README.md`
-> for the methodology. Work on branch **`ale`** (based on `main`); merge to `staging` before
-> `main`.
+> for the methodology. Work on branch **`ale`** (based on `master`); merge to `staging` before
+> `master`.
 >
-> ⚠️ Add your GitHub handle to `.github/CODEOWNERS.md` and ask a `Klass42` admin to grant you
-> Write access + set the default branch to `main`.
+> Your handle is `@Aletheios42` (already wired in `.github/CODEOWNERS`). Ask a `Klass42` admin to
+> grant you Write access to the repo.
 
 **Theme:** you own everything that isn't application code — containers, HTTPS, storage backend,
 CI/CD, observability, secrets, deployment, backups. The 3 app devs never touch `infra/`.
@@ -45,7 +45,7 @@ CI/CD, observability, secrets, deployment, backups. The 3 app devs never touch `
       `typescript-eslint`) for both apps and make lint blocking in CI (currently only build gates).
 - [ ] Add a **test** stage (`pnpm -r test`) once devs add unit tests; wire coverage.
 - [ ] Container image build + **Trivy** scan as a real (non-informational) gate on release branches.
-- [ ] Protect `main` and `staging` (branch protection): require CI green + 1 review before merge.
+- [ ] Protect `master` and `staging` (branch protection): require CI green + 1 review before merge.
 - [ ] Bump `actions/checkout` etc. to silence the Node-20 deprecation warning.
 
 ## Epic 4 — Observability (module: Monitoring Prometheus+Grafana ✓, Major 2)
