@@ -1,4 +1,4 @@
-# illia — Content & UX
+# Aloiki (@illia) — Content & UX
 
 **Theme:** the *product surface* and the *learning content*. You build the frontend foundation
 everyone else plugs into, plus the course/content/file backend.
