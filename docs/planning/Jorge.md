@@ -1,4 +1,4 @@
-# SrJorgeG — Identity & Access (Tech Lead)
+# Jorge (@SrJorgeG) — Identity & Access (Tech Lead)
 
 **Theme:** everything about *who a user is and what they're allowed to do*. You're also Tech Lead:
 schema steward, architecture calls, and critical-code reviewer.

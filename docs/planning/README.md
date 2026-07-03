@@ -3,9 +3,12 @@
 Work plan for the **MVP phase** (~3 weeks), split across **3 developers** so we can work in
 parallel with minimal merge conflicts. Read this first, then your own file:
 
-- [`dacs-dev.md`](./dacs-dev.md) — **Ops & Interaction** (DevOps/infra, evaluations, forums, real-time)
-- [`SrJorgeG.md`](./SrJorgeG.md) — **Identity & Access** (auth, OAuth, RBAC, organizations)
-- [`illia.md`](./illia.md) — **Content & UX** (frontend shell + design system, courses, content, files)
+- [`David.md`](./David.md) — **David** (`@dacs-dev`) — Ops & Interaction (DevOps/infra, evaluations, forums, real-time)
+- [`Jorge.md`](./Jorge.md) — **Jorge** (`@SrJorgeG`) — Identity & Access (auth, OAuth, RBAC, organizations)
+- [`Aloiki.md`](./Aloiki.md) — **Aloiki** (`@illia`) — Content & UX (frontend shell + design system, courses, content, files)
+
+> Name ↔ GitHub handle: **David** = `@dacs-dev` · **Jorge** = `@SrJorgeG` · **Aloiki** = `@illia`.
+> (Handles are what CODEOWNERS and git commits use.)
 
 Product & module context lives in [`../../AGENTS.md`](../../AGENTS.md) and
 [`../../MVP_DESIGN.md`](../../MVP_DESIGN.md). We target **14 module points** (planned ~16).
@@ -24,12 +27,12 @@ evenly split (courses/evaluations are big product features mapped to few explici
 
 | Area | Owner | Backend (`apps/backend/src/`) | Frontend (`apps/frontend/src/`) |
 |---|---|---|---|
-| Identity & Access | **SrJorgeG** | `auth/`, `users/`, `organizations/`, `permissions/`, `prisma/` | `features/auth/`, `features/admin/`, `features/org/` |
-| Content & UX | **illia** | `courses/`, `sections/`, `lessons/`, `enrollments/`, `files/`, `storage/` | `app/` (shell/router/layout), `components/ui/` (design system), `features/courses/`, `features/profile/` |
-| Ops & Interaction | **dacs-dev** | `assignments/`, `submissions/`, `forums/`, `notifications/`, `realtime/` | `features/gradebook/`, `features/forums/`, `features/notifications/` | 
-| Infra / CI | **dacs-dev** | — | — |
+| Identity & Access | **Jorge** (`@SrJorgeG`) | `auth/`, `users/`, `organizations/`, `prisma/` | `features/auth/`, `features/admin/`, `features/org/` |
+| Content & UX | **Aloiki** (`@illia`) | `courses/` (+ sections/lessons/enrollments), `files/` (+ storage) | `app/` (shell/router/layout), `components/ui/` (design system), `features/courses/`, `features/profile/` |
+| Ops & Interaction | **David** (`@dacs-dev`) | `assignments/` (+ submissions), `forums/`, `notifications/`, `realtime/` | `features/gradebook/`, `features/forums/`, `features/notifications/` |
+| Infra / CI | **David** (`@dacs-dev`) | — | — |
 
-dacs-dev also owns `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `flake.nix`.
+David (`@dacs-dev`) also owns `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `flake.nix`.
 
 ### Shared files — coordinate before editing (announce in the team channel)
 

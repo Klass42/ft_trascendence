@@ -1,4 +1,4 @@
-# dacs-dev — Ops & Interaction
+# David (@dacs-dev) — Ops & Interaction
 
 **Theme:** the platform runs, is secure and observable (**DevOps**), and users *interact* around
 the content (evaluations, forums, real-time). You already built the infra/observability — now
