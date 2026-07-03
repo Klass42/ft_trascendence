@@ -59,6 +59,21 @@ logs-otel: ## Muestra logs del OTel Collector
 status: ## Muestra estado de los servicios
 	$(COMPOSE) ps
 
+# ─── Base de datos (Prisma) ───────────────────────────────
+PRISMA := pnpm --filter @ft-trascendence/backend exec prisma
+
+db-generate: ## Genera el cliente Prisma
+	$(PRISMA) generate
+
+db-push: ## Sincroniza el schema con la BD (dev rápido, sin migraciones)
+	$(PRISMA) db push
+
+db-migrate: ## Crea/aplica una migración de desarrollo (NAME=nombre)
+	$(PRISMA) migrate dev --name $(or $(NAME),init)
+
+db-studio: ## Abre Prisma Studio
+	$(PRISMA) studio
+
 # ─── Nix OCI Images ───────────────────────────────────────
 images: ## Construye imágenes OCI con Nix
 	nix build .#backend-image

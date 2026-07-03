@@ -1,0 +1,16 @@
+# Relaxed yamllint config for CI — we care about real breakage, not cosmetics.
+extends: relaxed
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    check-keys: false   # allow `on:` in GitHub workflows
+
+ignore: |
+  .pnpm-store/
+  node_modules/
+  dist/
+  result

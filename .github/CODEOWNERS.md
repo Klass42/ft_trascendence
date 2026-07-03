@@ -11,5 +11,5 @@
 # ================================================================
 
 
-# Default — Todos los archivos seran revisados por el Team Lead
-*                                                       @Aletheios42
+# Default — cualquier archivo requiere revisión del equipo
+*                                                       @Aletheios42 @dacs-dev @SrJorgeG
