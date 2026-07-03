@@ -1,66 +1,105 @@
-# Jorge (@SrJorgeG) — Identity & Access (Tech Lead)
+# Jorge (@SrJorgeG) — Identity & Access · Tech Lead
 
-**Theme:** everything about *who a user is and what they're allowed to do*. You're also Tech Lead:
-schema steward, architecture calls, and critical-code reviewer.
+> **Your file.** This is your working brief. Read `../../AGENTS.md` for shared conventions and
+> `./README.md` for the methodology. Work on branch **`jorge`** (based on `main`); merge to
+> `staging` before `main`.
 
-**42 module points you own (~6):** Web: ORM (1) · User Mgmt: OAuth (1) · User Mgmt: Advanced
-permissions (2) · User Mgmt: Organization system (2). You co-own the Web framework Major (backend).
+**Theme:** who a user is and what they can do — auth, OAuth, users, organizations, permissions.
+As Tech Lead you are the **Prisma schema steward** and review auth/permissions PRs.
 
-**You own these directories:**
-`apps/backend/src/{prisma,auth,users,organizations,permissions}` ·
-`apps/frontend/src/features/{auth,admin,org}` · **steward of** `apps/backend/prisma/schema.prisma`
-and migrations.
+**Prisma models you own:** `User`, `Session`, `OAuthAccount`, `Organization`, `Friendship`.
 
-**Cross-team responsibilities (Tech Lead):**
-- You are the **only person who runs `make db-migrate`** and commits migrations. Others request
-  schema changes via small PRs — batch them so the schema doesn't thrash.
-- Review critical PRs (auth, permissions, anything touching `organizationId` scoping).
+**Directories you own:**
+`apps/backend/src/{common/auth,auth,users,organizations}` ·
+`apps/frontend/src/features/{auth,admin,org}` · `apps/backend/prisma/` (schema + seed + migrations).
+
+**Contracts YOU provide (Week 1, unblock everyone — do these first):**
+- `common/auth/` — `AuthUser` type, `@CurrentUser()`, `JwtAuthGuard`, `@Roles()`, `RolesGuard`.
+- `prisma/seed.ts` — deterministic seed so everyone has data.
+
+**Contracts you consume:** Aloiki's `FilesService` (avatar upload) — use its interface; David's
+`NotificationsService.emit()` (friend request notifications) — optional, no-op is fine.
 
 ---
 
-## Week 1 — Auth API
+## Epic 1 — Auth contracts + seed (Week 1, TOP PRIORITY, unblocks all)
 
-- [x] ~~`PrismaModule` + `PrismaService` wired globally~~ ✅ done in Sprint 0 (foundation).
-      Just inject `PrismaService`.
-- [x] ~~Global `ValidationPipe`, `ConfigModule`~~ ✅ done in Sprint 0. Your DTOs just need
-      class-validator decorators.
-- [ ] When the schema settles, take over migrations: `make db-migrate NAME=init` and commit
-      `apps/backend/prisma/migrations/` (dev currently uses `db push`). You are the schema steward.
-- [ ] Password hashing util (argon2 or bcrypt) — **hashed + salted** (mandatory).
-- [ ] Auth API: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`.
-      JWT **access + refresh**; refresh tokens stored **hashed** in `Session`.
-- [ ] `JwtAuthGuard` + `@CurrentUser()` decorator + `organizationId` resolution on every request.
-- [ ] DTO validation with `class-validator` (backend half of the mandatory front+back validation).
-- [ ] Email verification token flow (can stub email sending in dev; log the link).
+- [ ] `apps/backend/src/common/auth/auth-user.type.ts` — `interface AuthUser { userId: string;
+      organizationId: string; role: 'ADMIN'|'TEACHER'|'STUDENT'; }`
+- [ ] `apps/backend/src/common/auth/current-user.decorator.ts` — `@CurrentUser()` param decorator
+      returning `req.user as AuthUser`.
+- [ ] `apps/backend/src/common/auth/jwt-auth.guard.ts` — verifies access JWT, sets `req.user`.
+- [ ] `apps/backend/src/common/auth/dev-auth.guard.ts` — **fallback** for teammates: reads
+      `x-dev-user` header (a seeded userId), loads the user, sets `req.user`. Enabled when
+      `NODE_ENV=development`. This is what lets others build endpoints before real login exists.
+- [ ] `apps/backend/src/common/auth/roles.decorator.ts` + `roles.guard.ts` — `@Roles('ADMIN')`.
+- [ ] `apps/backend/src/common/common.module.ts` — exports guards so any module can apply them.
+- [ ] `apps/backend/prisma/seed.ts` — 1 `Organization`, users `admin@demo`, `teacher@demo`,
+      `student@demo` (hashed password `demo1234`), 1 published `Course` with a section + lesson.
+      Wire `package.json` `"prisma": { "seed": "ts-node prisma/seed.ts" }` and a `make db-seed`.
+- [ ] Announce in the team channel when `common/auth` + seed are on `staging`.
 
-## Week 2 — OAuth, RBAC, Organizations
+## Epic 2 — Email/password auth
 
-- [ ] **OAuth Google** (`passport-google-oauth20`): `/auth/google` + `/auth/google/callback`,
-      create/link `OAuthAccount`, issue our JWTs. (module: OAuth ✓)
-- [ ] **RBAC / Advanced permissions**: `RolesGuard` + `@Roles()`; admin user CRUD
-      (`GET/POST/PATCH/DELETE /users`) scoped to the org; different views per role. (module ✓)
-- [ ] **Organization system**: `GET/POST/PATCH/DELETE /organizations`, add/remove members,
-      per-org membership + role. (module ✓)
-- [ ] Frontend: login + register pages (with client-side validation), OAuth button,
-      admin panel (user list + role edit), org management screen. Use illia's design-system
-      components + shell/router.
+- [ ] `apps/backend/src/auth/` — `auth.module.ts`, `auth.controller.ts`, `auth.service.ts`,
+      `dto/{register,login,refresh}.dto.ts` (class-validator).
+- [ ] Password hashing: `argon2` (add dep). Never store plaintext; salted by argon2.
+- [ ] `POST /auth/register` (email unique per org), `POST /auth/login`, `POST /auth/refresh`,
+      `POST /auth/logout`. Access JWT (15 min) + refresh JWT (7 d); store refresh **hash** in
+      `Session`.
+- [ ] Refresh-token rotation + revoke on logout.
+- [ ] `GET /auth/me` → current user + org + role.
+- [ ] Email verification token (dev: log the link; real email is Ale's SMTP later).
 
-## Week 3 — Hardening, polish, review
+## Epic 3 — Google OAuth (module: OAuth ✓)
 
-- [ ] 2FA TOTP (optional bonus — only if core is solid).
-- [ ] Audit every service for **missing `organizationId` filters** (yours and teammates').
-- [ ] Security pass with dacs: password rules, token expiry, refresh rotation, brute-force lockout.
-- [ ] Lead the README "Modules" section (justify each module) + "Technical Stack" section.
-- [ ] Final review of auth/permissions PRs; multi-user concurrency testing with the team.
+- [ ] `passport-google-oauth20` (add deps). `GET /auth/google` + `GET /auth/google/callback`.
+- [ ] On callback: find/create `OAuthAccount` + `User`, issue our JWTs, redirect to frontend with
+      tokens.
+- [ ] Config via `ConfigService`: `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` (already in `.env.example`).
 
-## You depend on / you unblock
+## Epic 4 — Organizations (module: Organization system ✓)
 
-- **Unblock:** everyone — Prisma + auth must land Day 1–2. Treat it as top priority.
-- **Depend on:** illia's frontend shell + design-system primitives for your screens (Week 2).
-- **Coordinate:** `app.module.ts` (module registration), `schema.prisma` (you're steward).
+- [ ] `apps/backend/src/organizations/` — module/controller/service + DTOs.
+- [ ] `GET/POST/PATCH/DELETE /organizations` (create/read/update/delete).
+- [ ] Membership: `POST /organizations/:id/members` (add), `DELETE /organizations/:id/members/:userId`.
+- [ ] Actions scoped: a user only sees/acts within their `organizationId`.
+
+## Epic 5 — Advanced permissions / admin (module: Advanced permissions ✓)
+
+- [ ] `apps/backend/src/users/` — admin user CRUD: `GET/POST/PATCH/DELETE /users` (org-scoped,
+      `@Roles('ADMIN')`).
+- [ ] Role management: change a user's `GlobalRole`; different responses/fields per role.
+- [ ] Guard matrix documented (who can hit what) in this file when done.
+
+## Epic 6 — Users profile API + friends
+
+- [ ] `GET /users/:id` (profile), `PATCH /users/me` (name/bio), `PATCH /users/me/avatar`
+      (calls Aloiki's `FilesService.createUpload`, stores `avatarUrl`).
+- [ ] Friends: `POST /users/:id/friend` (request), `PATCH /friendships/:id` (accept/block),
+      `GET /users/me/friends`. Emits a notification via David's `emit()` (optional).
+- [ ] (Online status is set by David's presence service — you just expose `onlineAt` in the
+      profile response.)
+
+## Epic 7 — Frontend (features/auth, admin, org)
+
+- [ ] `features/auth/`: login + register pages (client-side validation), Google button, token
+      storage via Aloiki's API client, protected-route redirect.
+- [ ] `features/admin/`: user list + role editor (ADMIN only).
+- [ ] `features/org/`: organization settings + member management.
+- [ ] Use Aloiki's `components/ui` + `app/` router. Register your routes lazily.
+
+## Epic 8 — 2FA TOTP (stretch, only if core solid) — module: 2FA (Minor)
+
+- [ ] `otplib` + QR; `POST /auth/2fa/enable|verify|disable`; enforce on login when enabled.
+
+## Module points you carry
+ORM (1) · Organization system (2) · Advanced permissions (2) · OAuth (1) · Standard user mgmt —
+backend half (part of 2). 2FA (1, stretch).
 
 ## Reminders
-
-- Missing `organizationId` filter = **security bug**, not a nit (AGENTS.md §5).
+- **Missing `organizationId` filter = security bug** (AGENTS.md §5). You set the example.
+- Passwords **hashed + salted** (argon2) — mandatory gate.
+- You own migrations: dev uses `db push`; once the schema settles, `make db-migrate NAME=...` and
+  commit `prisma/migrations/`. Batch schema changes so teammates don't thrash.
 - Keep `import './telemetry/otel-sdk'` first in `main.ts`.
-- English identifiers; Prisma is the source of truth (never hand-edit the DB).
