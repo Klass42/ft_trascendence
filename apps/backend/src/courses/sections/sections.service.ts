@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
@@ -83,6 +83,10 @@ export class SectionsService {
     organizationId: string,
     orderedIds: string[],
   ) {
+    if (!orderedIds || orderedIds.length === 0) {
+      throw new BadRequestException('orderedIds must not be empty');
+    }
+
     await this.findCourseOrThrow(courseId, organizationId);
 
     const existing = await this.prisma.section.findMany({
