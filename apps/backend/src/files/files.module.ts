@@ -1,7 +1,17 @@
 import { Module } from '@nestjs/common';
+import { FilesController } from './files.controller';
+import { FilesService } from './files.service';
+import { createStorageDriver } from './storage';
+import { StorageService } from './storage/storage.service';
 
-// Owner: Aloiki (@illia) — Content & UX (see docs/planning/Aloiki.md)
-// Fill in controllers/providers here. Keep sub-resources inside this folder so
-// you don't need to touch app.module.ts again (avoids merge conflicts).
-@Module({})
+@Module({
+  controllers: [FilesController],
+  providers: [
+    FilesService,
+    {
+      provide: StorageService,
+      useFactory: () => createStorageDriver(),
+    },
+  ],
+})
 export class FilesModule {}
