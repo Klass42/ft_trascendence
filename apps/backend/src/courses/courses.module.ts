@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { CoursesController } from './courses.controller';
+import { CoursesService } from './courses.service';
 
-// Owner: Aloiki (@illia) — Content & UX (see docs/planning/Aloiki.md)
-// Fill in controllers/providers here. Keep sub-resources inside this folder so
-// you don't need to touch app.module.ts again (avoids merge conflicts).
-@Module({})
+@Module({
+  controllers: [CoursesController],
+  providers: [CoursesService],
+})
 export class CoursesModule {}
