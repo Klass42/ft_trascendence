@@ -7,9 +7,8 @@ import {
   Param,
   Body,
   Query,
-  Res,
+  HttpCode,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { EnrollmentsService } from './enrollments.service';
 import { EnrollCourseDto } from './dto/enroll-course.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -67,20 +66,17 @@ export class EnrollmentsController {
   }
 
   @Post('lessons/:lessonId/complete')
+  @HttpCode(200)
   async completeLesson(
     @Param('lessonId') lessonId: string,
     @Query('organizationId') organizationId: string,
     @Query('userId') userId: string,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.enrollmentsService.completeLesson(
+    return this.enrollmentsService.completeLesson(
       lessonId,
       organizationId,
       userId,
     );
-    res.status(result.created ? 201 : 200);
-    const { created, ...rest } = result;
-    return rest;
   }
 
   @Get('courses/:courseId/progress')

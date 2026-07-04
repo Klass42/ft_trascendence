@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -27,7 +28,14 @@ export class EnrollmentsService {
     userId: string,
     dto: EnrollCourseDto,
   ) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
     const course = await this.findCourseOrThrow(courseId, organizationId);
+
+    if (course.status !== 'PUBLISHED') {
+      throw new NotFoundException(`Course ${courseId} not found`);
+    }
 
     if (course.accessCode) {
       if (!dto.accessCode || dto.accessCode !== course.accessCode) {
@@ -64,6 +72,9 @@ export class EnrollmentsService {
     organizationId: string,
     userId: string,
   ) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
     await this.findCourseOrThrow(courseId, organizationId);
 
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -93,6 +104,8 @@ export class EnrollmentsService {
     organizationId: string,
     dto: UpdateRoleDto,
   ) {
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id: enrollmentId },
       include: { course: true },
@@ -113,6 +126,9 @@ export class EnrollmentsService {
     organizationId: string,
     userId: string,
   ) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
       include: { section: { include: { course: true } } },
@@ -135,24 +151,15 @@ export class EnrollmentsService {
       throw new NotFoundException('Not enrolled in this course');
     }
 
-    const existing = await this.prisma.lessonCompletion.findUnique({
+    await this.prisma.lessonCompletion.upsert({
       where: { lessonId_userId: { lessonId, userId } },
+      create: { lessonId, userId },
+      update: {},
     });
-
-    if (existing) {
-      await this.prisma.lessonCompletion.update({
-        where: { lessonId_userId: { lessonId, userId } },
-        data: {},
-      });
-    } else {
-      await this.prisma.lessonCompletion.create({
-        data: { lessonId, userId },
-      });
-    }
 
     const progress = await this.recalculateProgress(courseId, userId);
 
-    return { completed: true, progress, created: !existing };
+    return { completed: true, progress };
   }
 
   async getProgress(
@@ -160,6 +167,9 @@ export class EnrollmentsService {
     organizationId: string,
     userId: string,
   ) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
     await this.findCourseOrThrow(courseId, organizationId);
 
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -178,11 +188,9 @@ export class EnrollmentsService {
       where: { userId, lesson: { section: { courseId } } },
     });
 
-    return {
-      progress: enrollment.progress,
-      completed,
-      total,
-    };
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    return { progress, completed, total };
   }
 
   private async recalculateProgress(courseId: string, userId: string) {
