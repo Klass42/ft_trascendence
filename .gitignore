@@ -36,3 +36,6 @@ result-*
 
 # TypeScript
 *.tsbuildinfo
+
+# Uploaded files (local driver dev fallback)
+uploads/
