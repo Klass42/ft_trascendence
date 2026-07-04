@@ -5,17 +5,21 @@ import { SectionsController } from './sections/sections.controller';
 import { SectionsService } from './sections/sections.service';
 import { LessonsController } from './lessons/lessons.controller';
 import { LessonsService } from './lessons/lessons.service';
+import { EnrollmentsController } from './enrollments/enrollments.controller';
+import { EnrollmentsService } from './enrollments/enrollments.service';
 
 @Module({
   controllers: [
     CoursesController,
     SectionsController,
     LessonsController,
+    EnrollmentsController,
   ],
   providers: [
     CoursesService,
     SectionsService,
     LessonsService,
+    EnrollmentsService,
   ],
 })
 export class CoursesModule {}

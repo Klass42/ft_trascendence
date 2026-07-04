@@ -54,10 +54,11 @@ export class FilesService {
     });
 
     if (!fileRecord) {
-      throw new NotFoundException(`File ${fileId} not found`);
+      return { deleted: false };
     }
 
     await this.storage.deleteObject(fileRecord.objectKey);
     await this.prisma.file.delete({ where: { id: fileId } });
+    return { deleted: true };
   }
 }
