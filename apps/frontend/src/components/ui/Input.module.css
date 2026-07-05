@@ -1,0 +1,176 @@
+/**
+ * Input Styles
+ * 
+ * Uses design tokens from tokens.css
+ */
+
+/* =============================================================================
+ * Wrapper
+ * ============================================================================= */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* =============================================================================
+ * Label
+ * ============================================================================= */
+
+.label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  line-height: var(--leading-normal);
+}
+
+/* =============================================================================
+ * Input Wrapper (contains input + icons)
+ * ============================================================================= */
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: var(--color-bg-accent);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+
+.inputWrapper.hasError {
+  border-color: var(--color-error);
+}
+
+.inputWrapper.hasError:focus-within {
+  box-shadow: 0 0 0 3px var(--color-error-muted);
+}
+
+.inputWrapper.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+ * Sizes
+ * ============================================================================= */
+
+.sm {
+  height: 2rem; /* 32px */
+}
+
+.sm .input {
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
+.md {
+  height: 2.5rem; /* 40px */
+}
+
+.md .input {
+  font-size: var(--text-sm);
+  padding: 0 var(--space-3);
+}
+
+.lg {
+  height: 3rem; /* 48px */
+}
+
+.lg .input {
+  font-size: var(--text-base);
+  padding: 0 var(--space-4);
+}
+
+/* =============================================================================
+ * Input Element
+ * ============================================================================= */
+
+.input {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  line-height: var(--leading-normal);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+ * Icons
+ * ============================================================================= */
+
+.leftIcon,
+.rightIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.leftIcon {
+  padding-left: var(--space-3);
+}
+
+.rightIcon {
+  padding-right: var(--space-3);
+}
+
+.leftIcon > svg,
+.rightIcon > svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* Adjust input padding when icons are present */
+.hasLeftIcon .input {
+  padding-left: var(--space-2);
+}
+
+.hasRightIcon .input {
+  padding-right: var(--space-2);
+}
+
+/* =============================================================================
+ * Error & Hint Messages
+ * ============================================================================= */
+
+.error {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
+
+.hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: var(--leading-normal);
+  margin: 0;
+}
