@@ -1,0 +1,346 @@
+/**
+ * AppLayout Styles
+ * 
+ * Responsive layout with collapsible sidebar:
+ * - Desktop: sidebar visible, collapsible (240px ↔ 64px)
+ * - Tablet: sidebar collapsed by default
+ * - Mobile: sidebar hidden, hamburger menu opens overlay
+ */
+
+/* =============================================================================
+ * Variables
+ * ============================================================================= */
+
+.layout {
+  --navbar-height: 56px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+}
+
+/* =============================================================================
+ * Layout Grid
+ * ============================================================================= */
+
+.layout {
+  display: grid;
+  grid-template-areas:
+    "navbar navbar"
+    "sidebar main";
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: var(--navbar-height) 1fr;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+}
+
+/* =============================================================================
+ * Loading State
+ * ============================================================================= */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+}
+
+/* =============================================================================
+ * Navbar
+ * ============================================================================= */
+
+.navbar {
+  grid-area: navbar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.navbarLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.navbarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Mobile menu toggle */
+.mobileMenuToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.mobileMenuToggle:hover {
+  background-color: var(--color-bg-tertiary);
+}
+
+/* Logo */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.logoIcon {
+  font-size: var(--text-xl);
+}
+
+.logoText {
+  font-size: var(--text-lg);
+}
+
+/* User info */
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+
+.userName {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.userRole {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.logoutText {
+  display: inline;
+}
+
+/* =============================================================================
+ * Sidebar
+ * ============================================================================= */
+
+.sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border-primary);
+  padding: var(--space-4) 0;
+  transition: width var(--transition-base);
+  overflow: hidden;
+  position: sticky;
+  top: var(--navbar-height);
+  height: calc(100vh - var(--navbar-height));
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* Navigation */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  flex: 1;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.navItem:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.navItem.active {
+  background-color: var(--color-accent-muted);
+  color: var(--color-accent-primary);
+}
+
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Collapsed state - hide labels */
+.collapsed .navLabel {
+  display: none;
+}
+
+.collapsed .navItem {
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+/* Collapse toggle button */
+.collapseToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: var(--space-2);
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.collapseToggle:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+/* =============================================================================
+ * Main Content
+ * ============================================================================= */
+
+.main {
+  grid-area: main;
+  padding: var(--space-6);
+  overflow-y: auto;
+  background-color: var(--color-bg-primary);
+}
+
+/* When sidebar is collapsed, main area expands */
+.mainExpanded {
+  /* Grid handles this automatically */
+}
+
+/* =============================================================================
+ * Mobile Overlay
+ * ============================================================================= */
+
+.mobileOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: calc(var(--z-sticky) + 1);
+}
+
+/* =============================================================================
+ * Responsive: Tablet (768px - 1024px)
+ * ============================================================================= */
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: var(--sidebar-collapsed-width) 1fr;
+  }
+
+  .sidebar {
+    width: var(--sidebar-collapsed-width);
+  }
+
+  .sidebar .navLabel {
+    display: none;
+  }
+
+  .sidebar .navItem {
+    justify-content: center;
+  }
+
+  .collapseToggle {
+    display: none;
+  }
+
+  .logoText {
+    display: none;
+  }
+}
+
+/* =============================================================================
+ * Responsive: Mobile (<768px)
+ * ============================================================================= */
+
+@media (max-width: 768px) {
+  .layout {
+    grid-template-areas:
+      "navbar"
+      "main";
+    grid-template-columns: 1fr;
+  }
+
+  .mobileMenuToggle {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: var(--navbar-height);
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    transform: translateX(-100%);
+    z-index: calc(var(--z-sticky) + 2);
+    transition: transform var(--transition-base);
+  }
+
+  .sidebar.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .sidebar.mobileOpen .navLabel {
+    display: block;
+  }
+
+  .sidebar.mobileOpen .navItem {
+    justify-content: flex-start;
+  }
+
+  .mobileOverlay {
+    display: block;
+  }
+
+  .collapseToggle {
+    display: none;
+  }
+
+  .userInfo {
+    display: none;
+  }
+
+  .logoutText {
+    display: none;
+  }
+
+  .main {
+    padding: var(--space-4);
+  }
+}
