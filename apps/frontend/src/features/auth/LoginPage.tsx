@@ -59,9 +59,23 @@ export function LoginPage() {
       <div className={styles.container}>
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.logo}>📚</span>
-          <h1 className={styles.title}>ft_trascendence</h1>
-          <p className={styles.subtitle}>Sign in to your account</p>
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            background: 'var(--color-accent-primary)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 800,
+            fontSize: 24,
+            margin: '0 auto 16px',
+          }}>
+            K
+          </div>
+          <h1 className={styles.title}>Klass</h1>
+          <p className={styles.subtitle}>Inicia sesión en tu cuenta</p>
         </div>
 
         {/* Login Card */}
@@ -107,12 +121,12 @@ export function LoginPage() {
               loading={isLoading}
               leftIcon={<LogIn size={18} />}
             >
-              Sign in
+              Iniciar sesión
             </Button>
 
             {/* Divider */}
             <div className={styles.divider}>
-              <span>or continue with</span>
+              <span>o continuar con</span>
             </div>
 
             {/* Google OAuth */}
@@ -140,16 +154,16 @@ export function LoginPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Continue with Google
+              Continuar con Google
             </Button>
           </form>
         </Card>
 
         {/* Footer links */}
         <p className={styles.footer}>
-          Don't have an account?{' '}
+          ¿No tienes cuenta?{' '}
           <Link to="/register" className={styles.link}>
-            Sign up
+            Regístrate
           </Link>
         </p>
       </div>

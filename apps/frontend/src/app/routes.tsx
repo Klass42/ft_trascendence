@@ -1,10 +1,3 @@
-/**
- * Application Routes
- * 
- * Central routing configuration using React Router v7.
- * Uses lazy loading for code splitting.
- */
-
 import { lazy, Suspense } from 'react';
 import {
   createBrowserRouter,
@@ -15,43 +8,39 @@ import { Spinner } from '@/components/ui';
 import { AppLayout } from './AppLayout';
 import { ProtectedRoute } from './ProtectedRoute';
 
-// =============================================================================
-// Lazy-loaded Pages
-// =============================================================================
-
 const LoginPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.LoginPage }))
 );
-
 const DashboardPage = lazy(() =>
   import('@/features/dashboard').then((m) => ({ default: m.DashboardPage }))
 );
-
-// Placeholder pages for routes not yet implemented
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '50vh',
-      color: 'var(--color-text-secondary)',
-    }}
-  >
-    <h1 style={{ marginBottom: '1rem', color: 'var(--color-text-primary)' }}>
-      {title}
-    </h1>
-    <p>This page is coming soon.</p>
-  </div>
+const CoursesPage = lazy(() =>
+  import('@/features/courses').then((m) => ({ default: m.CoursesPage }))
 );
-
-const CoursesPage = () => <PlaceholderPage title="Courses" />;
-const ProfilePage = () => <PlaceholderPage title="Profile" />;
-
-// =============================================================================
-// Loading Fallback
-// =============================================================================
+const CourseDetailPage = lazy(() =>
+  import('@/features/courses').then((m) => ({ default: m.CourseDetailPage }))
+);
+const LessonPage = lazy(() =>
+  import('@/features/courses').then((m) => ({ default: m.LessonPage }))
+);
+const AssignmentsPage = lazy(() =>
+  import('@/features/assignments').then((m) => ({ default: m.AssignmentsPage }))
+);
+const ForumsPage = lazy(() =>
+  import('@/features/forums').then((m) => ({ default: m.ForumsPage }))
+);
+const ThreadPage = lazy(() =>
+  import('@/features/forums').then((m) => ({ default: m.ThreadPage }))
+);
+const GradesPage = lazy(() =>
+  import('@/features/grades').then((m) => ({ default: m.GradesPage }))
+);
+const NotificationsPage = lazy(() =>
+  import('@/features/notifications').then((m) => ({ default: m.NotificationsPage }))
+);
+const ProfilePage = lazy(() =>
+  import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
+);
 
 function PageLoader() {
   return (
@@ -63,17 +52,12 @@ function PageLoader() {
         minHeight: '50vh',
       }}
     >
-      <Spinner size="lg" label="Loading page..." />
+      <Spinner size="lg" label="Cargando..." />
     </div>
   );
 }
 
-// =============================================================================
-// Route Definitions
-// =============================================================================
-
 const routes: RouteObject[] = [
-  // Public routes
   {
     path: '/login',
     element: (
@@ -82,8 +66,6 @@ const routes: RouteObject[] = [
       </Suspense>
     ),
   },
-
-  // Protected routes with AppLayout
   {
     element: (
       <ProtectedRoute>
@@ -108,6 +90,62 @@ const routes: RouteObject[] = [
         ),
       },
       {
+        path: '/courses/:courseId',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <CourseDetailPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/courses/:courseId/lessons/:lessonId',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <LessonPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/assignments',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AssignmentsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/forums',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ForumsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/forums/:threadId',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ThreadPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/grades',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <GradesPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/notifications',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <NotificationsPage />
+          </Suspense>
+        ),
+      },
+      {
         path: '/profile',
         element: (
           <Suspense fallback={<PageLoader />}>
@@ -117,14 +155,10 @@ const routes: RouteObject[] = [
       },
     ],
   },
-
-  // Redirects
   {
     path: '/',
     element: <Navigate to="/dashboard" replace />,
   },
-
-  // 404 - Catch all
   {
     path: '*',
     element: (
@@ -136,35 +170,19 @@ const routes: RouteObject[] = [
           justifyContent: 'center',
           minHeight: '100vh',
           color: 'var(--color-text-secondary)',
-          backgroundColor: 'var(--color-bg-primary)',
+          background: 'var(--color-bg-primary)',
         }}
       >
-        <h1
-          style={{
-            fontSize: '4rem',
-            marginBottom: '1rem',
-            color: 'var(--color-text-primary)',
-          }}
-        >
+        <h1 style={{ fontSize: '4rem', marginBottom: '1rem', color: 'var(--color-text-primary)' }}>
           404
         </h1>
         <p>Page not found.</p>
-        <a
-          href="/dashboard"
-          style={{
-            marginTop: '1rem',
-            color: 'var(--color-accent-primary)',
-          }}
-        >
+        <a href="/dashboard" style={{ marginTop: '1rem', color: 'var(--color-accent-primary)' }}>
           Go to Dashboard
         </a>
       </div>
     ),
   },
 ];
-
-// =============================================================================
-// Router Instance
-// =============================================================================
 
 export const router = createBrowserRouter(routes);
