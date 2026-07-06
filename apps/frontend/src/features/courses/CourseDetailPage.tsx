@@ -36,9 +36,9 @@ export function CourseDetailPage() {
         >
           ← Mis cursos
         </button>
-        <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
           {course.title}
-        </div>
+        </h1>
         <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
           <span>{course.teacher}</span>
           <span>·</span>

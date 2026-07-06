@@ -104,6 +104,86 @@ class ApiClient {
     });
   }
 
+  /**
+   * Upload a file using XMLHttpRequest for progress tracking
+   * Use this when you need upload progress callbacks
+   */
+  async uploadWithProgress<T>(
+    path: string,
+    file: File,
+    options?: UploadOptions & { signal?: { aborted: boolean } }
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      if (options?.fields) {
+        for (const [key, value] of Object.entries(options.fields)) {
+          formData.append(key, value);
+        }
+      }
+
+      const xhr = new XMLHttpRequest();
+      const url = `${API_BASE_URL}${path}`;
+
+      // Track upload progress
+      if (options?.onProgress) {
+        xhr.upload.onprogress = (e: ProgressEvent) => {
+          if (e.lengthComputable) {
+            options.onProgress!(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data as T);
+          } catch {
+            reject(new ApiError(xhr.status, 'Invalid response from server'));
+          }
+        } else {
+          const contentType = xhr.getResponseHeader('content-type');
+          if (contentType?.includes('application/json')) {
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(ApiError.fromResponse(xhr.status, errorData));
+            } catch {
+              reject(new ApiError(xhr.status, xhr.statusText || 'Upload failed'));
+            }
+          } else {
+            reject(new ApiError(xhr.status, xhr.statusText || 'Upload failed'));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        // Check if aborted
+        if (options?.signal?.aborted) return;
+        reject(new ApiError(0, 'Network error'));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new ApiError(0, 'Upload timed out'));
+      };
+
+      xhr.open('POST', url);
+      xhr.timeout = 15000; // 15s default timeout
+
+      // Add auth headers
+      if (!options?.skipAuth) {
+        const headers = new Headers();
+        this.addAuthHeader(headers);
+        headers.forEach((value, key) => {
+          xhr.setRequestHeader(key, value);
+        });
+      }
+
+      xhr.send(formData);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Private Methods
   // ---------------------------------------------------------------------------

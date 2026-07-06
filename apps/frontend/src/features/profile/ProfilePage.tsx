@@ -1,13 +1,18 @@
+import { useState } from 'react';
 import { useAuth } from '@/lib/api';
+import { FileUpload, type FileValue } from '@/components/ui';
 
 export function ProfilePage() {
   const { user } = useAuth();
+  const [avatarFiles, setAvatarFiles] = useState<FileValue[]>([]);
 
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
   const roleLabel = user?.role === 'STUDENT' ? 'Alumno' : user?.role === 'TEACHER' ? 'Profesor' : 'Admin';
+
+  const avatarUrl = avatarFiles.find((f) => f.status === 'done')?.url || user?.avatarUrl;
 
   return (
     <div style={{ padding: '30px 40px', maxWidth: 640 }}>
@@ -32,7 +37,7 @@ export function ProfilePage() {
             width: 66,
             height: 66,
             borderRadius: '50%',
-            background: 'var(--color-accent-primary)',
+            background: avatarUrl ? 'transparent' : 'var(--color-accent-primary)',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
@@ -40,9 +45,14 @@ export function ProfilePage() {
             fontWeight: 800,
             fontSize: 24,
             flex: 'none',
+            overflow: 'hidden',
           }}
         >
-          {initials}
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            initials
+          )}
         </div>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800 }}>{user?.name || 'Usuario'}</div>
@@ -50,22 +60,21 @@ export function ProfilePage() {
             {roleLabel} · Klass
           </div>
         </div>
-        <button
-          style={{
-            marginLeft: 'auto',
-            background: 'var(--color-accent-primary)',
-            border: 'none',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: 13.5,
-            padding: '9px 16px',
-            borderRadius: 9,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Editar
-        </button>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <FileUpload
+          accept="image/*"
+          maxSizeBytes={5 * 1024 * 1024}
+          multiple={false}
+          maxFiles={1}
+          organizationId={user?.organizationId || ''}
+          uploaderId={user?.userId}
+          value={avatarFiles}
+          onChange={setAvatarFiles}
+          autoUpload
+          hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
+        />
       </div>
 
       <div
