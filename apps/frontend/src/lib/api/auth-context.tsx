@@ -40,10 +40,10 @@ import type { AuthUser, AuthTokens } from './types';
 const MOCK_USER: AuthUser = {
   userId: 'mock-user-id',
   email: 'dev@example.com',
-  name: 'Dev User',
+  name: 'Lucía Molina',
   avatarUrl: null,
   organizationId: 'mock-org-id',
-  role: 'TEACHER', // TEACHER to see most features
+  role: 'STUDENT', // STUDENT to see the student dashboard
 };
 
 const USE_MOCK_AUTH = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_AUTH === 'true';
