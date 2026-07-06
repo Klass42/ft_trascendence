@@ -1,0 +1,12 @@
+/**
+ * ProtectedRoute Styles
+ */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}

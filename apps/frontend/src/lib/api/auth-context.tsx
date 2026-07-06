@@ -27,6 +27,28 @@ import { tokenStorage } from './token-storage';
 import type { AuthUser, AuthTokens } from './types';
 
 // =============================================================================
+// Mock User for Development (before Jorge finishes auth)
+// =============================================================================
+
+/**
+ * Mock user for development when no auth backend exists yet.
+ * This allows seeing the full UI without a working auth system.
+ * 
+ * Set VITE_USE_MOCK_AUTH=true in .env.development to enable.
+ * Remove this when real auth is implemented.
+ */
+const MOCK_USER: AuthUser = {
+  userId: 'mock-user-id',
+  email: 'dev@example.com',
+  name: 'Dev User',
+  avatarUrl: null,
+  organizationId: 'mock-org-id',
+  role: 'TEACHER', // TEACHER to see most features
+};
+
+const USE_MOCK_AUTH = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_AUTH === 'true';
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -100,6 +122,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     apiClient.setOnUnauthorized(logout);
 
     const initAuth = async () => {
+      // If mock auth is enabled, use mock user immediately
+      if (USE_MOCK_AUTH) {
+        console.info('[Auth] Using mock user for development');
+        setUser(MOCK_USER);
+        setIsLoading(false);
+        return;
+      }
+
       // Check if we have a token or dev user ID
       const hasToken = tokenStorage.getAccessToken();
       const hasDevUser = tokenStorage.getDevUserId?.();
