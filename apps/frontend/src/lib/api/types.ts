@@ -102,3 +102,18 @@ export interface PaginationParams {
   page?: number;
   limit?: number;
 }
+
+// DTOs (api response shapes)
+export type {
+  CourseDTO,
+  SectionDTO,
+  LessonDTO,
+  FileDTO,
+  LessonAttachmentDTO,
+  EnrollmentDTO,
+  ProgressDTO,
+  CompleteLessonDTO,
+  MyProgressItem,
+  CourseStatus,
+  CourseRole,
+} from './types/course';

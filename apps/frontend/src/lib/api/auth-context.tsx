@@ -38,11 +38,11 @@ import type { AuthUser, AuthTokens } from './types';
  * Remove this when real auth is implemented.
  */
 const MOCK_USER: AuthUser = {
-  userId: 'mock-user-id',
+  userId: 'user-lucia-001',
   email: 'dev@example.com',
   name: 'Lucía Molina',
   avatarUrl: null,
-  organizationId: 'mock-org-id',
+  organizationId: 'org-klass-0001',
   role: 'STUDENT', // STUDENT to see the student dashboard
 };
 

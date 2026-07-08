@@ -79,6 +79,19 @@ export class EnrollmentsController {
     );
   }
 
+  @Get('courses/:courseId/completed-lessons')
+  async getCompletedLessons(
+    @Param('courseId') courseId: string,
+    @Query('organizationId') organizationId: string,
+    @Query('userId') userId: string,
+  ) {
+    return this.enrollmentsService.getCompletedLessonIds(
+      courseId,
+      organizationId,
+      userId,
+    );
+  }
+
   @Get('courses/:courseId/progress')
   async getProgress(
     @Param('courseId') courseId: string,
@@ -90,5 +103,13 @@ export class EnrollmentsController {
       organizationId,
       userId,
     );
+  }
+
+  @Get('enrollments/my-progress')
+  async getMyProgress(
+    @Query('organizationId') organizationId: string,
+    @Query('userId') userId: string,
+  ) {
+    return this.enrollmentsService.getMyProgress(organizationId, userId);
   }
 }

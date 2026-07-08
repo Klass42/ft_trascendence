@@ -21,6 +21,20 @@ export {
   type TokenStorage,
 } from './token-storage';
 
+// Hooks
+export {
+  useCourses,
+  useCourseDetail,
+  useSections,
+  useLesson,
+  useLessonById,
+  useProgress,
+  useCompleteLesson,
+  useEnroll,
+  useCompletedLessons,
+  useMyProgress,
+} from './hooks';
+
 // Types
 export {
   ApiError,
@@ -32,4 +46,5 @@ export {
   type UploadOptions,
   type PaginatedResponse,
   type PaginationParams,
+  type MyProgressItem,
 } from './types';
