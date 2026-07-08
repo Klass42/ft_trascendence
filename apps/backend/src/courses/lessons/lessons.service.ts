@@ -85,6 +85,22 @@ export class LessonsService {
     });
   }
 
+  async findById(lessonId: string, organizationId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { section: { include: { course: true } } },
+    });
+
+    if (!lesson || lesson.section.course.organizationId !== organizationId) {
+      throw new NotFoundException(`Lesson ${lessonId} not found`);
+    }
+
+    return this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { attachments: { include: { file: true } } },
+    });
+  }
+
   async update(
     sectionId: string,
     lessonId: string,

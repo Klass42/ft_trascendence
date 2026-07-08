@@ -193,6 +193,47 @@ export class EnrollmentsService {
     return { progress, completed, total };
   }
 
+  async getCompletedLessonIds(
+    courseId: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
+    await this.findCourseOrThrow(courseId, organizationId);
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { courseId_userId: { courseId, userId } },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Not enrolled in this course');
+    }
+
+    const completions = await this.prisma.lessonCompletion.findMany({
+      where: { userId, lesson: { section: { courseId } } },
+      select: { lessonId: true },
+    });
+
+    return completions.map(c => c.lessonId);
+  }
+
+  async getMyProgress(organizationId: string, userId: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { userId, course: { organizationId } },
+      select: { courseId: true, progress: true },
+    });
+
+    return enrollments.map(e => ({
+      courseId: e.courseId,
+      percentage: e.progress,
+    }));
+  }
+
   private async recalculateProgress(courseId: string, userId: string) {
     const total = await this.prisma.lesson.count({
       where: { section: { courseId } },

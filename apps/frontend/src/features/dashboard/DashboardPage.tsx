@@ -1,6 +1,22 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/api';
-import { courses, submissions, users, getCourseProgress } from '@/lib/mock-data';
+import { submissions, users } from '@/lib/mock-data';
+import { useCourses, useMyProgress } from '@/lib/api';
+import type { MyProgressItem } from '@/lib/api';
+
+const COURSE_COLORS = [
+  '#2563eb', '#0f766e', '#d97706', '#7c3aed',
+  '#dc2626', '#0891b2', '#4f46e5', '#db2777',
+];
+
+function hashToColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
+}
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -8,6 +24,24 @@ export function DashboardPage() {
   const isStudent = user?.role === 'STUDENT';
   const isTeacher = user?.role === 'TEACHER';
   const isAdmin = user?.role === 'ADMIN';
+
+  const { data: courses } = useCourses('PUBLISHED');
+  const { data: myProgress, isLoading: progressLoading } = useMyProgress();
+
+  const progressMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (myProgress) myProgress.forEach((p: MyProgressItem) => { map[p.courseId] = p.percentage; });
+    return map;
+  }, [myProgress]);
+
+  const avgProgress = useMemo(() => {
+    if (!myProgress || myProgress.length === 0) return 0;
+    const sum = myProgress.reduce((acc: number, p: MyProgressItem) => acc + p.percentage, 0);
+    return Math.round(sum / myProgress.length);
+  }, [myProgress]);
+
+  const circumference = 2 * Math.PI * 52;
+  const dashOffset = circumference * (1 - avgProgress / 100);
 
   const roleLabel = isStudent ? 'Alumno' : isTeacher ? 'Profesor' : 'Admin';
   const greeting = isStudent ? 'Hola de nuevo' : isTeacher ? 'Hola,' : 'Panel de administración';
@@ -66,25 +100,35 @@ export function DashboardPage() {
                 <div style={{ position: 'relative', width: 128, height: 128, flex: 'none' }}>
                   <svg width="128" height="128" viewBox="0 0 120 120">
                     <circle cx="60" cy="60" r="52" fill="none" stroke="var(--color-border-primary)" strokeWidth="13" />
-                    <circle cx="60" cy="60" r="52" fill="none" stroke="var(--color-accent-primary)" strokeWidth="13" strokeLinecap="round" strokeDasharray="326.7" strokeDashoffset="104.5" transform="rotate(-90 60 60)" />
+                    <circle
+                      cx="60" cy="60" r="52" fill="none" stroke="var(--color-accent-primary)" strokeWidth="13"
+                      strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset}
+                      transform="rotate(-90 60 60)"
+                    />
                   </svg>
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: 31, fontWeight: 700 }}>68%</span>
+                    <span style={{ fontSize: 31, fontWeight: 700 }}>
+                      {progressLoading ? '–' : `${avgProgress}%`}
+                    </span>
                   </div>
                 </div>
-                <div>
-                  {courses.map((c) => {
-                    const pct = getCourseProgress(c);
-                    return (
-                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color, flex: 'none' }} />
-                        <span style={{ fontSize: 12.5, color: 'var(--color-text-primary)' }}>
-                          {c.title} · {pct}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {!progressLoading && myProgress && myProgress.length > 0 && (
+                  <div>
+                    {myProgress.map((p: MyProgressItem) => {
+                      const course = courses?.find(c => c.id === p.courseId);
+                      if (!course) return null;
+                      const color = hashToColor(course.title);
+                      return (
+                        <div key={p.courseId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 3, background: color, flex: 'none' }} />
+                          <span style={{ fontSize: 12.5, color: 'var(--color-text-primary)' }}>
+                            {course.title} · {p.percentage}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -164,8 +208,9 @@ export function DashboardPage() {
             </div>
 
             {/* Course cards */}
-            {courses.map((c) => {
-              const pct = getCourseProgress(c);
+            {courses?.map((c) => {
+              const pct = progressMap[c.id] ?? 0;
+              const color = hashToColor(c.title);
               return (
                 <div
                   key={c.id}
@@ -186,15 +231,16 @@ export function DashboardPage() {
                       width: 38,
                       height: 38,
                       borderRadius: 11,
-                      background: c.tint,
-                      color: c.color,
+                      background: `${color}1a`,
+                      color: color,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontWeight: 700,
+                      fontSize: 16,
                     }}
                   >
-                    {c.code}
+                    {c.title.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{c.title}</div>
@@ -211,7 +257,7 @@ export function DashboardPage() {
                         style={{
                           width: `${pct}%`,
                           height: '100%',
-                          background: c.color,
+                          background: color,
                         }}
                       />
                     </div>
@@ -238,7 +284,7 @@ export function DashboardPage() {
               <div style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>
                 Cursos activos
               </div>
-              <div style={{ fontSize: 30, fontWeight: 800, marginTop: 4 }}>{courses.length}</div>
+              <div style={{ fontSize: 30, fontWeight: 800, marginTop: 4 }}>{courses?.length ?? 0}</div>
             </div>
             <div
               style={{

@@ -52,6 +52,14 @@ export class LessonsController {
     return this.lessonsService.findOne(sectionId, id, organizationId);
   }
 
+  @Get('lessons/:id')
+  async findById(
+    @Param('id') id: string,
+    @Query('organizationId') organizationId: string,
+  ) {
+    return this.lessonsService.findById(id, organizationId);
+  }
+
   @Patch('sections/:sectionId/lessons/:id')
   async update(
     @Param('sectionId') sectionId: string,

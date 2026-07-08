@@ -1,12 +1,43 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getCourse, getCourseProgress } from '@/lib/mock-data';
+import { useCourseDetail, useSections, useProgress, useCompletedLessons, useEnroll, ApiError } from '@/lib/api';
+
+const COURSE_COLORS = [
+  '#2563eb', '#0f766e', '#d97706', '#7c3aed',
+  '#dc2626', '#0891b2', '#4f46e5', '#db2777',
+];
+
+function hashToColor(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
+}
 
 export function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
-  const course = getCourse(courseId || '');
 
-  if (!course) {
+  const { data: course, isLoading: courseLoading, error: courseErr } = useCourseDetail(courseId);
+  const { data: sections, isLoading: sectionsLoading } = useSections(courseId);
+  const { data: progress, isLoading: progressLoading, error: progressError } = useProgress(courseId);
+  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(courseId);
+  const { enroll, isLoading: enrolling } = useEnroll();
+
+  const [accessCode, setAccessCode] = useState('');
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [justEnrolled, setJustEnrolled] = useState(false);
+
+  if (courseLoading || sectionsLoading || progressLoading || completedLoading) {
+    return (
+      <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
+        Cargando curso...
+      </div>
+    );
+  }
+
+  if (courseErr || !course) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
         Curso no encontrado
@@ -14,11 +45,27 @@ export function CourseDetailPage() {
     );
   }
 
-  const pct = getCourseProgress(course);
+  const color = hashToColor(course.title);
+  const isNotEnrolled = progressError instanceof ApiError && progressError.isNotFound;
+  const pct = progress?.progress ?? 0;
+
+  const handleEnroll = async () => {
+    setEnrollError(null);
+    try {
+      await enroll(course.id, course.accessCode ? accessCode : undefined);
+      setJustEnrolled(true);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      const msg = err instanceof ApiError && err.isNotFound
+        ? 'Código de acceso incorrecto'
+        : err instanceof Error ? err.message : 'Error al inscribirse';
+      setEnrollError(msg);
+    }
+  };
 
   return (
     <div>
-      <div style={{ padding: '26px 40px', background: course.color, color: '#fff' }}>
+      <div style={{ padding: '26px 40px', background: color, color: '#fff' }}>
         <button
           onClick={() => navigate('/courses')}
           style={{
@@ -39,34 +86,97 @@ export function CourseDetailPage() {
         <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
           {course.title}
         </h1>
-        <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
-          <span>{course.teacher}</span>
-          <span>·</span>
-          <span>Progreso {pct}%</span>
-        </div>
-        <div
-          style={{
-            height: 7,
-            borderRadius: 6,
-            background: 'rgba(255,255,255,.28)',
-            marginTop: 14,
-            maxWidth: 340,
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              width: `${pct}%`,
-              height: '100%',
-              background: '#fff',
-            }}
-          />
-        </div>
+
+        {isNotEnrolled ? (
+          <div style={{ marginTop: 14 }}>
+            {course.description && (
+              <p style={{ fontSize: 14, opacity: 0.88, margin: '0 0 14px', lineHeight: 1.5 }}>
+                {course.description}
+              </p>
+            )}
+            {justEnrolled ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                ¡Inscrito! Cargando...
+              </div>
+            ) : (
+              <div>
+                {course.accessCode && (
+                  <input
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value)}
+                    placeholder="Código de acceso"
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 9,
+                      border: 'none',
+                      fontSize: 14,
+                      fontFamily: 'inherit',
+                      width: 200,
+                      marginRight: 10,
+                      marginBottom: 8,
+                    }}
+                  />
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    onClick={handleEnroll}
+                    disabled={enrolling}
+                    style={{
+                      background: enrolling ? 'rgba(255,255,255,.4)' : '#fff',
+                      border: 'none',
+                      color: color,
+                      fontWeight: 700,
+                      fontSize: 14.5,
+                      padding: '10px 22px',
+                      borderRadius: 9,
+                      cursor: enrolling ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {enrolling ? 'Inscribiendo...' : 'Inscribirse'}
+                  </button>
+                  {enrollError && (
+                    <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.95 }}>
+                      {enrollError}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
+              <span>Progreso {pct}%</span>
+            </div>
+            <div
+              style={{
+                height: 7,
+                borderRadius: 6,
+                background: 'rgba(255,255,255,.28)',
+                marginTop: 14,
+                maxWidth: 340,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${pct}%`,
+                  height: '100%',
+                  background: '#fff',
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ padding: '26px 40px', maxWidth: 820 }}>
-        {course.sections.map((sec) => (
-          <div key={sec.title}>
+        {sections?.map((sec) => (
+          <div key={sec.id}>
             <div
               style={{
                 fontSize: 12,
@@ -88,12 +198,12 @@ export function CourseDetailPage() {
                 marginBottom: 18,
               }}
             >
-              {sec.lessons.map((l) => {
-                const isPlay = !l.done;
+              {sec.lessons?.map((l) => {
+                const isDone = completedLessons?.includes(l.id);
                 return (
-                  <div
-                    key={l.id}
-                    onClick={() => navigate(`/courses/${course.id}/lessons/${l.id}`)}
+                    <div
+                      key={l.id}
+                      onClick={() => !isNotEnrolled && navigate(`/courses/${courseId}/lessons/${l.id}`)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -103,7 +213,7 @@ export function CourseDetailPage() {
                       cursor: 'pointer',
                     }}
                   >
-                    {l.done ? (
+                    {isDone ? (
                       <span
                         style={{
                           width: 22,
@@ -119,7 +229,7 @@ export function CourseDetailPage() {
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
                       </span>
-                    ) : isPlay ? (
+                    ) : (
                       <span
                         style={{
                           width: 22,
@@ -135,22 +245,9 @@ export function CourseDetailPage() {
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                       </span>
-                    ) : (
-                      <span
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          border: '2px solid var(--color-border-secondary)',
-                          flex: 'none',
-                        }}
-                      />
                     )}
-                    <span style={{ flex: 1, fontSize: 14.5, fontWeight: l.done ? 500 : 600, color: l.done ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
+                    <span style={{ flex: 1, fontSize: 14.5, fontWeight: isDone ? 500 : 600, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
                       {l.title}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                      {l.min} min
                     </span>
                   </div>
                 );

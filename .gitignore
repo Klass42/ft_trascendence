@@ -39,3 +39,6 @@ result-*
 
 # Uploaded files (local driver dev fallback)
 uploads/
+
+# Design mockups (exported from design tool, not served)
+Frontend*/
