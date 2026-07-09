@@ -7,8 +7,13 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 export class CoursesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateCourseDto) {
-    return this.prisma.course.create({ data: dto });
+  async create(dto: CreateCourseDto, organizationId: string) {
+    return this.prisma.course.create({
+      data: {
+        ...dto,
+        organizationId,
+      },
+    });
   }
 
   async findAll(organizationId: string, status?: string, search?: string) {
