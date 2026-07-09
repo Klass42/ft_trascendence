@@ -22,50 +22,49 @@ As Tech Lead you are the **Prisma schema steward** and review auth/permissions P
 
 ---
 
-## Epic 1 — Auth contracts + seed (Week 1, TOP PRIORITY, unblocks all)
+## Epic 1 — Auth contracts + seed (Week 1, TOP PRIORITY, unblocks all) ✅ DONE
 
 > Design spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
 > Progress log: `docs/planning/desarrollo_jorge.md`.
+> **Status:** Complete. 10 commits (`e4142030..7bb07c3a`) on `jorge`, PR #2 → `staging`.
+> **Tests:** 13 unit tests, 4 suites, 0 failures.
+> **Runtime:** `make up` + `make db-seed` verified — 8 rows with `$argon2id$v=` hashes, `/health` 200.
 
-- [ ] `apps/backend/src/common/auth/auth-user.type.ts` — `interface AuthUser` with **6 fields**
-      (matches the frontend contract in `apps/frontend/src/lib/api/types.ts:10-19`):
-      `{ userId: string; email: string; name: string; avatarUrl: string | null;
-      organizationId: string; role: 'ADMIN'|'TEACHER'|'STUDENT'; }`.
-- [ ] `apps/backend/src/common/auth/current-user.decorator.ts` — `@CurrentUser()` param decorator
-      returning `req.user as AuthUser` (throws if undefined — programmer error).
-- [ ] `apps/backend/src/common/auth/jwt-auth.guard.ts` + `jwt.strategy.ts` — verifies access JWT
-      (`Authorization: Bearer`), loads the `User`, sets `req.user`. **Complete but inert in this
-      epic** — nobody issues tokens yet; any request without a valid token returns 401 (correct).
-      Activates without code changes in Epic 2.
-- [ ] `apps/backend/src/common/auth/dev-auth.guard.ts` — **operative guard for the pre-login
-      phase**: reads the `x-dev-user` header (a seeded `userId` — already what the frontend
-      sends via `DevTokenStorage`), loads the user, sets `req.user`. **Blocked in production**
-      (`NODE_ENV==='production'` → 403). This is what lets others build endpoints before login.
-- [ ] `apps/backend/src/common/auth/roles.decorator.ts` + `roles.guard.ts` — `@Roles('ADMIN')`
-      (accepts multiple roles); `RolesGuard` reads `req.user.role`. Composes with either auth
-      guard: `@UseGuards(DevAuthGuard, RolesGuard)`.
-- [ ] `apps/backend/src/common/common.module.ts` — `@Global`, exports the guards + `JwtModule`
-      (registers `JwtModule.registerAsync` with `JWT_ACCESS_SECRET`). Added once to
-      `app.module.ts`. **No global `APP_GUARD` in this epic** — Aloiki's `courses`/`files`
-      controllers still read `organizationId` from `@Query`; that migration is Epic 2.
-- [ ] **Add dependencies** (deps installed here, seed needs argon2): `argon2`, `@nestjs/jwt`,
-      `@nestjs/passport`, `passport`, `passport-jwt` (+ dev `@types/passport-jwt`, `ts-node`).
-- [ ] `apps/backend/prisma/seed.ts` — deterministic with **stable IDs** (so `VITE_DEV_USER_ID`
-      is shareable): `org-klass-0001` (aligns with frontend mock), users `user-admin-0001` /
-      `user-teacher-0001` / `user-student-0001` (`admin@demo`/`teacher@demo`/`student@demo`,
-      argon2-hashed `demo1234`, `emailVerifiedAt` set), 1 published `Course` (`course-demo-0001`,
-      owner=teacher, `status: PUBLISHED`, `accessCode: KLASS123`) with a section + lesson +
-      student enrollment. Idempotent via `upsert` by `id`.
-- [ ] Wire `apps/backend/package.json` `"prisma": { "seed": "ts-node prisma/seed.ts" }` and add
-      `make db-seed` to the `Makefile` (block "Base de datos", next to `db-push`).
-- [ ] Announce in the team channel when `common/auth` + seed are on `staging`; tell Aloiki to
-      set `VITE_DEV_USER_ID=user-student-0001` in `apps/frontend/.env.development` (his file).
+Delivered:
+- ✅ `common/auth/auth-user.type.ts` — `AuthUser` 6 fields (frontend-aligned).
+- ✅ `common/auth/current-user.decorator.ts` — `@CurrentUser()` factory decorator (500 on programming error).
+- ✅ `common/auth/jwt-auth.guard.ts` + `jwt.strategy.ts` — passport-jwt, complete but inert (activates in Epic 2).
+- ✅ `common/auth/dev-auth.guard.ts` — `x-dev-user` header → Prisma → `req.user`; **prod-blocked** (`NODE_ENV==='production'` → `return false`).
+- ✅ `common/auth/roles.decorator.ts` + `roles.guard.ts` — `@Roles('ADMIN')`, `RolesGuard` via `Reflector.getAllAndOverride`.
+- ✅ `common/common.module.ts` — `@Global`, `JwtModule.registerAsync`, exports guards + JwtModule. Wired into `app.module.ts`.
+- ✅ `prisma/seed.ts` — stable IDs (`org-klass-0001`, `user-*-0001`), argon2 `demo1234`, `emailVerifiedAt` set, `Course` PUBLISHED `KLASS123`, upsert idempotent.
+- ✅ `make db-seed` Makefile target.
+- ✅ JWT env vars added to `infra/docker/docker-compose.dev.yml` (dev placeholders — Ale to review).
 
-## Epic 2 — Email/password auth
+**Teammates can now use:**
+```ts
+@UseGuards(DevAuthGuard)
+@Get('something')
+getThing(@CurrentUser() user: AuthUser) { ... }
 
+@UseGuards(DevAuthGuard, RolesGuard)
+@Roles('ADMIN')
+@Get('admin')
+getAdmin(@CurrentUser() user: AuthUser) { ... }
+```
+Seed: `make db-seed`. Frontend dev: `VITE_DEV_USER_ID=user-student-0001` in `apps/frontend/.env.development`.
+
+## Epic 2 — Email/password auth (NEXT — spec not yet written)
+
+> **Status:** Not started. **Brainstorm + spec required before code.**
+> Must produce: `docs/superpowers/specs/2026-07-XX-epic2-email-password-auth-design.md`.
+
+- [ ] **Brainstorm + write spec** before touching code.
+- [ ] Migrate Aloiki's `courses.controller.ts` + `files.controller.ts` from `@Query(organizationId)`
+      to `@CurrentUser()` **before** adding global `APP_GUARD`.
 - [ ] `apps/backend/src/auth/` — `auth.module.ts`, `auth.controller.ts`, `auth.service.ts`,
       `dto/{register,login,refresh}.dto.ts` (class-validator).
-- [ ] Password hashing: `argon2` (add dep). Never store plaintext; salted by argon2.
+- [ ] Password hashing: `argon2` (already installed in Epic 1). Never store plaintext; salted by argon2.
 - [ ] `POST /auth/register` (email unique per org), `POST /auth/login`, `POST /auth/refresh`,
       `POST /auth/logout`. Access JWT (15 min) + refresh JWT (7 d); store refresh **hash** in
       `Session`. **`POST /auth/login` response shape** (matches
@@ -76,6 +75,7 @@ As Tech Lead you are the **Prisma schema steward** and review auth/permissions P
 - [ ] **`GET /auth/me` → `AuthUser` directly** (not wrapped — the frontend calls
       `apiClient.get<AuthUser>('/auth/me')` and `setUser(currentUser)` in `auth-context.tsx:107-115`).
 - [ ] Email verification token (dev: log the link; real email is Ale's SMTP later).
+- [ ] Switch frontend from mock auth to real: turn off `VITE_USE_MOCK_AUTH`, use `VITE_DEV_USER_ID` only for DevAuthGuard fallback.
 
 ## Epic 3 — Google OAuth (module: OAuth ✓)
 

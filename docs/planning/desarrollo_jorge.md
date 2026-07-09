@@ -156,7 +156,9 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - [ ] Commit + push `jorge`; avisar al equipo en el canal.
 
 ### Bloque 2 — (futuro) Epic 2 Email/password auth
-Espec pendiente de escribir cuando Epic 1 esté merged.
+Espec pendiente de escribir. **Brainstorm obligatorio antes de code.**
+Endpoints: `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`.
+Pre-requisito: migrar `courses.controller.ts` + `files.controller.ts` de `@Query(orgId)` a `@CurrentUser()` antes de activar `APP_GUARD` global.
 
 ---
 
@@ -177,8 +179,11 @@ Espec pendiente de escribir cuando Epic 1 esté merged.
 
 ## 6. Próximos pasos (inmediatos)
 
-1. Commitear los cambios de docs de este bloque (spec + bitácora + Jorge.md).
-2. Ejecutar Bloque 1 (ver §4). Sub-ramas tipo `jorge/epic1-auth` si fija más
-   cómodo, sino directo en `jorge` y PR a `staging` cuando passe `make up` +
-   `make db-seed`.
-3. Avisar a Aloiki/David cuando `common/auth` + seed estén en `staging`.
+1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
+2. **Esperar review/merge de PR #2** en `staging`.
+3. **Brainstorm Epic 2** (email/password auth) — escribir spec antes de code:
+   `docs/superpowers/specs/2026-07-XX-epic2-email-password-auth-design.md`.
+4. Antes de activar `APP_GUARD` global: coordinar con Aloiki para migrar
+   `courses.controller.ts` + `files.controller.ts` de `@Query(organizationId)` a `@CurrentUser()`.
+5. Avisar a Aloiki/David cuando Epic 1 merge a `staging`: ya pueden usar
+   `@UseGuards(DevAuthGuard)` + `@CurrentUser()` + `make db-seed`.
