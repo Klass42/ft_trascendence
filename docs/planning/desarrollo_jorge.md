@@ -26,10 +26,9 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 - **Última sincronización:** `jorge`, `staging` y `aloiki` idénticos en
   `eb53db12` (2026-07-09) tras merger de 10 commits de Aloiki (frontend shell +
   design system + courses/enrollments/sections/lessons + files/storage API).
-- **Epica en curso:** Epic 1 (Auth contracts + seed). Spec aprobada:
-  `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
-- **Sin empezar todavía:** implementación de los archivos de Epic 1. Esta
-  bitácora arranca justo después del brainstorm + spec.
+- **Epica completada:** Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
+  PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
+- **Siguiente:** Epic 2 spec (email/password auth). Escribir spec antes de tocar código.
 
 ---
 
@@ -133,25 +132,27 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 > Formato por bloque: fecha · qué se creó/modificó · commit hash · propósito.
 
 ### Bloque 0 — 2026-07-09 — Brainstorm + spec
-- **Creado:** `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`
-  (spec aprobada de Epic 1).
-- **Creado:** `docs/planning/desarrollo_jorge.md` (este archivo).
-- **Modificado:** `docs/planning/Jorge.md` Epic 1 — `AuthUser` 3→6 campos,
-  alineado con el frontend. Aclarado `GET /auth/me` y respuesta de `login`.
-- **Merges previos:** `staging` y `jorge` traídos a `eb53db12` (Aloiki).
-- **Sin commit todavía** (cambio de docs pendiente de commitear).
+- ✅ `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md` (spec aprobada de Epic 1).
+- ✅ `docs/planning/desarrollo_jorge.md` (este archivo).
+- ✅ `docs/planning/Jorge.md` Epic 1 — `AuthUser` 3→6 campos, alineado con el frontend. Aclarado `GET /auth/me` y respuesta de `login`.
+- ✅ Merges previos: `staging` y `jorge` traídos a `eb53db12` (Aloiki).
+- ✅ Committed en `e4142030` junto con deps y jest config (Bloque 1).
 
-### Bloque 1 — (pendiente) Desbloqueo de implementación
-- [ ] Instalar deps (`pnpm --filter ...backend add argon2 @nestjs/jwt @nestjs/passport passport passport-jwt` + dev `@types/passport-jwt ts-node`).
-- [ ] Crear `apps/backend/src/common/auth/` (8 archivos de §4 spec).
-- [ ] Crear `apps/backend/src/common/common.module.ts` (@Global).
-- [ ] Añadir `CommonModule` a `app.module.ts` (una línea en bloque Jorge).
-- [ ] Escribir `apps/backend/prisma/seed.ts` con IDs estables (`org-klass-0001`
-  + `user-*-0001`).
-- [ ] Configurar `"prisma":{"seed"}` en `apps/backend/package.json`.
-- [ ] Añadir `make db-seed` al Makefile.
-- [ ] Tests unit de guards + decorator + strategy.
-- [ ] `make db-seed` en compose; sanity check `prisma studio`.
+### Bloque 1 — 2026-07-09 — Epic 1 implementado ✅
+- ✅ `e4142030` — deps + jest config + docs brainstorm (argon2, @nestjs/jwt, @nestjs/passport, passport, passport-jwt, jest 30, ts-jest, @nestjs/testing, supertest, ts-node)
+- ✅ `83f78746` — `AuthUser` type (6 campos, alineado con frontend) + `@CurrentUser()` decorator + barrel progresivo
+- ✅ `ece550c6` — `@Roles()` decorator + `RolesGuard` (Reflector.getAllAndOverride, 403 on role-mismatch, 401 on missing user)
+- ✅ `95680cb6` — `JwtStrategy` + `JwtAuthGuard` (passport-jwt, inerte hasta Epic 2, getOrThrow fail-fast)
+- ✅ `c6806499` — `DevAuthGuard` (x-dev-user header, carga user de Prisma, bloqueado en producción, 403 via return false)
+- ✅ `a6028463` — `@Global CommonModule` (JwtModule.registerAsync, providers: RolesGuard+DevAuthGuard+JwtStrategy, exports: guards+JwtModule) wired into AppModule
+- ✅ `c8e000d6` — `prisma/seed.ts` (IDs estables, argon2.hash, GlobalRole/CourseStatus/CourseRole enum members, upsert idempotente, emailVerifiedAt set, output VITE_DEV_USER_ID)
+- ✅ `831f3e24` — `make db-seed` Makefile target
+- ✅ `3ea12013` — `docker-compose.dev.yml`: JWT_ACCESS_SECRET + JWT_REFRESH_SECRET (dev-only placeholders — Ale: revisar antes de staging/prod)
+
+**Tests:** 13 unit tests en 4 suites (current-user, roles.guard, jwt.strategy, dev-auth.guard). 0 fallos.
+**Runtime smoke:** `make up` ✅ backend arranca limpio · `make db-seed` ✅ 8 filas con hashes `$argon2id$v=` · `/health` 200 · x-dev-user header aceptado · 13 unit tests pasando post-compose.
+
+**Estado actual del §1:** Epic 1 en `jorge`, PR a `staging` creado/pendiente. Siguiente: Epic 2 spec (email/password auth: POST /auth/login, /register, /refresh, /logout, GET /auth/me).
 - [ ] Commit + push `jorge`; avisar al equipo en el canal.
 
 ### Bloque 2 — (futuro) Epic 2 Email/password auth
