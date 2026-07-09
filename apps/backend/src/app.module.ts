@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CommonModule } from './common/common.module';
 
 // ── Identity & Access — SrJorgeG ──
 import { AuthModule } from './auth/auth.module';
@@ -23,6 +24,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ConfigModule.forRoot({ isGlobal: true }),
     TelemetryModule,
     PrismaModule,
+    CommonModule, // <-- foundation: guards + JwtModule (global)
     // Feature modules (owned per docs/planning). Add sub-resources INSIDE each
     // module's folder so this file rarely needs to change.
     AuthModule,
