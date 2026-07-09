@@ -1,206 +1,218 @@
-import { useAuth } from '@/lib/api';
-import { grades, users } from '@/lib/mock-data';
+import { useEffect, useState } from 'react';
+import { Spinner } from '@/components/ui';
+import { useAuth, useCourses, useMyGrades } from '@/lib/api';
+import type { MyGradeDTO } from '@/lib/api';
+import { STATUS_CHIP, formatDate } from '@/features/assignments/helpers';
+import { GradebookPage } from '@/features/gradebook';
 
+/**
+ * Grades route. Staff (teacher/admin) get the full gradebook; a student sees
+ * their own grades per course, backed by the real API (Epic C).
+ */
 export function GradesPage() {
   const { user } = useAuth();
-  const isStudent = user?.role === 'STUDENT';
-  const isTeacher = user?.role === 'TEACHER';
-  const isAdmin = user?.role === 'ADMIN';
+  const isStaff = user?.role === 'TEACHER' || user?.role === 'ADMIN';
+
+  if (isStaff) {
+    return <GradebookPage />;
+  }
+  return <StudentGrades />;
+}
+
+// ---------------------------------------------------------------------------
+
+function StudentGrades() {
+  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const [courseId, setCourseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!courseId && courses && courses.length > 0) {
+      setCourseId(courses[0].id);
+    }
+  }, [courses, courseId]);
+
+  const { data: grades, isLoading, error } = useMyGrades(courseId);
 
   return (
     <div style={{ padding: '30px 40px', maxWidth: 820 }}>
-      {isStudent && (
-        <>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 20px', letterSpacing: '-0.02em' }}>
-            Mis notas
-          </h1>
-          <div
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 20,
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 26,
+            fontWeight: 800,
+            margin: 0,
+            letterSpacing: '-0.02em',
+          }}
+        >
+          Mis notas
+        </h1>
+
+        {courses && courses.length > 0 && (
+          <select
+            value={courseId ?? ''}
+            onChange={(e) => setCourseId(e.target.value)}
             style={{
-              background: 'var(--color-bg-secondary)',
+              marginLeft: 'auto',
+              padding: '8px 12px',
+              borderRadius: 9,
               border: '1px solid var(--color-border-primary)',
-              borderRadius: 13,
-              overflow: 'hidden',
+              background: 'var(--color-bg-primary)',
+              color: 'var(--color-text-primary)',
+              fontSize: 14,
+              fontFamily: 'inherit',
             }}
           >
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.4fr 1fr .5fr',
-                gap: 8,
-                padding: '12px 18px',
-                background: 'var(--color-bg-primary)',
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--color-text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
-              }}
-            >
-              <span>Curso</span>
-              <span>Evaluación</span>
-              <span style={{ textAlign: 'right' }}>Nota</span>
-            </div>
-            {grades.map((g, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.4fr 1fr .5fr',
-                  gap: 8,
-                  padding: '14px 18px',
-                  borderTop: '1px solid var(--color-border-primary)',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{g.course}</span>
-                <span style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>
-                  {g.item}
-                </span>
-                <span
-                  style={{
-                    textAlign: 'right',
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: g.color,
-                  }}
-                >
-                  {g.score}
-                </span>
-              </div>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
             ))}
-          </div>
-        </>
+          </select>
+        )}
+      </div>
+
+      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+
+      {!coursesLoading && (!courses || courses.length === 0) && (
+        <p style={{ color: 'var(--color-text-muted)' }}>
+          No estás inscrito en ningún curso.
+        </p>
       )}
 
-      {isTeacher && (
-        <>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 20px', letterSpacing: '-0.02em' }}>
-            Analíticas del curso
-          </h1>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 22 }}>
-            {[
-              { label: 'Nota media', value: '7,9' },
-              { label: 'Tasa de entrega', value: '86%' },
-              { label: 'Participación foro', value: '64%' },
-            ].map((s) => (
-              <div
-                key={s.label}
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border-primary)',
-                  borderRadius: 14,
-                  padding: 18,
-                }}
-              >
-                <div style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  {s.label}
-                </div>
-                <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
+      {isLoading && <Spinner size="md" label="Cargando notas…" />}
 
-          <div
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-primary)',
-              borderRadius: 14,
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'flex-end',
-              gap: 14,
-              height: 180,
-            }}
-          >
-            {[55, 72, 60, 88, 70].map((h, i) => (
-              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: '100%',
-                    height: `${h}%`,
-                    background: i === 3 ? 'var(--color-accent-primary)' : 'var(--color-accent-muted)',
-                    borderRadius: '6px 6px 0 0',
-                  }}
-                />
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Sem {i + 1}</span>
-              </div>
-            ))}
-          </div>
-        </>
+      {error && (
+        <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
+          No se pudieron cargar tus notas.
+        </p>
       )}
 
-      {isAdmin && (
-        <>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 20px', letterSpacing: '-0.02em' }}>
-            Usuarios
-          </h1>
+      {grades && !isLoading && (
+        <div
+          style={{
+            background: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border-primary)',
+            borderRadius: 13,
+            overflow: 'hidden',
+          }}
+        >
           <div
             style={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-primary)',
-              borderRadius: 13,
-              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateColumns: '1.6fr .8fr .6fr',
+              gap: 8,
+              padding: '12px 18px',
+              background: 'var(--color-bg-primary)',
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'var(--color-text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '.04em',
             }}
           >
+            <span>Evaluación</span>
+            <span>Estado</span>
+            <span style={{ textAlign: 'right' }}>Nota</span>
+          </div>
+
+          {grades.length === 0 && (
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: '1.8fr 1fr .7fr',
-                gap: 8,
-                padding: '12px 18px',
-                background: 'var(--color-bg-primary)',
-                fontSize: 12,
-                fontWeight: 700,
+                padding: '16px 18px',
+                fontSize: 14,
                 color: 'var(--color-text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '.04em',
               }}
             >
-              <span>Nombre</span>
-              <span>Rol</span>
-              <span style={{ textAlign: 'right' }}>Alta</span>
+              Este curso no tiene tareas todavía.
             </div>
-            {users.map((u, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1.8fr 1fr .7fr',
-                  gap: 8,
-                  padding: '12px 18px',
-                  borderTop: '1px solid var(--color-border-primary)',
-                  alignItems: 'center',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: '50%',
-                      background: 'var(--color-accent-muted)',
-                      color: 'var(--color-accent-hover)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
-                      fontSize: 12,
-                    }}
-                  >
-                    {u.initials}
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{u.name}</span>
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)' }}>
-                  {u.role}
-                </span>
-                <span style={{ textAlign: 'right', fontSize: 13, color: 'var(--color-text-muted)' }}>
-                  {u.joined}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
+          )}
+
+          {grades.map((g) => (
+            <GradeRow key={g.assignmentId} grade={g} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GradeRow({ grade }: { grade: MyGradeDTO }) {
+  const chip = grade.status ? STATUS_CHIP[grade.status] : STATUS_CHIP.NONE;
+  const isGraded = grade.status === 'GRADED' && grade.score != null;
+
+  return (
+    <div
+      style={{
+        borderTop: '1px solid var(--color-border-primary)',
+        padding: '14px 18px',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.6fr .8fr .6fr',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 14.5, fontWeight: 600 }}>{grade.title}</div>
+          {grade.dueAt && (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              Vence {formatDate(grade.dueAt)}
+            </div>
+          )}
+        </div>
+        <span
+          style={{
+            justifySelf: 'start',
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: chip.fg,
+            background: chip.bg,
+            padding: '4px 10px',
+            borderRadius: 20,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {chip.label}
+        </span>
+        <span
+          style={{
+            textAlign: 'right',
+            fontSize: 16,
+            fontWeight: 800,
+            color: isGraded ? '#0f766e' : 'var(--color-text-muted)',
+          }}
+        >
+          {isGraded ? `${grade.score}/${grade.maxScore}` : '—'}
+        </span>
+      </div>
+
+      {isGraded && grade.feedback && (
+        <p
+          style={{
+            margin: '10px 0 0',
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            color: 'var(--color-text-secondary)',
+            background: 'var(--color-bg-primary)',
+            border: '1px solid var(--color-border-primary)',
+            borderRadius: 9,
+            padding: '10px 12px',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          <strong style={{ fontWeight: 700 }}>Feedback:</strong> {grade.feedback}
+        </p>
       )}
     </div>
   );

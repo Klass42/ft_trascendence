@@ -117,3 +117,22 @@ export type {
   CourseStatus,
   CourseRole,
 } from './types/course';
+
+export type {
+  AssignmentDTO,
+  SubmissionDTO,
+  SubmissionFileDTO,
+  SubmissionAuthorDTO,
+  SubmissionStatus,
+  CreateAssignmentInput,
+  CreateSubmissionInput,
+} from './types/assignment';
+
+export type {
+  GradebookDTO,
+  GradebookAssignmentDTO,
+  GradebookCellDTO,
+  GradebookRowDTO,
+  MyGradeDTO,
+  GradeSubmissionInput,
+} from './types/gradebook';
