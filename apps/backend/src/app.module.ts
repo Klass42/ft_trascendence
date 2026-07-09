@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { AppAuthGuard } from './common/auth/app-auth.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TelemetryModule } from './telemetry/telemetry.module';
@@ -38,6 +40,9 @@ import { RealtimeModule } from './realtime/realtime.module';
     RealtimeModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: AppAuthGuard },
+  ],
 })
 export class AppModule {}
