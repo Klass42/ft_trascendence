@@ -1,5 +1,6 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
-import { NotificationsService } from './notifications.service';
+import { NotificationsService, NOTIFICATION_CREATED } from './notifications.service';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -48,11 +49,25 @@ describe('NotificationsService', () => {
   }
 
   it('emit persists a notification and listMine returns it scoped to the user', async () => {
-    const service = new NotificationsService(buildPrismaFake());
+    const emitted: Array<{ event: string; payload: unknown }> = [];
+    const events = {
+      emit: (event: string, payload: unknown) => {
+        emitted.push({ event, payload });
+        return true;
+      },
+    } as unknown as EventEmitter2;
+    const service = new NotificationsService(buildPrismaFake(), events);
 
-    await service.emit('user-lucia-001', NotificationType.SYSTEM, {
+    const created = await service.emit('user-lucia-001', NotificationType.SYSTEM, {
       title: 'Welcome',
       body: 'Your account is ready',
+    });
+
+    // Epic E: emit() must publish the persisted row on the bus so the realtime
+    // gateway can push it. Decoupled — asserted here without a live socket.
+    expect(emitted).toContainEqual({
+      event: NOTIFICATION_CREATED,
+      payload: created,
     });
     // a notification for someone else must not leak into Lucia's list
     await service.emit('user-diego-001', NotificationType.SYSTEM, {

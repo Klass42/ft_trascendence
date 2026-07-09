@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+/** App-bus event fired after a notification is persisted (see RealtimeGateway). */
+export const NOTIFICATION_CREATED = 'notification.created';
 
 /** Payload for {@link NotificationsService.emit}. */
 export interface EmitPayload {
@@ -22,7 +26,10 @@ export interface ListMineOptions {
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Create a notification for `userId`. Returns the persisted row so callers
@@ -39,7 +46,10 @@ export class NotificationsService {
       },
     });
 
-    // TODO(Epic E): push por socket
+    // Epic E: push por socket, sin acoplar módulos. Publicamos en el bus de
+    // eventos; RealtimeGateway lo escucha con @OnEvent y empuja "notification:new"
+    // a user:<id> si está conectado. No-op seguro si nadie escucha / no hay gateway.
+    this.events.emit(NOTIFICATION_CREATED, notification);
     return notification;
   }
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TelemetryModule } from './telemetry/telemetry.module';
@@ -21,6 +22,9 @@ import { RealtimeModule } from './realtime/realtime.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // App event bus — decouples NotificationsService (emit) from RealtimeGateway
+    // (push over socket). Global, so EventEmitter2 is injectable everywhere.
+    EventEmitterModule.forRoot(),
     TelemetryModule,
     PrismaModule,
     // Feature modules (owned per docs/planning). Add sub-resources INSIDE each

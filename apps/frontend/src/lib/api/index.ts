@@ -78,4 +78,7 @@ export {
   type ForumPostDTO,
   type CreateThreadInput,
   type CreatePostInput,
+  type NotificationType,
+  type NotificationDTO,
+  type NotificationsListDTO,
 } from './types';
