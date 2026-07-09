@@ -16,3 +16,10 @@ export { useCreateAssignment } from './useCreateAssignment';
 export { useGradebook } from './useGradebook';
 export { useMyGrades } from './useMyGrades';
 export { useGradeSubmission, downloadGradebookCsv } from './useGradeSubmission';
+export { useForumThreads } from './useForumThreads';
+export { useForumThread } from './useForumThread';
+export {
+  useCreateThread,
+  useCreatePost,
+  usePinThread,
+} from './useForumMutations';
