@@ -145,3 +145,9 @@ export type {
   CreateThreadInput,
   CreatePostInput,
 } from './types/forum';
+
+export type {
+  NotificationType,
+  NotificationDTO,
+  NotificationsListDTO,
+} from './types/notification';
