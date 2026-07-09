@@ -31,6 +31,10 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - DATABASE_URL=postgresql://ft:ft@postgres:5432/ft_dev?schema=public
+      # JWT secrets for Epic 1+ — dev-only non-secret placeholders (AGENTS.md §7).
+      # Ale: tighten before any staging/prod deploy.
+      - JWT_ACCESS_SECRET=dev-not-secret-replace-me
+      - JWT_REFRESH_SECRET=dev-not-secret-replace-me
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=ft-backend
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
