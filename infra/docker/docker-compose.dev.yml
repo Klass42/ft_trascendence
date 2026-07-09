@@ -35,6 +35,8 @@ services:
       # Ale: tighten before any staging/prod deploy.
       - JWT_ACCESS_SECRET=dev-not-secret-replace-me
       - JWT_REFRESH_SECRET=dev-not-secret-replace-me
+      # Google OAuth (Epic 3) — dev defaults.
+      - FRONTEND_URL=http://localhost:5173
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=ft-backend
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
