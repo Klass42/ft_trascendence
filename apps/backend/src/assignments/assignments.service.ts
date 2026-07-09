@@ -56,6 +56,19 @@ export class AssignmentsService {
   }
 
   /**
+   * Public course-membership gate for course-level resources that don't hang
+   * off a single assignment (e.g. the gradebook). Delegates to the private
+   * {@link requireMembership} so tenant/role enforcement stays in one place.
+   */
+  async requireCourseMembership(
+    courseId: string,
+    actingUserId: string,
+    roles?: CourseRole[],
+  ): Promise<{ course: Course; enrollment: Enrollment }> {
+    return this.requireMembership(courseId, actingUserId, roles);
+  }
+
+  /**
    * Load an assignment and enforce that `actingUserId` is a member of its
    * course. Returns the assignment plus the parent course (for its org).
    */

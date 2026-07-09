@@ -13,3 +13,6 @@ export { useMySubmission } from './useMySubmission';
 export { useAssignmentSubmissions } from './useAssignmentSubmissions';
 export { useSubmitAssignment } from './useSubmitAssignment';
 export { useCreateAssignment } from './useCreateAssignment';
+export { useGradebook } from './useGradebook';
+export { useMyGrades } from './useMyGrades';
+export { useGradeSubmission, downloadGradebookCsv } from './useGradeSubmission';
