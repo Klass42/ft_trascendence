@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { RolesGuard } from './auth/roles.guard';
 import { DevAuthGuard } from './auth/dev-auth.guard';
+import { AppAuthGuard } from './auth/app-auth.guard';
 
 /**
  * Global Identity & Access primitives. Imports JwtModule (configured via env) so
@@ -22,7 +23,7 @@ import { DevAuthGuard } from './auth/dev-auth.guard';
       }),
     }),
   ],
-  providers: [RolesGuard, DevAuthGuard, JwtStrategy],
-  exports: [RolesGuard, DevAuthGuard, JwtStrategy, JwtModule],
+  providers: [RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy],
+  exports: [RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy, JwtModule],
 })
 export class CommonModule {}
