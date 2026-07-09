@@ -127,3 +127,12 @@ export type {
   CreateAssignmentInput,
   CreateSubmissionInput,
 } from './types/assignment';
+
+export type {
+  GradebookDTO,
+  GradebookAssignmentDTO,
+  GradebookCellDTO,
+  GradebookRowDTO,
+  MyGradeDTO,
+  GradeSubmissionInput,
+} from './types/gradebook';

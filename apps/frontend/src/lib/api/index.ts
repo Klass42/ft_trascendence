@@ -38,6 +38,10 @@ export {
   useAssignmentSubmissions,
   useSubmitAssignment,
   useCreateAssignment,
+  useGradebook,
+  useGradeSubmission,
+  useMyGrades,
+  downloadGradebookCsv,
 } from './hooks';
 
 // Types
@@ -57,4 +61,10 @@ export {
   type SubmissionStatus,
   type CreateAssignmentInput,
   type CreateSubmissionInput,
+  type GradebookDTO,
+  type GradebookAssignmentDTO,
+  type GradebookCellDTO,
+  type GradebookRowDTO,
+  type MyGradeDTO,
+  type GradeSubmissionInput,
 } from './types';
