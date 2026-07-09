@@ -8,3 +8,8 @@ export { useCompleteLesson } from './useCompleteLesson';
 export { useEnroll } from './useEnroll';
 export { useCompletedLessons } from './useCompletedLessons';
 export { useMyProgress } from './useMyProgress';
+export { useAssignments } from './useAssignments';
+export { useMySubmission } from './useMySubmission';
+export { useAssignmentSubmissions } from './useAssignmentSubmissions';
+export { useSubmitAssignment } from './useSubmitAssignment';
+export { useCreateAssignment } from './useCreateAssignment';
