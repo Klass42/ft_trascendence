@@ -138,4 +138,90 @@ export class AuthService {
     const tokens = await this.issueTokens(user.id);
     return { user: this.mapUser(user), ...tokens };
   }
+
+  async refresh(refreshToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    const refreshSecret = this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
+    const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    const hash = this.hashToken(refreshToken);
+
+    const session = await this.prisma.session.findUnique({
+      where: { refreshTokenHash: hash },
+    });
+
+    if (!session) {
+      const decoded = this.jwt.decode(refreshToken) as { sub?: string; jti?: string } | null;
+      if (decoded?.sub) {
+        await this.prisma.session.deleteMany({ where: { userId: decoded.sub } });
+      }
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (session.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    await this.prisma.session.delete({ where: { id: session.id } });
+
+    const newSession = await this.prisma.session.create({
+      data: {
+        userId: session.userId,
+        refreshTokenHash: 'placeholder',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const newRefreshToken = this.jwt.sign(
+      { sub: session.userId, jti: newSession.id },
+      { secret: refreshSecret, expiresIn: '7d' },
+    );
+    const newRefreshHash = this.hashToken(newRefreshToken);
+    await this.prisma.session.update({
+      where: { id: newSession.id },
+      data: { refreshTokenHash: newRefreshHash },
+    });
+
+    const newAccessToken = this.jwt.sign(
+      { sub: session.userId },
+      { secret: accessSecret, expiresIn: '15m' },
+    );
+
+    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const hash = this.hashToken(refreshToken);
+    const session = await this.prisma.session.findUnique({
+      where: { refreshTokenHash: hash },
+    });
+    if (session) {
+      await this.prisma.session.delete({ where: { id: session.id } });
+    }
+  }
+
+  async getMe(userId: string): Promise<AuthUser> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+    return this.mapUser(user);
+  }
+
+  async verifyEmail(token: string): Promise<{ verified: true }> {
+    const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    const decoded = this.jwt.verify(token, { secret: accessSecret }) as {
+      sub: string;
+      purpose?: string;
+    };
+    if (decoded.purpose !== 'email-verify') {
+      throw new UnauthorizedException('Invalid verification token');
+    }
+    await this.prisma.user.update({
+      where: { id: decoded.sub },
+      data: { emailVerifiedAt: new Date() },
+    });
+    return { verified: true };
+  }
 }
