@@ -32,9 +32,12 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`) sobre `jorge`, pushed.**
     Spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
-- **Tests:** 40 tests, 7 suites, 0 fallos.
+  - **Epic 3 (Google OAuth). Spec + plan escritos, implementación pendiente.**
+    Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md`.
+- **Tests:** 40 tests, 7 suites, 0 fallos (pre-Epic 3).
 - **Runtime:** `make up` ✅ · `POST /auth/login` devuelve `{ user(AuthUser 6), accessToken, refreshToken }` ✅ · `GET /auth/me` con Bearer ✅ · `GET /courses` sin token → 401 (APP_GUARD global) ✅ · `GET /courses` con x-dev-user → 200 (dev fallback) ✅.
-- **Siguiente:** Epic 3 (Google OAuth) o coordinar merge de Epic 2 a `staging`.
+- **Siguiente:** Implementar Epic 3 (5 tasks, ~2-3 commits), luego PR conjunto Epic 2+3 a `staging`.
 
 ---
 
@@ -189,6 +192,13 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - [ ] Avisar a equipo: APP_GUARD global activo, `@Public()` para endpoints públicos, `@CurrentUser()` sin `@UseGuards()`.
 - [ ] Coordinar con Aloiki: `VITE_USE_MOCK_AUTH=false` para usar login real.
 
+### Bloque 3 — 2026-07-10 — Epic 3 brainstorm + spec + plan (pendiente de implementar)
+- ✅ Brainstorm: 3 preguntas aclaratorias (redirect hash fragment / auto-create / auto-vincular email match) → todas A/B/A.
+- ✅ Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md` (5 tasks)
+- [ ] Implementación pendiente — 2 deps (`passport-google-oauth20` + types), 1 strategy, 1 service method, 2 routes.
+- [ ] Commit + push `jorge`; crear PR conjunto Epic 2 + Epic 3 a `staging`.
+
 ---
 
 ## 5. Decisiones de diseño (resumen — ver spec para detalle)
@@ -210,11 +220,13 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
 2. ~~Brainstorm Epic 2 + spec + plan + implementación.~~ ✅ Hecho (Bloque 2).
-3. **PR de Epic 2 a `staging`** — crear PR desde `jorge` → `staging` con los 9 commits.
-4. Avisar al equipo en el canal:
-   - `@Public()` para endpoints públicos (login, register, refresh, verify-email).
+3. ~~Brainstorm Epic 3 + spec + plan.~~ ✅ Hecho (Bloque 3).
+4. **Implementar Epic 3** (Google OAuth) — seguir plan `2026-07-10-epic3-google-oauth.md` (5 tasks).
+5. **PR conjunto Epic 2+3 a `staging`** — crear PR desde `jorge` → `staging` con todos los commits de auth.
+6. Avisar al equipo en el canal:
+   - `@Public()` para endpoints públicos (login, register, refresh, verify-email, google).
    - `@CurrentUser()` funciona sin `@UseGuards()` (APP_GUARD global).
    - `VITE_USE_MOCK_AUTH=false` + login con `student@demo`/`demo1234` para auth real.
    - `VITE_DEV_USER_ID` sigue funcionando como fallback en dev.
-5. **Brainstorm Epic 3** (Google OAuth) cuando Epic 2 merge a `staging`.
-6. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.
+   - Google: requiere `GOOGLE_CLIENT_ID/SECRET` reales para testear; dev sin creds → login email/password.
+7. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.
