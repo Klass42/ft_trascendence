@@ -42,6 +42,11 @@ export {
   useGradeSubmission,
   useMyGrades,
   downloadGradebookCsv,
+  useForumThreads,
+  useForumThread,
+  useCreateThread,
+  useCreatePost,
+  usePinThread,
 } from './hooks';
 
 // Types
@@ -67,4 +72,10 @@ export {
   type GradebookRowDTO,
   type MyGradeDTO,
   type GradeSubmissionInput,
+  type ForumAuthorDTO,
+  type ForumThreadListItemDTO,
+  type ForumThreadDTO,
+  type ForumPostDTO,
+  type CreateThreadInput,
+  type CreatePostInput,
 } from './types';
