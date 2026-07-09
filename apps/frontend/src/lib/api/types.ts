@@ -117,3 +117,13 @@ export type {
   CourseStatus,
   CourseRole,
 } from './types/course';
+
+export type {
+  AssignmentDTO,
+  SubmissionDTO,
+  SubmissionFileDTO,
+  SubmissionAuthorDTO,
+  SubmissionStatus,
+  CreateAssignmentInput,
+  CreateSubmissionInput,
+} from './types/assignment';

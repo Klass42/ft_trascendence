@@ -33,6 +33,11 @@ export {
   useEnroll,
   useCompletedLessons,
   useMyProgress,
+  useAssignments,
+  useMySubmission,
+  useAssignmentSubmissions,
+  useSubmitAssignment,
+  useCreateAssignment,
 } from './hooks';
 
 // Types
@@ -47,4 +52,9 @@ export {
   type PaginatedResponse,
   type PaginationParams,
   type MyProgressItem,
+  type AssignmentDTO,
+  type SubmissionDTO,
+  type SubmissionStatus,
+  type CreateAssignmentInput,
+  type CreateSubmissionInput,
 } from './types';
