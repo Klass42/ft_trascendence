@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
+import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
 
 // Owner: David (@dacs-dev) — Ops & Interaction (see docs/planning/David.md)
-// Fill in controllers/providers here. Keep sub-resources inside this folder so
-// you don't need to touch app.module.ts again (avoids merge conflicts).
-@Module({})
+@Module({
+  controllers: [NotificationsController],
+  providers: [NotificationsService],
+  // Exported so Assignments/Grading/Forums can inject it and call emit().
+  exports: [NotificationsService],
+})
 export class NotificationsModule {}

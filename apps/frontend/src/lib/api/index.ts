@@ -33,6 +33,15 @@ export {
   useEnroll,
   useCompletedLessons,
   useMyProgress,
+  useAssignments,
+  useMySubmission,
+  useAssignmentSubmissions,
+  useSubmitAssignment,
+  useCreateAssignment,
+  useGradebook,
+  useGradeSubmission,
+  useMyGrades,
+  downloadGradebookCsv,
 } from './hooks';
 
 // Types
@@ -47,4 +56,15 @@ export {
   type PaginatedResponse,
   type PaginationParams,
   type MyProgressItem,
+  type AssignmentDTO,
+  type SubmissionDTO,
+  type SubmissionStatus,
+  type CreateAssignmentInput,
+  type CreateSubmissionInput,
+  type GradebookDTO,
+  type GradebookAssignmentDTO,
+  type GradebookCellDTO,
+  type GradebookRowDTO,
+  type MyGradeDTO,
+  type GradeSubmissionInput,
 } from './types';
