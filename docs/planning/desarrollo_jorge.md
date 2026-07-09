@@ -26,9 +26,15 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 - **Última sincronización:** `jorge`, `staging` y `aloiki` idénticos en
   `eb53db12` (2026-07-09) tras merger de 10 commits de Aloiki (frontend shell +
   design system + courses/enrollments/sections/lessons + files/storage API).
-- **Epica completada:** Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
-  PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
-- **Siguiente:** Epic 2 spec (email/password auth). Escribir spec antes de tocar código.
+- **Epicas completadas:**
+  - Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
+    PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
+  - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`) sobre `jorge`, pushed.**
+    Spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
+- **Tests:** 40 tests, 7 suites, 0 fallos.
+- **Runtime:** `make up` ✅ · `POST /auth/login` devuelve `{ user(AuthUser 6), accessToken, refreshToken }` ✅ · `GET /auth/me` con Bearer ✅ · `GET /courses` sin token → 401 (APP_GUARD global) ✅ · `GET /courses` con x-dev-user → 200 (dev fallback) ✅.
+- **Siguiente:** Epic 3 (Google OAuth) o coordinar merge de Epic 2 a `staging`.
 
 ---
 
@@ -99,15 +105,18 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 ## 3. Contratos que cruzo con el equipo
 
-### 3.1 Contratos que YO proveo (Epic 1 — desbloquean a todos)
+### 3.1 Contratos que YO proveo (Epic 1 + Epic 2 — desbloquean a todos)
 | Contract | Archivo | Quién lo consume |
 |---|---|---|
 | `AuthUser` type (6 campos) | `common/auth/auth-user.type.ts` | Todo el backend + frontend (cambia la versión interna del backend) |
 | `@CurrentUser()` | `common/auth/current-user.decorator.ts` | Aloiki (files/courses), David |
-| `JwtAuthGuard` (inerte en Epic 1) | `common/auth/jwt-auth.guard.ts` | Endpoints protegidos Epic 2+ |
-| `DevAuthGuard` (header `x-dev-user`) | `common/auth/dev-auth.guard.ts` | Todo endpoint mientras no exista login |
+| `JwtAuthGuard` | `common/auth/jwt-auth.guard.ts` | AppAuthGuard (inyectado) |
+| `DevAuthGuard` (header `x-dev-user`) | `common/auth/dev-auth.guard.ts` | AppAuthGuard (fallback en dev) |
+| `AppAuthGuard` (composite, APP_GUARD global) | `common/auth/app-auth.guard.ts` | Todos los endpoints (guard por defecto) |
+| `@Public()` | `common/auth/public.decorator.ts` | Endpoints sin auth (login, register, refresh, verify-email) |
 | `@Roles()` + `RolesGuard` | `common/auth/roles.*` | Endpoints admin Epic 5 |
 | `prisma/seed.ts` (IDs estables) | `apps/backend/prisma/seed.ts` | Todos (datos demo) |
+| `POST /auth/login\|register\|refresh\|logout`, `GET /auth/me\|verify-email` | `auth/auth.controller.ts` | Frontend (auth-context.tsx) |
 
 ### 3.2 Contratos que YO consumo
 - **Aloiki — `FilesService.createUpload(file, organizationId, uploaderId)`**
@@ -119,11 +128,15 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
   No-op seguro. Lo invoco en Epic 6 vía inyección opcional
   (inject con `@Optional()` y cheque `!= null`).
 
-### 3.3 Deuda conocida (trackear para Epic 2)
-- Los controladores de Aloiki (`courses.controller.ts`, `files.controller.ts`)
-  leen `organizationId` de `@Query` en vez de `@CurrentUser()`. Cuando añada
-  `APP_GUARD` global en Epic 2, hay que migrarlos (coordinar con Aloiki o
-  plantear no usar `APP_GUARD` y seguir marcando cada controlador a mano).
+### 3.3 Deuda conocida (actualizada tras Epic 2)
+- ~~Los controladores de Aloiki (`courses.controller.ts`, `files.controller.ts`)
+  leen `organizationId` de `@Query` en vez de `@CurrentUser()`.~~ ✅ Migrados en
+  Epic 2 (commit `ed30e367`). Con permiso de Aloiki para modificar en la rama `jorge`.
+- `GET /files/:id/url` y `DELETE /files/:id` ahora requieren autenticación (APP_GUARD)
+  pero **no filtran por `organizationId`** — cualquiera autenticado puede ver/borrar
+  cualquier file. Scoping por org es un seguimiento de seguridad pendiente.
+- `IsEmail({ require_tld: false })` en los DTOs para aceptar emails del seed (`student@demo`).
+  Cuando el seed use emails reales, se puede quitar la opción.
 
 ---
 
@@ -155,10 +168,26 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Estado actual del §1:** Epic 1 en `jorge`, PR a `staging` creado/pendiente. Siguiente: Epic 2 spec (email/password auth: POST /auth/login, /register, /refresh, /logout, GET /auth/me).
 - [ ] Commit + push `jorge`; avisar al equipo en el canal.
 
-### Bloque 2 — (futuro) Epic 2 Email/password auth
-Espec pendiente de escribir. **Brainstorm obligatorio antes de code.**
-Endpoints: `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout` · `GET /auth/me`.
-Pre-requisito: migrar `courses.controller.ts` + `files.controller.ts` de `@Query(orgId)` a `@CurrentUser()` antes de activar `APP_GUARD` global.
+### Bloque 2 — 2026-07-10 — Epic 2 implementado ✅
+- ✅ Brainstorm + spec aprobada: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`
+- ✅ `1d6b4537` — `@Public()` decorator + RegisterDto, LoginDto, RefreshDto (class-validator)
+- ✅ `ed30e367` — Migración `courses.controller.ts` + `files.controller.ts` de `@Query/@Body` a `@CurrentUser()` (con permiso de Aloiki). `CreateFileDto` eliminado.
+- ✅ `907bd7a5` — `AppAuthGuard` (composite: JWT → DevAuthGuard fallback en non-prod) + wired en `CommonModule`
+- ✅ `cc1fc4fa` — `AuthService.register()` + `login()` con argon2, JWT, Session CRUD (8 tests)
+- ✅ `c22d6842` — `APP_GUARD` global registrado en `app.module.ts`
+- ✅ `d7ef5f8b` — `AuthService.refresh()` (single-use + reuse detection: revoca todas las sesiones), `logout()`, `getMe()`, `verifyEmail()` (9 tests)
+- ✅ `e6d5f969` — `AuthController` con 6 endpoints + wired en `AuthModule`
+- ✅ `a3ae61de` — E2E tests: login OK/fail, me con/sin token, register validation (5 tests). Fix bug: `JwtAuthGuard` no estaba en providers de `CommonModule` — arreglado.
+- ✅ `df31d706` — Fix `IsEmail({ require_tld: false })` para aceptar emails del seed (`@demo`)
+
+**Tests finales:** 40 tests, 7 suites, 0 fallos.
+**Runtime smoke:** `make up` ✅ backend arranca limpio con todas las rutas mapeadas · `POST /auth/login` con `student@demo`/`demo1234` → `{ user(AuthUser 6), accessToken, refreshToken }` ✅ · `GET /auth/me` con Bearer → AuthUser ✅ · `GET /courses` sin token → 401 (APP_GUARD) ✅ · `GET /courses` con x-dev-user → 200 (dev fallback) ✅.
+
+**Estado actual del §1:** Epic 2 completo en `jorge`, pushed. Siguiente: PR a `staging` o Epic 3 (Google OAuth).
+- [ ] PR de Epic 2 a `staging`.
+- [ ] Avisar a equipo: APP_GUARD global activo, `@Public()` para endpoints públicos, `@CurrentUser()` sin `@UseGuards()`.
+- [ ] Coordinar con Aloiki: `VITE_USE_MOCK_AUTH=false` para usar login real.
 
 ---
 
@@ -180,10 +209,12 @@ Pre-requisito: migrar `courses.controller.ts` + `files.controller.ts` de `@Query
 ## 6. Próximos pasos (inmediatos)
 
 1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
-2. **Esperar review/merge de PR #2** en `staging`.
-3. **Brainstorm Epic 2** (email/password auth) — escribir spec antes de code:
-   `docs/superpowers/specs/2026-07-XX-epic2-email-password-auth-design.md`.
-4. Antes de activar `APP_GUARD` global: coordinar con Aloiki para migrar
-   `courses.controller.ts` + `files.controller.ts` de `@Query(organizationId)` a `@CurrentUser()`.
-5. Avisar a Aloiki/David cuando Epic 1 merge a `staging`: ya pueden usar
-   `@UseGuards(DevAuthGuard)` + `@CurrentUser()` + `make db-seed`.
+2. ~~Brainstorm Epic 2 + spec + plan + implementación.~~ ✅ Hecho (Bloque 2).
+3. **PR de Epic 2 a `staging`** — crear PR desde `jorge` → `staging` con los 9 commits.
+4. Avisar al equipo en el canal:
+   - `@Public()` para endpoints públicos (login, register, refresh, verify-email).
+   - `@CurrentUser()` funciona sin `@UseGuards()` (APP_GUARD global).
+   - `VITE_USE_MOCK_AUTH=false` + login con `student@demo`/`demo1234` para auth real.
+   - `VITE_DEV_USER_ID` sigue funcionando como fallback en dev.
+5. **Brainstorm Epic 3** (Google OAuth) cuando Epic 2 merge a `staging`.
+6. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.

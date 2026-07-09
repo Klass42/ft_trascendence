@@ -54,28 +54,35 @@ getAdmin(@CurrentUser() user: AuthUser) { ... }
 ```
 Seed: `make db-seed`. Frontend dev: `VITE_DEV_USER_ID=user-student-0001` in `apps/frontend/.env.development`.
 
-## Epic 2 — Email/password auth (NEXT — spec not yet written)
+## Epic 2 — Email/password auth ✅ DONE
 
-> **Status:** Not started. **Brainstorm + spec required before code.**
-> Must produce: `docs/superpowers/specs/2026-07-XX-epic2-email-password-auth-design.md`.
+> Design spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
+> Progress log: `docs/planning/desarrollo_jorge.md` (Bloque 2).
+> **Status:** Complete. 9 commits (`1d6b4537..df31d706`) on `jorge`, pushed to `origin/jorge`.
+> **Tests:** 40 tests, 7 suites, 0 failures.
+> **Runtime:** `make up` + `curl POST /auth/login` verified — tokens + 6-field AuthUser; APP_GUARD global active (401 without token, 200 with x-dev-user in dev).
 
-- [ ] **Brainstorm + write spec** before touching code.
-- [ ] Migrate Aloiki's `courses.controller.ts` + `files.controller.ts` from `@Query(organizationId)`
-      to `@CurrentUser()` **before** adding global `APP_GUARD`.
-- [ ] `apps/backend/src/auth/` — `auth.module.ts`, `auth.controller.ts`, `auth.service.ts`,
-      `dto/{register,login,refresh}.dto.ts` (class-validator).
-- [ ] Password hashing: `argon2` (already installed in Epic 1). Never store plaintext; salted by argon2.
-- [ ] `POST /auth/register` (email unique per org), `POST /auth/login`, `POST /auth/refresh`,
-      `POST /auth/logout`. Access JWT (15 min) + refresh JWT (7 d); store refresh **hash** in
-      `Session`. **`POST /auth/login` response shape** (matches
-      `apps/frontend/src/lib/api/auth-context.tsx:150-166`): `{ user: AuthUser; accessToken:
-      string; refreshToken: string }`.
-- [ ] Refresh-token rotation + revoke on logout. `POST /auth/refresh` returns
-      `{ accessToken, refreshToken }`.
-- [ ] **`GET /auth/me` → `AuthUser` directly** (not wrapped — the frontend calls
-      `apiClient.get<AuthUser>('/auth/me')` and `setUser(currentUser)` in `auth-context.tsx:107-115`).
-- [ ] Email verification token (dev: log the link; real email is Ale's SMTP later).
-- [ ] Switch frontend from mock auth to real: turn off `VITE_USE_MOCK_AUTH`, use `VITE_DEV_USER_ID` only for DevAuthGuard fallback.
+Delivered:
+- ✅ `auth/auth.controller.ts` — 6 endpoints: `POST /auth/register|login|refresh|logout`, `GET /auth/me|verify-email`.
+- ✅ `auth/auth.service.ts` — argon2 hashing, JWT sign (access 15m / refresh 7d), Session CRUD, refresh single-use rotation with reuse detection (revokes all sessions on reuse), email verification token (dev auto-verify, prod logs link).
+- ✅ `auth/dto/{register,login,refresh}.dto.ts` — class-validator (password ≥8 + upper/lower/number).
+- ✅ `common/auth/public.decorator.ts` — `@Public()` for public route opt-out.
+- ✅ `common/auth/app-auth.guard.ts` — composite guard: JWT first, DevAuthGuard fallback in non-prod, `@Public()` skip. Registered as `APP_GUARD` globally.
+- ✅ `common/common.module.ts` — added `AppAuthGuard` + `JwtAuthGuard` to providers/exports.
+- ✅ `app.module.ts` — `APP_GUARD` registered.
+- ✅ `courses/courses.controller.ts` — migrated from `@Query('organizationId')` to `@CurrentUser()`.
+- ✅ `files/files.controller.ts` — migrated from `CreateFileDto` body to `@CurrentUser()`; `create-file.dto.ts` deleted.
+- ✅ `courses/dto/create-course.dto.ts` — removed `organizationId` field.
+- ✅ E2E tests (`auth.e2e.spec.ts`) — login, me, register validation, dev header, 401 guard.
+
+**Frontend can now switch to real auth:** set `VITE_USE_MOCK_AUTH=false` in
+`apps/frontend/.env.development`, log in with `student@demo` / `demo1234`.
+`VITE_DEV_USER_ID` stays as dev fallback (AppAuthGuard accepts x-dev-user in dev).
+
+**Teammates:** All endpoints now require auth by default (APP_GUARD global).
+Use `@Public()` for public routes. `@CurrentUser()` works everywhere without
+`@UseGuards()` (the global guard handles it).
 
 ## Epic 3 — Google OAuth (module: OAuth ✓)
 
