@@ -1,13 +1,5 @@
-import {
-  Controller,
-  Get,
-  Headers,
-  Param,
-  Patch,
-  Post,
-  Query,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { CurrentUser, AuthUser } from '@/common/auth';
 import { NotificationsService } from './notifications.service';
 import { ListNotificationsDto } from './dto/list-notifications.dto';
 
@@ -17,40 +9,19 @@ export class NotificationsController {
 
   @Get()
   async listMine(
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
+    @CurrentUser() user: AuthUser,
     @Query() query: ListNotificationsDto,
   ) {
-    return this.notifications.listMine(this.requireUser(actingUserId), query);
+    return this.notifications.listMine(user.userId, query);
   }
 
   @Patch(':id/read')
-  async markRead(
-    @Param('id') id: string,
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
-  ) {
-    return this.notifications.markRead(id, this.requireUser(actingUserId));
+  async markRead(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.notifications.markRead(id, user.userId);
   }
 
   @Post('read-all')
-  async markAllRead(
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
-  ) {
-    return this.notifications.markAllRead(this.requireUser(actingUserId));
-  }
-
-  /**
-   * Temporary identity gate. Without a `userId` the service's `updateMany`
-   * calls would match every row (`where: { userId: undefined }`), so an empty
-   * header is a hard 401 rather than a silent cross-user write.
-   * TODO(auth): drop this once @CurrentUser() guarantees identity (Jorge).
-   */
-  private requireUser(actingUserId?: string): string {
-    if (!actingUserId) {
-      throw new UnauthorizedException('Missing x-dev-user header');
-    }
-    return actingUserId;
+  async markAllRead(@CurrentUser() user: AuthUser) {
+    return this.notifications.markAllRead(user.userId);
   }
 }
