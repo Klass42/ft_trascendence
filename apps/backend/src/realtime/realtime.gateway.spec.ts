@@ -1,5 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Test } from '@nestjs/testing';
 import { NotificationType } from '@prisma/client';
@@ -7,6 +9,9 @@ import { io, type Socket } from 'socket.io-client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from './realtime.gateway';
+
+// Same secret the gateway verifies with (ConfigService mock returns it below).
+const TEST_ACCESS_SECRET = 'test-access-secret';
 
 /**
  * Integration test for the realtime path with a REAL Socket.io server and
@@ -18,6 +23,7 @@ import { RealtimeGateway } from './realtime.gateway';
 describe('RealtimeGateway (integration)', () => {
   let app: INestApplication;
   let notifications: NotificationsService;
+  let jwt: JwtService;
   let port: number;
   const clients: Socket[] = [];
 
@@ -36,11 +42,18 @@ describe('RealtimeGateway (integration)', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [EventEmitterModule.forRoot()],
+      imports: [
+        EventEmitterModule.forRoot(),
+        JwtModule.register({ secret: TEST_ACCESS_SECRET }),
+      ],
       providers: [
         RealtimeGateway,
         NotificationsService,
         { provide: PrismaService, useValue: prismaMock },
+        {
+          provide: ConfigService,
+          useValue: { getOrThrow: () => TEST_ACCESS_SECRET },
+        },
       ],
     }).compile();
 
@@ -51,6 +64,7 @@ describe('RealtimeGateway (integration)', () => {
     const address = (app.getHttpServer() as { address(): { port: number } }).address();
     port = address.port;
     notifications = moduleRef.get(NotificationsService);
+    jwt = moduleRef.get(JwtService);
   });
 
   afterAll(async () => {
@@ -59,9 +73,13 @@ describe('RealtimeGateway (integration)', () => {
   });
 
   function connect(userId: string): Promise<Socket> {
+    return connectWith({ userId });
+  }
+
+  function connectWith(auth: Record<string, unknown>): Promise<Socket> {
     return new Promise((resolve, reject) => {
       const socket = io(`http://localhost:${port}`, {
-        auth: { userId },
+        auth,
         transports: ['websocket'],
         reconnection: false,
       });
@@ -103,6 +121,39 @@ describe('RealtimeGateway (integration)', () => {
 
     expect(leaked).toBe(false);
     bob.close();
+  });
+
+  it('accepts a socket carrying a valid access JWT and delivers to its sub', async () => {
+    const token = jwt.sign({ sub: 'user-jwt' }, { secret: TEST_ACCESS_SECRET });
+    const carol = await connectWith({ token });
+    const received = new Promise<{ title: string; userId: string }>((resolve) =>
+      carol.on('notification:new', resolve),
+    );
+
+    await notifications.emit('user-jwt', NotificationType.SYSTEM, {
+      title: 'Hi JWT',
+    });
+
+    const payload = await received;
+    expect(payload.title).toBe('Hi JWT');
+    expect(payload.userId).toBe('user-jwt');
+    carol.close();
+  });
+
+  it('rejects a socket with an invalid access JWT', async () => {
+    await expect(
+      new Promise((resolve, reject) => {
+        const socket = io(`http://localhost:${port}`, {
+          auth: { token: 'not-a-real-jwt' },
+          transports: ['websocket'],
+          reconnection: false,
+        });
+        clients.push(socket);
+        socket.on('disconnect', () => resolve('disconnected'));
+        socket.on('connect_error', reject);
+        setTimeout(() => reject(new Error('still connected')), 1500);
+      }),
+    ).resolves.toBe('disconnected');
   });
 
   it('rejects a socket with no identity', async () => {
