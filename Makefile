@@ -74,6 +74,9 @@ db-migrate: ## Crea/aplica una migración de desarrollo (NAME=nombre)
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio
 
+db-seed: ## Carga datos demo deterministas (1 org, 3 users con demo1234, 1 curso)
+	$(PRISMA) db seed
+
 # ─── Nix OCI Images ───────────────────────────────────────
 images: ## Construye imágenes OCI con Nix
 	nix build .#backend-image
