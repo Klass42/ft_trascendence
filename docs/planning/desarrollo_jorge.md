@@ -192,12 +192,23 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - [ ] Avisar a equipo: APP_GUARD global activo, `@Public()` para endpoints públicos, `@CurrentUser()` sin `@UseGuards()`.
 - [ ] Coordinar con Aloiki: `VITE_USE_MOCK_AUTH=false` para usar login real.
 
-### Bloque 3 — 2026-07-10 — Epic 3 brainstorm + spec + plan (pendiente de implementar)
+### Bloque 3 — 2026-07-10 — Epic 3 Google OAuth implementado ✅
 - ✅ Brainstorm: 3 preguntas aclaratorias (redirect hash fragment / auto-create / auto-vincular email match) → todas A/B/A.
 - ✅ Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`
 - ✅ Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md` (5 tasks)
-- [ ] Implementación pendiente — 2 deps (`passport-google-oauth20` + types), 1 strategy, 1 service method, 2 routes.
-- [ ] Commit + push `jorge`; crear PR conjunto Epic 2 + Epic 3 a `staging`.
+- ✅ `e48b25a4` — Deps: `passport-google-oauth20` + `@types/passport-google-oauth20`, env: `FRONTEND_URL` + `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` en compose y `.env.example`
+- ✅ `(commit merge)` — `GoogleStrategy` (passport-google-oauth20) + 2 tests + wired en `CommonModule`
+- ✅ `c71cca40` — `AuthService.googleLogin()` (auto-create + auto-vincular por email match) + 3 tests
+- ✅ `cd6ca1a2` — `AuthController`: `GET /auth/google` + `GET /auth/google/callback` con redirect hash fragment `#accessToken=...&refreshToken=...`
+- ✅ `a286b839` — Fix compose: añadir `GOOGLE_CLIENT_*` al backend service
+- ✅ `f2df7249` — Fix `GoogleStrategy`: usar `config.get()` con fallback en vez de `getOrThrow()` (app bootea sin Google creds)
+
+**Tests finales:** 45 tests, 8 suites, 0 fallos.
+**Runtime smoke:** `make up` ✅ backend arranca limpio · `/auth/google` y `/auth/google/callback` mapeados ✅ · login email/password sigue funcionando ✅ · Google redirect funciona con creds reales (requiere `GOOGLE_CLIENT_ID`/`SECRET` válidos; en dev sin creds → placeholder, no crashea).
+
+**Estado actual del §1:** Epics 1+2+3 completos en `jorge`, pushed. Total: 45 tests, 8 suites.
+- [ ] PR conjunto Epic 1+2+3 a `staging`.
+- [ ] Avisar al equipo: Google OAuth disponible, requiere creds reales de Google Cloud Console.
 
 ---
 
