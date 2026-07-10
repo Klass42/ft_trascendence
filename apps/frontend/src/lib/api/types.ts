@@ -151,3 +151,11 @@ export type {
   NotificationDTO,
   NotificationsListDTO,
 } from './types/notification';
+
+export type {
+  AnalyticsOverviewDTO,
+  SubmissionsSeriesPointDTO,
+  SubmissionsOverTimeDTO,
+  GradeBucketDTO,
+  GradeDistributionDTO,
+} from './types/analytics';

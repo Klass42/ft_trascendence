@@ -1,0 +1,266 @@
+.page {
+  padding: 30px 40px;
+  max-width: 1100px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.select {
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* ===== KPI tiles ===== */
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.kpi {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 13px;
+  padding: 16px 18px;
+}
+
+.kpiLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+}
+
+.kpiValue {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.kpiHint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+/* ===== Chart cards ===== */
+
+.charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 13px;
+  padding: 18px 20px 20px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.rangeControls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dateInput {
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.rangeLabel {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* ===== Chart primitives ===== */
+
+.chartWrap {
+  position: relative;
+  width: 100%;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.gridLine {
+  stroke: var(--color-border-secondary);
+  stroke-width: 1;
+}
+
+.axisLabel {
+  fill: var(--color-text-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+
+.linePath {
+  fill: none;
+  stroke: var(--color-accent-primary);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.areaPath {
+  fill: var(--color-accent-primary);
+  opacity: 0.08;
+}
+
+.point {
+  fill: var(--color-bg-secondary);
+  stroke: var(--color-accent-primary);
+  stroke-width: 2;
+}
+
+.pointActive {
+  fill: var(--color-accent-primary);
+}
+
+.bar {
+  fill: var(--color-accent-primary);
+  transition: fill var(--transition-fast);
+}
+
+.barActive {
+  fill: var(--color-accent-active);
+}
+
+.hit {
+  fill: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.hit:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: -2px;
+}
+
+/* HTML tooltip positioned as a % of the chart box (SVG scales uniformly). */
+.tooltip {
+  position: absolute;
+  transform: translate(-50%, -115%);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+  z-index: 2;
+}
+
+.tooltipValue {
+  font-weight: 700;
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.error {
+  color: var(--color-error);
+  font-size: 14px;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+/* ===== Print (Export PDF via the browser) =====
+ * Scoped to a body class we toggle only while printing this dashboard, so a
+ * normal Ctrl+P elsewhere is unaffected. Everything is hidden, then just the
+ * print area is revealed and pinned to the top-left of the page. */
+@media print {
+  :global(body.analytics-printing) * {
+    visibility: hidden !important;
+  }
+
+  :global(body.analytics-printing) .printArea,
+  :global(body.analytics-printing) .printArea * {
+    visibility: visible !important;
+  }
+
+  :global(body.analytics-printing) .printArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    max-width: none;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+
+  .card,
+  .kpi {
+    break-inside: avoid;
+  }
+}
