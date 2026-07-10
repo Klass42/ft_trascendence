@@ -23,3 +23,9 @@ export {
   useCreatePost,
   usePinThread,
 } from './useForumMutations';
+export {
+  useAnalyticsOverview,
+  useSubmissionsOverTime,
+  useGradeDistribution,
+  downloadAnalyticsCsv,
+} from './useAnalytics';

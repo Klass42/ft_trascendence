@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   MessageSquare,
   BarChart3,
+  LineChart,
   User,
   LogOut,
   ChevronLeft,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/assignments', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
   { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
+  { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },
 ] as const;
 
 export function AppLayout() {
@@ -108,6 +110,10 @@ export function AppLayout() {
       >
         <nav className={styles.nav}>
           {NAV_ITEMS.map((item) => {
+            // Analytics dashboard is a staff tool — hide from students.
+            if ('staffOnly' in item && item.staffOnly && user?.role === 'STUDENT') {
+              return null;
+            }
             if ('student' in item && item.student !== undefined && user) {
               if (item.student && user.role === 'ADMIN') return null;
               if (item.teacher && user.role === 'STUDENT') return null;
