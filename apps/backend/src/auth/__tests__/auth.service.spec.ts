@@ -47,6 +47,8 @@ let mockSessionDelete: jest.Mock;
 let mockSessionDeleteMany: jest.Mock;
 let mockUserFindUnique: jest.Mock;
 let mockUserUpdate: jest.Mock;
+let mockOAuthAccountFindUnique: jest.Mock;
+let mockOAuthAccountCreate: jest.Mock;
 
 const mkPrisma = () => ({
   user: {
@@ -61,6 +63,10 @@ const mkPrisma = () => ({
     findUnique: (...a: unknown[]) => mockSessionFindUnique(...a),
     delete: (...a: unknown[]) => mockSessionDelete(...a),
     deleteMany: (...a: unknown[]) => mockSessionDeleteMany(...a),
+  },
+  oAuthAccount: {
+    findUnique: (...a: unknown[]) => mockOAuthAccountFindUnique(...a),
+    create: (...a: unknown[]) => mockOAuthAccountCreate(...a),
   },
 }) as unknown as PrismaService;
 
@@ -78,6 +84,8 @@ describe('AuthService', () => {
     mockSessionDeleteMany = jest.fn();
     mockUserFindUnique = jest.fn();
     mockUserUpdate = jest.fn();
+    mockOAuthAccountFindUnique = jest.fn();
+    mockOAuthAccountCreate = jest.fn();
     process.env.NODE_ENV = 'development';
     service = new AuthService(mkPrisma(), mkJwtService(), mkConfig());
   });
@@ -289,6 +297,56 @@ describe('AuthService', () => {
 
       const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
       await expect(service2.verifyEmail('bad-token')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('googleLogin', () => {
+    const googleProfile = {
+      providerUserId: 'google-123',
+      email: 'newuser@gmail.com',
+      name: 'Google User',
+      avatarUrl: 'https://lh3.googleusercontent.com/photo.jpg',
+    };
+
+    it('returns tokens when OAuthAccount already linked', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue({
+        userId: mockUser.id,
+        provider: 'google',
+        providerUserId: 'google-123',
+      });
+      mockSessionCreate.mockResolvedValue({ id: 'session-g1' });
+
+      const result = await service.googleLogin(googleProfile);
+      expect(result.accessToken).toBe('access-token-mock');
+      expect(result.refreshToken).toBe('refresh-token-mock');
+    });
+
+    it('links existing user by email match and returns tokens', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(mockUser);
+      mockOAuthAccountCreate.mockResolvedValue({});
+      mockSessionCreate.mockResolvedValue({ id: 'session-g2' });
+
+      const result = await service.googleLogin(googleProfile);
+      expect(result.accessToken).toBe('access-token-mock');
+      expect(mockOAuthAccountCreate).toHaveBeenCalled();
+      expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it('creates a new user + OAuthAccount when no match', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(null);
+      mockUserCreate.mockResolvedValue({ ...mockUser, id: 'user-google-0001', passwordHash: null });
+      mockOAuthAccountCreate.mockResolvedValue({});
+      mockSessionCreate.mockResolvedValue({ id: 'session-g3' });
+
+      const result = await service.googleLogin(googleProfile);
+      expect(result.accessToken).toBe('access-token-mock');
+      const createData = (mockUserCreate.mock.calls[0][0] as { data: any }).data;
+      expect(createData.passwordHash).toBeNull();
+      expect(createData.emailVerifiedAt).toBeInstanceOf(Date);
+      expect(createData.role).toBe('STUDENT');
+      expect(mockOAuthAccountCreate).toHaveBeenCalled();
     });
   });
 });

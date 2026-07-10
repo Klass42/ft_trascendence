@@ -224,4 +224,63 @@ export class AuthService {
     });
     return { verified: true };
   }
+
+  async googleLogin(profile: {
+    providerUserId: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  }): Promise<{ accessToken: string; refreshToken: string }> {
+    const oauthAccount = await this.prisma.oAuthAccount.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: 'google',
+          providerUserId: profile.providerUserId,
+        },
+      },
+    });
+
+    let userId: string;
+
+    if (oauthAccount) {
+      userId = oauthAccount.userId;
+    } else {
+      const existingUser = await this.prisma.user.findFirst({
+        where: { organizationId: SEED_ORG_ID, email: profile.email },
+      });
+
+      if (existingUser) {
+        await this.prisma.oAuthAccount.create({
+          data: {
+            provider: 'google',
+            providerUserId: profile.providerUserId,
+            userId: existingUser.id,
+          },
+        });
+        userId = existingUser.id;
+      } else {
+        const newUser = await this.prisma.user.create({
+          data: {
+            organizationId: SEED_ORG_ID,
+            email: profile.email,
+            name: profile.name,
+            avatarUrl: profile.avatarUrl,
+            passwordHash: null,
+            role: 'STUDENT',
+            emailVerifiedAt: new Date(),
+          },
+        });
+        await this.prisma.oAuthAccount.create({
+          data: {
+            provider: 'google',
+            providerUserId: profile.providerUserId,
+            userId: newUser.id,
+          },
+        });
+        userId = newUser.id;
+      }
+    }
+
+    return this.issueTokens(userId);
+  }
 }
