@@ -21,6 +21,7 @@ import { AssignmentsModule } from './assignments/assignments.module';
 import { ForumsModule } from './forums/forums.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ForumsModule,
     NotificationsModule,
     RealtimeModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

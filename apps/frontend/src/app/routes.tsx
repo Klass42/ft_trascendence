@@ -38,6 +38,9 @@ const GradesPage = lazy(() =>
 const NotificationsPage = lazy(() =>
   import('@/features/notifications').then((m) => ({ default: m.NotificationsPage }))
 );
+const AnalyticsPage = lazy(() =>
+  import('@/features/analytics').then((m) => ({ default: m.AnalyticsPage }))
+);
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
 );
@@ -134,6 +137,14 @@ const routes: RouteObject[] = [
         element: (
           <Suspense fallback={<PageLoader />}>
             <GradesPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/analytics',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AnalyticsPage />
           </Suspense>
         ),
       },
