@@ -17,10 +17,13 @@ export interface GoogleProfile {
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(config: ConfigService) {
+    const clientID = config.get<string>('GOOGLE_CLIENT_ID') || 'google-oauth-dev-not-configured';
+    const clientSecret = config.get<string>('GOOGLE_CLIENT_SECRET') || 'google-oauth-dev-not-configured';
+    const callbackURL = config.get<string>('GOOGLE_CALLBACK_URL') || 'http://localhost:3000/auth/google/callback';
     super({
-      clientID: config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
-      clientSecret: config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
-      callbackURL: config.getOrThrow<string>('GOOGLE_CALLBACK_URL'),
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['email', 'profile'],
     });
   }
