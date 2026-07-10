@@ -1,12 +1,5 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  Param,
-  Post,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { CurrentUser, AuthUser } from '@/common/auth';
 import { SubmissionsService } from './submissions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 
@@ -17,49 +10,25 @@ export class SubmissionsController {
   @Post('assignments/:assignmentId/submissions')
   async submit(
     @Param('assignmentId') assignmentId: string,
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
+    @CurrentUser() user: AuthUser,
     @Body() dto: CreateSubmissionDto,
   ) {
-    return this.submissions.submit(
-      assignmentId,
-      this.requireUser(actingUserId),
-      dto,
-    );
+    return this.submissions.submit(assignmentId, user.userId, dto);
   }
 
   @Get('assignments/:assignmentId/submissions')
   async listForAssignment(
     @Param('assignmentId') assignmentId: string,
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.submissions.listForAssignment(
-      assignmentId,
-      this.requireUser(actingUserId),
-    );
+    return this.submissions.listForAssignment(assignmentId, user.userId);
   }
 
   @Get('assignments/:assignmentId/submissions/me')
   async findMine(
     @Param('assignmentId') assignmentId: string,
-    // TODO(auth): @CurrentUser() (Jorge)
-    @Headers('x-dev-user') actingUserId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.submissions.findMine(
-      assignmentId,
-      this.requireUser(actingUserId),
-    );
-  }
-
-  /**
-   * Temporary identity gate — mirrors NotificationsController.
-   * TODO(auth): drop this once @CurrentUser() guarantees identity (Jorge).
-   */
-  private requireUser(actingUserId?: string): string {
-    if (!actingUserId) {
-      throw new UnauthorizedException('Missing x-dev-user header');
-    }
-    return actingUserId;
+    return this.submissions.findMine(assignmentId, user.userId);
   }
 }

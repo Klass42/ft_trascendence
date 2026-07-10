@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
+import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -42,7 +44,11 @@ export class RealtimeGateway
   @WebSocketServer()
   private server!: Server;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) {}
 
   async handleConnection(client: Socket): Promise<void> {
     const userId = this.identify(client);
@@ -82,24 +88,46 @@ export class RealtimeGateway
   }
 
   /**
-   * DEV identity: the acting user comes from the Socket.io handshake —
-   * `handshake.auth.userId` (preferred) or the `x-dev-user` header fallback.
-   * TODO(auth): verificar JWT real (Jorge) en handshake.auth.token.
+   * Resolve the acting user from the Socket.io handshake.
+   *
+   * Prod contract (mirrors AppAuthGuard): verify a REAL access JWT from
+   * `handshake.auth.token` with the same `JWT_ACCESS_SECRET` Jorge signs with;
+   * the token's `sub` claim is the userId. An absent/invalid token yields no
+   * identity → the socket is rejected.
+   *
+   * Dev valve: ONLY when NODE_ENV !== 'production', fall back to the seeded
+   * `handshake.auth.userId` / `x-dev-user` header so QA can impersonate without
+   * issuing JWTs. Never active in production.
    */
   private identify(client: Socket): string | null {
     const auth = (client.handshake.auth ?? {}) as {
       userId?: unknown;
       token?: unknown;
     };
-    if (typeof auth.userId === 'string' && auth.userId.trim()) {
-      return auth.userId.trim();
+
+    if (typeof auth.token === 'string' && auth.token.trim()) {
+      try {
+        const payload = this.jwt.verify<{ sub?: string }>(auth.token.trim(), {
+          secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        });
+        if (payload?.sub) return payload.sub;
+      } catch {
+        // Invalid/expired token → fall through (reject, unless dev fallback).
+      }
     }
 
-    const header = client.handshake.headers['x-dev-user'];
-    const fromHeader = Array.isArray(header) ? header[0] : header;
-    return typeof fromHeader === 'string' && fromHeader.trim()
-      ? fromHeader.trim()
-      : null;
+    if (process.env.NODE_ENV !== 'production') {
+      if (typeof auth.userId === 'string' && auth.userId.trim()) {
+        return auth.userId.trim();
+      }
+      const header = client.handshake.headers['x-dev-user'];
+      const fromHeader = Array.isArray(header) ? header[0] : header;
+      if (typeof fromHeader === 'string' && fromHeader.trim()) {
+        return fromHeader.trim();
+      }
+    }
+
+    return null;
   }
 
   /** Best-effort presence stamp. A bad dev id must not crash the socket. */
