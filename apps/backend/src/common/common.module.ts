@@ -7,6 +7,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
 import { RolesGuard } from './auth/roles.guard';
 import { DevAuthGuard } from './auth/dev-auth.guard';
 import { AppAuthGuard } from './auth/app-auth.guard';
+import { GoogleStrategy } from '../auth/google.strategy';
 
 /**
  * Global Identity & Access primitives. Imports JwtModule (configured via env) so
@@ -26,7 +27,7 @@ import { AppAuthGuard } from './auth/app-auth.guard';
       }),
     }),
   ],
-  providers: [JwtAuthGuard, RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy],
-  exports: [JwtAuthGuard, RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy, JwtModule],
+  providers: [JwtAuthGuard, RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy, GoogleStrategy],
+  exports: [JwtAuthGuard, RolesGuard, DevAuthGuard, AppAuthGuard, JwtStrategy, JwtModule, GoogleStrategy],
 })
 export class CommonModule {}
