@@ -22,34 +22,67 @@ As Tech Lead you are the **Prisma schema steward** and review auth/permissions P
 
 ---
 
-## Epic 1 — Auth contracts + seed (Week 1, TOP PRIORITY, unblocks all)
+## Epic 1 — Auth contracts + seed (Week 1, TOP PRIORITY, unblocks all) ✅ DONE
 
-- [ ] `apps/backend/src/common/auth/auth-user.type.ts` — `interface AuthUser { userId: string;
-      organizationId: string; role: 'ADMIN'|'TEACHER'|'STUDENT'; }`
-- [ ] `apps/backend/src/common/auth/current-user.decorator.ts` — `@CurrentUser()` param decorator
-      returning `req.user as AuthUser`.
-- [ ] `apps/backend/src/common/auth/jwt-auth.guard.ts` — verifies access JWT, sets `req.user`.
-- [ ] `apps/backend/src/common/auth/dev-auth.guard.ts` — **fallback** for teammates: reads
-      `x-dev-user` header (a seeded userId), loads the user, sets `req.user`. Enabled when
-      `NODE_ENV=development`. This is what lets others build endpoints before real login exists.
-- [ ] `apps/backend/src/common/auth/roles.decorator.ts` + `roles.guard.ts` — `@Roles('ADMIN')`.
-- [ ] `apps/backend/src/common/common.module.ts` — exports guards so any module can apply them.
-- [ ] `apps/backend/prisma/seed.ts` — 1 `Organization`, users `admin@demo`, `teacher@demo`,
-      `student@demo` (hashed password `demo1234`), 1 published `Course` with a section + lesson.
-      Wire `package.json` `"prisma": { "seed": "ts-node prisma/seed.ts" }` and a `make db-seed`.
-- [ ] Announce in the team channel when `common/auth` + seed are on `staging`.
+> Design spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
+> Progress log: `docs/planning/desarrollo_jorge.md`.
+> **Status:** Complete. 10 commits (`e4142030..7bb07c3a`) on `jorge`, PR #2 → `staging`.
+> **Tests:** 13 unit tests, 4 suites, 0 failures.
+> **Runtime:** `make up` + `make db-seed` verified — 8 rows with `$argon2id$v=` hashes, `/health` 200.
 
-## Epic 2 — Email/password auth
+Delivered:
+- ✅ `common/auth/auth-user.type.ts` — `AuthUser` 6 fields (frontend-aligned).
+- ✅ `common/auth/current-user.decorator.ts` — `@CurrentUser()` factory decorator (500 on programming error).
+- ✅ `common/auth/jwt-auth.guard.ts` + `jwt.strategy.ts` — passport-jwt, complete but inert (activates in Epic 2).
+- ✅ `common/auth/dev-auth.guard.ts` — `x-dev-user` header → Prisma → `req.user`; **prod-blocked** (`NODE_ENV==='production'` → `return false`).
+- ✅ `common/auth/roles.decorator.ts` + `roles.guard.ts` — `@Roles('ADMIN')`, `RolesGuard` via `Reflector.getAllAndOverride`.
+- ✅ `common/common.module.ts` — `@Global`, `JwtModule.registerAsync`, exports guards + JwtModule. Wired into `app.module.ts`.
+- ✅ `prisma/seed.ts` — stable IDs (`org-klass-0001`, `user-*-0001`), argon2 `demo1234`, `emailVerifiedAt` set, `Course` PUBLISHED `KLASS123`, upsert idempotent.
+- ✅ `make db-seed` Makefile target.
+- ✅ JWT env vars added to `infra/docker/docker-compose.dev.yml` (dev placeholders — Ale to review).
 
-- [ ] `apps/backend/src/auth/` — `auth.module.ts`, `auth.controller.ts`, `auth.service.ts`,
-      `dto/{register,login,refresh}.dto.ts` (class-validator).
-- [ ] Password hashing: `argon2` (add dep). Never store plaintext; salted by argon2.
-- [ ] `POST /auth/register` (email unique per org), `POST /auth/login`, `POST /auth/refresh`,
-      `POST /auth/logout`. Access JWT (15 min) + refresh JWT (7 d); store refresh **hash** in
-      `Session`.
-- [ ] Refresh-token rotation + revoke on logout.
-- [ ] `GET /auth/me` → current user + org + role.
-- [ ] Email verification token (dev: log the link; real email is Ale's SMTP later).
+**Teammates can now use:**
+```ts
+@UseGuards(DevAuthGuard)
+@Get('something')
+getThing(@CurrentUser() user: AuthUser) { ... }
+
+@UseGuards(DevAuthGuard, RolesGuard)
+@Roles('ADMIN')
+@Get('admin')
+getAdmin(@CurrentUser() user: AuthUser) { ... }
+```
+Seed: `make db-seed`. Frontend dev: `VITE_DEV_USER_ID=user-student-0001` in `apps/frontend/.env.development`.
+
+## Epic 2 — Email/password auth ✅ DONE
+
+> Design spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
+> Progress log: `docs/planning/desarrollo_jorge.md` (Bloque 2).
+> **Status:** Complete. 9 commits (`1d6b4537..df31d706`) on `jorge`, pushed to `origin/jorge`.
+> **Tests:** 40 tests, 7 suites, 0 failures.
+> **Runtime:** `make up` + `curl POST /auth/login` verified — tokens + 6-field AuthUser; APP_GUARD global active (401 without token, 200 with x-dev-user in dev).
+
+Delivered:
+- ✅ `auth/auth.controller.ts` — 6 endpoints: `POST /auth/register|login|refresh|logout`, `GET /auth/me|verify-email`.
+- ✅ `auth/auth.service.ts` — argon2 hashing, JWT sign (access 15m / refresh 7d), Session CRUD, refresh single-use rotation with reuse detection (revokes all sessions on reuse), email verification token (dev auto-verify, prod logs link).
+- ✅ `auth/dto/{register,login,refresh}.dto.ts` — class-validator (password ≥8 + upper/lower/number).
+- ✅ `common/auth/public.decorator.ts` — `@Public()` for public route opt-out.
+- ✅ `common/auth/app-auth.guard.ts` — composite guard: JWT first, DevAuthGuard fallback in non-prod, `@Public()` skip. Registered as `APP_GUARD` globally.
+- ✅ `common/common.module.ts` — added `AppAuthGuard` + `JwtAuthGuard` to providers/exports.
+- ✅ `app.module.ts` — `APP_GUARD` registered.
+- ✅ `courses/courses.controller.ts` — migrated from `@Query('organizationId')` to `@CurrentUser()`.
+- ✅ `files/files.controller.ts` — migrated from `CreateFileDto` body to `@CurrentUser()`; `create-file.dto.ts` deleted.
+- ✅ `courses/dto/create-course.dto.ts` — removed `organizationId` field.
+- ✅ E2E tests (`auth.e2e.spec.ts`) — login, me, register validation, dev header, 401 guard.
+
+**Frontend can now switch to real auth:** set `VITE_USE_MOCK_AUTH=false` in
+`apps/frontend/.env.development`, log in with `student@demo` / `demo1234`.
+`VITE_DEV_USER_ID` stays as dev fallback (AppAuthGuard accepts x-dev-user in dev).
+
+**Teammates:** All endpoints now require auth by default (APP_GUARD global).
+Use `@Public()` for public routes. `@CurrentUser()` works everywhere without
+`@UseGuards()` (the global guard handles it).
 
 ## Epic 3 — Google OAuth (module: OAuth ✓)
 

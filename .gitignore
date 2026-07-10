@@ -27,6 +27,9 @@ Thumbs.db
 # direnv
 .direnv
 
+# engram knowledge graph (local agent memory)
+.engram/
+
 # Docker volumes
 docker-data/
 
