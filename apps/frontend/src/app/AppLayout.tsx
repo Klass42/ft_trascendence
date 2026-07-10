@@ -6,7 +6,6 @@ import {
   ClipboardCheck,
   MessageSquare,
   BarChart3,
-  Bell,
   User,
   LogOut,
   ChevronLeft,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/api';
 import { Spinner } from '@/components/ui';
+import { NotificationsProvider, NotificationBell } from '@/features/notifications';
 import styles from './AppLayout.module.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
@@ -64,9 +64,8 @@ export function AppLayout() {
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
 
-  const unreadCount = 3;
-
   return (
+    <NotificationsProvider>
     <div className={styles.layout}>
       {/* ===== Navbar ===== */}
       <header className={styles.navbar}>
@@ -86,12 +85,7 @@ export function AppLayout() {
         </div>
 
         <div className={styles.navbarRight}>
-          <NavLink to="/notifications" className={styles.notifBtn} aria-label="Notifications">
-            <Bell size={20} />
-            {unreadCount > 0 && (
-              <span className={styles.notifBadge}>{unreadCount}</span>
-            )}
-          </NavLink>
+          <NotificationBell />
           <NavLink to="/profile" className={styles.avatar}>
             {initials}
           </NavLink>
@@ -160,5 +154,6 @@ export function AppLayout() {
         <Outlet />
       </main>
     </div>
+    </NotificationsProvider>
   );
 }

@@ -136,3 +136,18 @@ export type {
   MyGradeDTO,
   GradeSubmissionInput,
 } from './types/gradebook';
+
+export type {
+  ForumAuthorDTO,
+  ForumThreadListItemDTO,
+  ForumThreadDTO,
+  ForumPostDTO,
+  CreateThreadInput,
+  CreatePostInput,
+} from './types/forum';
+
+export type {
+  NotificationType,
+  NotificationDTO,
+  NotificationsListDTO,
+} from './types/notification';
