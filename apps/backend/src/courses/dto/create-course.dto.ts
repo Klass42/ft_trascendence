@@ -2,15 +2,11 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsUUID,
   MinLength,
 } from 'class-validator';
 import { CourseStatus } from '@prisma/client';
 
 export class CreateCourseDto {
-  @IsUUID()
-  organizationId: string;
-
   @IsString()
   @MinLength(1)
   title: string;

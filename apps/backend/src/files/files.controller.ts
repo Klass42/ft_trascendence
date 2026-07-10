@@ -1,3 +1,4 @@
+// Owner: Aloiki (@illia) — Content & UX; migrated to @CurrentUser by Jorge (Epic 2)
 import {
   Controller,
   Post,
@@ -6,12 +7,11 @@ import {
   Param,
   UseInterceptors,
   UploadedFile,
-  Body,
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FilesService } from './files.service';
-import { CreateFileDto } from './dto/create-file.dto';
+import { CurrentUser, AuthUser } from '@/common/auth';
 
 @Controller('files')
 export class FilesController {
@@ -21,16 +21,12 @@ export class FilesController {
   @UseInterceptors(FileInterceptor('file'))
   async upload(
     @UploadedFile() file: Express.Multer.File,
-    @Body() dto: CreateFileDto,
+    @CurrentUser() user: AuthUser,
   ) {
     if (!file) {
       throw new BadRequestException('File is required');
     }
-    return this.filesService.createUpload(
-      file,
-      dto.organizationId,
-      dto.uploaderId,
-    );
+    return this.filesService.createUpload(file, user.organizationId, user.userId);
   }
 
   @Get(':id/url')
