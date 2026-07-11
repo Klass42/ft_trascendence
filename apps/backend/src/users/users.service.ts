@@ -4,13 +4,15 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
-import type { CreateUserDto } from './dto/create-user.dto';
+import { FilesService } from '../files/files.service';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
+import type { CreateUserDto } from './dto/create-user.dto';
 
 const selectUser = {
   id: true, email: true, name: true, avatarUrl: true,
@@ -27,6 +29,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly files?: FilesService,
   ) {}
 
   async findAll(organizationId: string) {
@@ -105,5 +108,13 @@ export class UsersService {
     });
     const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
     return this.prisma.user.findMany({ where: { id: { in: friendIds } }, select: selectPublicProfile, orderBy: { name: 'asc' } });
+  }
+
+  async uploadAvatar(userId: string, organizationId: string, file: Express.Multer.File) {
+    if (!this.files) throw new BadRequestException('File upload is not available');
+    const fileRecord = await this.files.createUpload(file, organizationId, userId);
+    const { url } = await this.files.getSignedUrl(fileRecord.id);
+    await this.prisma.user.update({ where: { id: userId }, data: { avatarUrl: url } });
+    return this.prisma.user.findUnique({ where: { id: userId }, select: selectPublicProfile });
   }
 }

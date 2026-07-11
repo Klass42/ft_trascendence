@@ -11,6 +11,10 @@ const mkService = () =>
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    updateProfile: jest.fn(),
+    uploadAvatar: jest.fn(),
+    listFriends: jest.fn(),
+    sendFriendRequest: jest.fn(),
   }) as unknown as UsersService;
 
 const admin = {
@@ -31,13 +35,13 @@ describe('UsersController', () => {
     expect(roles).toEqual(['ADMIN']);
   });
 
-  it('findOne requires ADMIN role', () => {
+  it('findOne does NOT require ADMIN (public profile)', () => {
     const ctrl = new UsersController(mkService());
     const roles = reflector.getAllAndOverride(ROLES_KEY, [
       ctrl.findOne,
       UsersController,
     ]);
-    expect(roles).toEqual(['ADMIN']);
+    expect(roles).toBeUndefined();
   });
 
   it('create requires ADMIN role', () => {
@@ -83,5 +87,31 @@ describe('UsersController', () => {
     const svc = mkService();
     await new UsersController(svc).remove('user-student-0001', admin);
     expect(svc.remove).toHaveBeenCalledWith('user-student-0001', 'org-klass-0001', 'user-admin-0001');
+  });
+
+  // ── Epic 6: profile + friends ──
+
+  it('findOne passes role to service', async () => {
+    const svc = mkService();
+    await new UsersController(svc).findOne('user-student-0001', admin);
+    expect(svc.findOne).toHaveBeenCalledWith('user-student-0001', 'org-klass-0001', 'ADMIN');
+  });
+
+  it('updateProfile calls service with userId + dto', async () => {
+    const svc = mkService();
+    await new UsersController(svc).updateProfile({ name: 'New' }, admin);
+    expect(svc.updateProfile).toHaveBeenCalledWith('user-admin-0001', { name: 'New' });
+  });
+
+  it('listFriends calls service with userId', async () => {
+    const svc = mkService();
+    await new UsersController(svc).listFriends(admin);
+    expect(svc.listFriends).toHaveBeenCalledWith('user-admin-0001');
+  });
+
+  it('sendFriendRequest calls service with callerId, targetId, orgId', async () => {
+    const svc = mkService();
+    await new UsersController(svc).sendFriendRequest('user-student-0001', admin);
+    expect(svc.sendFriendRequest).toHaveBeenCalledWith('user-admin-0001', 'user-student-0001', 'org-klass-0001');
   });
 });
