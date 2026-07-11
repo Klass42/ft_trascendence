@@ -215,19 +215,25 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Estado actual del §1:** Epics 1+2+3 completos en `jorge`, pushed. Total: 45 tests, 8 suites.
 
 ### Bloque 4 — 2026-07-11 — Epic 5 Admin User CRUD implementado ✅
-- ✅ Brainstorm: 1 pregunta (DELETE duplication → A). Spec + plan escritos.
-- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`
-- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`
-- ✅ `d5e6bd30` — DTOs: `CreateUserDto` (email, password, name, role) + `UpdateUserDto` (name, email, role, bio)
-- ✅ `(commit merge)` — `UsersService` (findAll, findOne, create, update, remove) + 14 tests (TDD). Argon2 hashing, org-scoped, self-role-change protection.
-- ✅ `e0f2394d` — `UsersController` (5 endpoints, all @Roles('ADMIN')) + wired `UsersModule` + 8 tests (TDD).
-
-**Tests finales:** 100 tests, 18 suites, 0 fallos.
-**Runtime smoke:** `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅.
-
+[...]
 **Estado actual del §1:** Epics 1+2+3+4+5 completos en `jorge`, pushed. Total: 100 tests, 18 suites.
 - [ ] PR a `staging` con Epics 1-5.
-- [ ] Avisar al equipo: CRUD de usuarios admin listo.
+
+### Bloque 5 — 2026-07-11 — Epic 6 Profile + Friends implementado ✅
+- ✅ Brainstorm: 3 preguntas → C/A/A (role-aware GET / A avatar / A block). Spec + plan escritos.
+- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic6-profile-friends-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic6-profile-friends.md`
+- ✅ `38b62fa1` — DTOs: `UpdateProfileDto` (name/bio) + `UpdateFriendshipDto` (status)
+- ✅ `a184cef` — `UsersService`: findOne role-aware + updateProfile + sendFriendRequest + listFriends + 9 tests
+- ✅ `(commit)` — `FriendshipsService` (accept/block transitions) + 5 tests
+- ✅ `9929e09e` — `UsersController`: role-aware GET /:id + PATCH /me + /me/avatar + POST /:id/friend + GET /me/friends. `FriendshipsController`: PATCH /friendships/:id. `FilesModule` exports `FilesService`. `UsersModule` imports `FilesModule`.
+
+**Tests finales:** 118 tests, 19 suites, 0 fallos.
+**Runtime smoke:** `GET /users/:id` → public profile (sin email) ✅ · admin profile (con email) ✅ · `PATCH /users/me` → bio ✅ · `POST /users/:id/friend` → 201 ✅.
+
+**Estado actual del §1:** Epics 1-6 completos en `jorge`, pushed. Total: 118 tests, 19 suites.
+- [ ] PR a `staging` con Epics 4-6.
+- [ ] Epic 7 (frontend auth/admin/org pages) — última epica de Jorge.
 
 ---
 
