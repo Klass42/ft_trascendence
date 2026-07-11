@@ -84,19 +84,41 @@ Delivered:
 Use `@Public()` for public routes. `@CurrentUser()` works everywhere without
 `@UseGuards()` (the global guard handles it).
 
-## Epic 3 — Google OAuth (module: OAuth ✓)
+## Epic 3 — Google OAuth (module: OAuth ✓) ✅ DONE
 
-- [ ] `passport-google-oauth20` (add deps). `GET /auth/google` + `GET /auth/google/callback`.
-- [ ] On callback: find/create `OAuthAccount` + `User`, issue our JWTs, redirect to frontend with
-      tokens.
-- [ ] Config via `ConfigService`: `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` (already in `.env.example`).
+> Design spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md`.
+> Progress log: `docs/planning/desarrollo_jorge.md` (Bloque 3).
+> **Status:** Complete. 6 commits on `jorge`, pushed. Merged to `staging` via PR #2.
+> **Tests:** 45 tests, 8 suites, 0 failures.
+> **Runtime:** Routes mapped (`/auth/google`, `/auth/google/callback`). Boots without real Google
+> credentials (uses fallback). Login with email/password unaffected.
+
+Delivered:
+- ✅ `auth/google.strategy.ts` — passport-google-oauth20, scopes email+profile, `config.get()` fallbacks.
+- ✅ `auth/auth.service.ts` — `googleLogin(profile)` auto-create + auto-link by email match.
+- ✅ `auth/auth.controller.ts` — `GET /auth/google` + `GET /auth/google/callback` with hash fragment redirect.
+- ✅ `common/common.module.ts` — GoogleStrategy registered.
+- ✅ Env: `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + `FRONTEND_URL` added to compose + .env.example.
+- ✅ 5 new tests (2 strategy + 3 googleLogin).
+
+**Notes:** Real Google Cloud Console credentials required to test the full OAuth flow. App
+boots fine without them (fallback values prevent crash). Google login will 400 if creds are
+empty — acceptable for dev.
 
 ## Epic 4 — Organizations (module: Organization system ✓)
 
-- [ ] `apps/backend/src/organizations/` — module/controller/service + DTOs.
-- [ ] `GET/POST/PATCH/DELETE /organizations` (create/read/update/delete).
-- [ ] Membership: `POST /organizations/:id/members` (add), `DELETE /organizations/:id/members/:userId`.
-- [ ] Actions scoped: a user only sees/acts within their `organizationId`.
+> Design spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md`.
+> **Status:** Spec + plan written. Implementation pending (4 tasks).
+
+Delivered (pending):
+- [ ] `GET /organizations/me` — any user sees their org.
+- [ ] `PATCH /organizations/:id` — ADMIN only, name/logoUrl editable.
+- [ ] `GET /organizations/:id/members` — ADMIN only, excludes passwordHash.
+- [ ] `DELETE /organizations/:id/members/:userId` — ADMIN only, no self-deletion.
+- [ ] `@Roles('ADMIN')` + `RolesGuard` on admin endpoints, `@CurrentUser()` for org scope.
+- [ ] No new schema models, no new guards, no `POST /organizations` (Phase 2).
 
 ## Epic 5 — Advanced permissions / admin (module: Advanced permissions ✓)
 

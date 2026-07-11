@@ -207,8 +207,14 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Runtime smoke:** `make up` ✅ backend arranca limpio · `/auth/google` y `/auth/google/callback` mapeados ✅ · login email/password sigue funcionando ✅ · Google redirect funciona con creds reales (requiere `GOOGLE_CLIENT_ID`/`SECRET` válidos; en dev sin creds → placeholder, no crashea).
 
 **Estado actual del §1:** Epics 1+2+3 completos en `jorge`, pushed. Total: 45 tests, 8 suites.
-- [ ] PR conjunto Epic 1+2+3 a `staging`.
-- [ ] Avisar al equipo: Google OAuth disponible, requiere creds reales de Google Cloud Console.
+
+### Bloque 3b — 2026-07-11 — Sync staging + Epic 4 brainstorm + spec + plan
+- ✅ Sync: `jorge` fast-forward a `staging` (`eb616ea6`). David mergeó analytics + assignments + forums + notifications + realtime gateway con JWT socket handshake. Seed consolidado (lucia/diego@example.com + admin/teacher/student@demo, password `demo1234`).
+- ✅ Brainstorm Epic 4 (Organizations): 3 preguntas → A/A/A (admin manages seeded org / FK membership / ADMIN-only).
+- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md` (4 tasks: DTO → service TDD → controller TDD → smoke)
+- [ ] Implementar Epic 4 (4 tasks, ~3 commits).
+- [ ] PR conjunto Epic 1+2+3+4 a `staging`.
 
 ---
 
