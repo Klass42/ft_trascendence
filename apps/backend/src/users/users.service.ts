@@ -5,10 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import type { CreateUserDto } from './dto/create-user.dto';
 import type { UpdateUserDto } from './dto/update-user.dto';
+import type { UpdateProfileDto } from './dto/update-profile.dto';
 
 const selectUser = {
   id: true, email: true, name: true, avatarUrl: true,
@@ -16,9 +18,16 @@ const selectUser = {
   organizationId: true, createdAt: true, updatedAt: true,
 } as const;
 
+const selectPublicProfile = {
+  id: true, name: true, avatarUrl: true, role: true, bio: true, onlineAt: true,
+} as const;
+
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async findAll(organizationId: string) {
     return this.prisma.user.findMany({
@@ -28,10 +37,14 @@ export class UsersService {
     });
   }
 
-  async findOne(id: string, organizationId: string) {
+  async findOne(id: string, organizationId: string, callerRole?: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: selectUser });
     if (!user) throw new NotFoundException('User not found');
     if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
+    if (callerRole !== 'ADMIN') {
+      const { id: uid, name, avatarUrl, role, bio, onlineAt } = user;
+      return { id: uid, name, avatarUrl, role, bio, onlineAt };
+    }
     return user;
   }
 
@@ -66,5 +79,31 @@ export class UsersService {
     if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
     if (id === callerUserId) throw new BadRequestException('Cannot delete yourself');
     await this.prisma.user.delete({ where: { id } });
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    return this.prisma.user.update({ where: { id: userId }, data: dto, select: selectPublicProfile });
+  }
+
+  async sendFriendRequest(callerId: string, targetId: string, callerOrgId: string) {
+    if (callerId === targetId) throw new BadRequestException('Cannot friend yourself');
+    const target = await this.prisma.user.findUnique({ where: { id: targetId }, select: { organizationId: true } });
+    if (!target) throw new NotFoundException('User not found');
+    if (target.organizationId !== callerOrgId) throw new ForbiddenException('User belongs to another organization');
+    const existing = await this.prisma.friendship.findFirst({
+      where: { OR: [{ requesterId: callerId, addresseeId: targetId }, { requesterId: targetId, addresseeId: callerId }] },
+    });
+    if (existing) throw new ConflictException('Friendship already exists');
+    const friendship = await this.prisma.friendship.create({ data: { requesterId: callerId, addresseeId: targetId, status: 'PENDING' } });
+    this.eventEmitter.emit('notification.created', { userId: targetId, type: 'FRIEND_REQUEST', title: 'New friend request', body: 'You have a new friend request', link: null, read: false, createdAt: new Date() });
+    return friendship;
+  }
+
+  async listFriends(userId: string) {
+    const friendships = await this.prisma.friendship.findMany({
+      where: { status: 'ACCEPTED', OR: [{ requesterId: userId }, { addresseeId: userId }] },
+    });
+    const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
+    return this.prisma.user.findMany({ where: { id: { in: friendIds } }, select: selectPublicProfile, orderBy: { name: 'asc' } });
   }
 }

@@ -1,4 +1,5 @@
 import { ConflictException, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { UsersService } from '../users.service';
 import type { PrismaService } from '@/prisma/prisma.service';
 
@@ -16,13 +17,14 @@ const mockUser = {
 
 const mkPrisma = () => ({
   user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
 }) as unknown as PrismaService;
 
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: ReturnType<typeof mkPrisma>;
 
-  beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma); process.env.NODE_ENV = 'development'; });
+  beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma, { emit: jest.fn() } as unknown as EventEmitter2); process.env.NODE_ENV = 'development'; });
   afterAll(() => { process.env.NODE_ENV = 'test'; });
 
   describe('findAll', () => {
@@ -118,6 +120,82 @@ describe('UsersService', () => {
     it('throws 400 self-delete', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, id: ADMIN_ID });
       await expect(service.remove(ADMIN_ID, ORG_ID, ADMIN_ID)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── findOne role-aware ──
+  describe('findOne (role-aware)', () => {
+    it('returns full fields for ADMIN caller', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const r = await service.findOne('user-student-0001', ORG_ID, 'ADMIN') as any;
+      expect(r.email).toBe('student@demo');
+      expect(r.organizationId).toBe(ORG_ID);
+    });
+
+    it('returns public fields only for STUDENT caller', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      const r = await service.findOne('user-student-0001', ORG_ID, 'STUDENT');
+      expect(r.id).toBe('user-student-0001');
+      expect(r.name).toBe('Sam');
+      expect((r as any).email).toBeUndefined();
+      expect((r as any).organizationId).toBeUndefined();
+    });
+
+    it('throws ForbiddenException for org mismatch in STUDENT role', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      await expect(service.findOne('user-student-0001', OTHER_ORG, 'STUDENT')).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── updateProfile ──
+  describe('updateProfile', () => {
+    it('updates name and bio for the caller', async () => {
+      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'New', bio: 'Bio', avatarUrl: null, role: 'STUDENT', onlineAt: null });
+      const r = await service.updateProfile('user-student-0001', { name: 'New', bio: 'Bio' });
+      expect(r.name).toBe('New');
+      expect((r as any).email).toBeUndefined();
+    });
+  });
+
+  // ── sendFriendRequest ──
+  describe('sendFriendRequest', () => {
+    beforeEach(() => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+    });
+
+    it('creates a PENDING friendship', async () => {
+      const mkFriendshipCreate = jest.fn();
+      (prisma as any).friendship = { findFirst: jest.fn().mockResolvedValue(null), create: mkFriendshipCreate };
+      mkFriendshipCreate.mockResolvedValue({ id: 'f1', requesterId: ADMIN_ID, addresseeId: 'user-student-0001', status: 'PENDING', createdAt: new Date() });
+      const r = await service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID);
+      expect(r.status).toBe('PENDING');
+    });
+
+    it('throws 409 if friendship already exists', async () => {
+      (prisma as any).friendship = { findFirst: jest.fn().mockResolvedValue({ id: 'f1' }), create: jest.fn() };
+      await expect(service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID)).rejects.toThrow(ConflictException);
+    });
+
+    it('throws 400 on self-friend', async () => {
+      (prisma as any).friendship = { findFirst: jest.fn(), create: jest.fn() };
+      await expect(service.sendFriendRequest(ADMIN_ID, ADMIN_ID, ORG_ID)).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws 403 if target is in another org', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, organizationId: OTHER_ORG });
+      (prisma as any).friendship = { findFirst: jest.fn(), create: jest.fn() };
+      await expect(service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // ── listFriends ──
+  describe('listFriends', () => {
+    it('returns accepted friends (bidirectional)', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-teacher-0001', name: 'Theo', avatarUrl: null, role: 'TEACHER', bio: null, onlineAt: null }]);
+      (prisma as any).friendship = { findMany: jest.fn().mockResolvedValue([{ requesterId: ADMIN_ID, addresseeId: 'user-teacher-0001' }, { requesterId: 'user-student-0001', addresseeId: ADMIN_ID }]) };
+      const r = await service.listFriends(ADMIN_ID);
+      expect(r).toHaveLength(1);
+      expect((r[0] as any).email).toBeUndefined();
     });
   });
 });
