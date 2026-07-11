@@ -38,9 +38,12 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - **Epic 4 (Organizations). Implementado (3 commits, 78 tests total).**
     Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`.
     Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md`.
-- **Tests:** 78 tests, 16 suites, 0 fallos.
-- **Runtime:** `make up` ✅ · `GET /organizations/me` → org ✅ · `GET /organizations/:id/members` → sin passwordHash ✅ · `PATCH` 200 ✅ · `403 org mismatch` ✅.
-- **Siguiente:** Epic 5 (Advanced permissions / admin user CRUD + role management).
+  - **Epic 5 (Admin User CRUD). Implementado (3 commits, 100 tests total).**
+    Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`.
+- **Tests:** 100 tests, 18 suites, 0 fallos.
+- **Runtime:** `make up` ✅ · `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅ · `@Roles('ADMIN')` en todos los endpoints ✅.
+- **Siguiente:** Epic 6 (Users profile API + friends) o PR a `staging` con Epics 1-5.
 
 ---
 
@@ -211,22 +214,20 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 **Estado actual del §1:** Epics 1+2+3 completos en `jorge`, pushed. Total: 45 tests, 8 suites.
 
-### Bloque 3b — 2026-07-11 — Sync staging + Epic 4 brainstorm + spec + plan + implementación ✅
-- ✅ Sync: `jorge` fast-forward a `staging` (`eb616ea6`). David mergeó analytics + assignments + forums + notifications + realtime gateway con JWT socket handshake. Seed consolidado (lucia/diego@example.com + admin/teacher/student@demo, password `demo1234`).
-- ✅ Brainstorm Epic 4 (Organizations): 3 preguntas → A/A/A (admin manages seeded org / FK membership / ADMIN-only).
-- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`
-- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md` (4 tasks)
-- ✅ `91b5db58` — `UpdateOrganizationDto` (name, logoUrl)
-- ✅ `a421d7a8` — `OrganizationsService` (findMyOrganization, update, findMembers, removeMember) + 10 tests (TDD)
-- ✅ `49900f4c` — `OrganizationsController` + wired en `OrganizationsModule` + 8 tests (TDD). Fix: export `Member` type.
-- ✅ Fix post-merge build: instaladas deps faltantes de staging (`@nestjs/event-emitter`, `socket.io`).
+### Bloque 4 — 2026-07-11 — Epic 5 Admin User CRUD implementado ✅
+- ✅ Brainstorm: 1 pregunta (DELETE duplication → A). Spec + plan escritos.
+- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`
+- ✅ `d5e6bd30` — DTOs: `CreateUserDto` (email, password, name, role) + `UpdateUserDto` (name, email, role, bio)
+- ✅ `(commit merge)` — `UsersService` (findAll, findOne, create, update, remove) + 14 tests (TDD). Argon2 hashing, org-scoped, self-role-change protection.
+- ✅ `e0f2394d` — `UsersController` (5 endpoints, all @Roles('ADMIN')) + wired `UsersModule` + 8 tests (TDD).
 
-**Tests finales:** 78 tests, 16 suites, 0 fallos.
-**Runtime smoke:** `make up` ✅ · `GET /organizations/me` → org ✅ · `GET /organizations/:id/members` → 3 miembros sin passwordHash ✅ · `PATCH` → 200 ✅ · `403 mismatched org` → 403 ✅.
+**Tests finales:** 100 tests, 18 suites, 0 fallos.
+**Runtime smoke:** `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅.
 
-**Estado actual del §1:** Epics 1+2+3+4 completos en `jorge`, pushed. Total: 78 tests, 16 suites.
-- [ ] PR a `staging` con Epics 1-4.
-- [ ] Avisar al equipo: módulo Organizations licolaboradores listo.
+**Estado actual del §1:** Epics 1+2+3+4+5 completos en `jorge`, pushed. Total: 100 tests, 18 suites.
+- [ ] PR a `staging` con Epics 1-5.
+- [ ] Avisar al equipo: CRUD de usuarios admin listo.
 
 ---
 
