@@ -62,8 +62,14 @@ export class EnrollmentsService {
       update: {},
     });
 
-    return this.prisma.enrollment.create({
+    const enrollment = await this.prisma.enrollment.create({
       data: { courseId, userId },
+    });
+
+    await this.recalculateProgress(courseId, userId);
+
+    return this.prisma.enrollment.findUniqueOrThrow({
+      where: { id: enrollment.id },
     });
   }
 
