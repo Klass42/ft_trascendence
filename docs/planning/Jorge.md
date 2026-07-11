@@ -122,10 +122,16 @@ Delivered (pending):
 
 ## Epic 5 — Advanced permissions / admin (module: Advanced permissions ✓)
 
-- [ ] `apps/backend/src/users/` — admin user CRUD: `GET/POST/PATCH/DELETE /users` (org-scoped,
-      `@Roles('ADMIN')`).
-- [ ] Role management: change a user's `GlobalRole`; different responses/fields per role.
-- [ ] Guard matrix documented (who can hit what) in this file when done.
+> Design spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`.
+> **Status:** Spec + plan written. Implementation pending (4 tasks).
+
+Delivered (pending):
+- [ ] `GET /users` + `GET /users/:id` — ADMIN only, org-scoped, no passwordHash.
+- [ ] `POST /users` — ADMIN creates user in org, argon2 hashed, default STUDENT.
+- [ ] `PATCH /users/:id` — ADMIN updates name/email/role/bio, 403 org mismatch, 400 self-role-change.
+- [ ] `DELETE /users/:id` — ADMIN deletes user, 403 org mismatch, 400 self-delete.
+- [ ] Guard matrix: all endpoints `@Roles('ADMIN')` + `@CurrentUser()` for org scope.
 
 ## Epic 6 — Users profile API + friends
 
