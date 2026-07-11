@@ -135,12 +135,17 @@ Delivered (pending):
 
 ## Epic 6 — Users profile API + friends
 
-- [ ] `GET /users/:id` (profile), `PATCH /users/me` (name/bio), `PATCH /users/me/avatar`
-      (calls Aloiki's `FilesService.createUpload`, stores `avatarUrl`).
-- [ ] Friends: `POST /users/:id/friend` (request), `PATCH /friendships/:id` (accept/block),
-      `GET /users/me/friends`. Emits a notification via David's `emit()` (optional).
-- [ ] (Online status is set by David's presence service — you just expose `onlineAt` in the
-      profile response.)
+> Design spec: `docs/superpowers/specs/2026-07-11-epic6-profile-friends-design.md`.
+> Implementation plan: `docs/superpowers/plans/2026-07-11-epic6-profile-friends.md`.
+> **Status:** Spec + plan written. Implementation pending (6 tasks).
+
+Delivered (pending):
+- [ ] `GET /users/:id` — role-aware (admin: full, non-admin: public profile).
+- [ ] `PATCH /users/me` — self-edit name/bio.
+- [ ] `PATCH /users/me/avatar` — multipart upload via FilesService.
+- [ ] `POST /users/:id/friend` — send request (PENDING), emit FRIEND_REQUEST notification.
+- [ ] `PATCH /friendships/:id` — accept/block (addressee only, PENDING→ACCEPTED/BLOCKED).
+- [ ] `GET /users/me/friends` — list accepted friends (bidirectional).
 
 ## Epic 7 — Frontend (features/auth, admin, org)
 
