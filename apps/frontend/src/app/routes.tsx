@@ -11,6 +11,15 @@ import { ProtectedRoute } from './ProtectedRoute';
 const LoginPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.LoginPage }))
 );
+const RegisterPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.RegisterPage }))
+);
+const VerifyEmailPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.VerifyEmailPage }))
+);
+const OAuthCallbackPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.OAuthCallbackPage }))
+);
 const DashboardPage = lazy(() =>
   import('@/features/dashboard').then((m) => ({ default: m.DashboardPage }))
 );
@@ -66,6 +75,30 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<PageLoader />}>
         <LoginPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/register',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <RegisterPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/verify-email',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <VerifyEmailPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/auth/callback',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <OAuthCallbackPage />
       </Suspense>
     ),
   },
