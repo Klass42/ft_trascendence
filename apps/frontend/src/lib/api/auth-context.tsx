@@ -61,6 +61,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   /** Login with email/password */
   login: (email: string, password: string) => Promise<void>;
+  /** Register with name/email/password */
+  register: (name: string, email: string, password: string) => Promise<void>;
   /** Login with OAuth (Google) */
   loginWithGoogle: () => void;
   /** Logout and clear tokens */
@@ -166,6 +168,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // Register with name/email/password
+  // ---------------------------------------------------------------------------
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    const response = await apiClient.post<LoginResponse>(
+      '/auth/register',
+      { name, email, password },
+      { skipAuth: true }
+    );
+
+    const tokens: AuthTokens = {
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+    };
+    tokenStorage.setTokens(tokens);
+
+    setUser(response.user);
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Login with Google OAuth
   // ---------------------------------------------------------------------------
   const loginWithGoogle = useCallback(() => {
@@ -183,11 +204,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isLoading,
       isAuthenticated: !!user,
       login,
+      register,
       loginWithGoogle,
       logout,
       refreshUser,
     }),
-    [user, isLoading, login, loginWithGoogle, logout, refreshUser]
+    [user, isLoading, login, register, loginWithGoogle, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
