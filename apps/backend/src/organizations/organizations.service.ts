@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '@/prisma/prisma.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 
-interface Member {
+export interface Member {
   id: string;
   email: string;
   name: string;
@@ -65,6 +65,9 @@ export class OrganizationsService {
     if (userId === callerUserId) {
       throw new BadRequestException('Cannot remove yourself');
     }
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, organizationId: true } });
+    if (!target) throw new NotFoundException('User not found');
+    if (target.organizationId !== id) throw new ForbiddenException('User belongs to another organization');
     await this.prisma.user.delete({ where: { id: userId } });
   }
 }

@@ -53,6 +53,7 @@ const mkPrisma = () =>
     },
     user: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       delete: jest.fn(),
     },
   }) as unknown as PrismaService;
@@ -124,6 +125,7 @@ describe('OrganizationsService', () => {
 
   describe('removeMember', () => {
     it('deletes the user when caller is admin of same org', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-student-0001', organizationId: ORG_ID });
       (prisma.user.delete as jest.Mock).mockResolvedValue({});
       await service.removeMember(ORG_ID, 'user-student-0001', ORG_ID, 'user-admin-0001');
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-student-0001' } });
@@ -133,6 +135,22 @@ describe('OrganizationsService', () => {
       await expect(
         service.removeMember(OTHER_ORG, 'user-student-0001', ORG_ID, 'user-admin-0001'),
       ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when target user belongs to another org', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-x', organizationId: OTHER_ORG });
+      await expect(
+        service.removeMember(ORG_ID, 'user-x', ORG_ID, 'user-admin-0001'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when target user does not exist', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(
+        service.removeMember(ORG_ID, 'ghost', ORG_ID, 'user-admin-0001'),
+      ).rejects.toThrow(NotFoundException);
       expect(prisma.user.delete).not.toHaveBeenCalled();
     });
 

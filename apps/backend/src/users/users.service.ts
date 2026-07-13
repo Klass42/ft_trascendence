@@ -7,12 +7,17 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
+
+function isPrismaUniqueViolation(err: unknown): err is PrismaClientKnownRequestError {
+  return typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002';
+}
 
 const selectUser = {
   id: true, email: true, name: true, avatarUrl: true,
@@ -55,25 +60,39 @@ export class UsersService {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
     if (existing) throw new ConflictException('Email already registered in this organization');
     const isDev = process.env.NODE_ENV !== 'production';
-    return this.prisma.user.create({
-      data: {
-        organizationId,
-        email: dto.email,
-        name: dto.name,
-        passwordHash: await argon2.hash(dto.password),
-        role: dto.role ?? 'STUDENT',
-        emailVerifiedAt: isDev ? new Date() : null,
-      },
-      select: selectUser,
-    });
+    try {
+      return await this.prisma.user.create({
+        data: {
+          organizationId,
+          email: dto.email,
+          name: dto.name,
+          passwordHash: await argon2.hash(dto.password),
+          role: dto.role ?? 'STUDENT',
+          emailVerifiedAt: isDev ? new Date() : null,
+        },
+        select: selectUser,
+      });
+    } catch (err) {
+      if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
+      throw err;
+    }
   }
 
   async update(id: string, dto: UpdateUserDto, organizationId: string, callerUserId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { ...selectUser, passwordHash: true } });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: selectUser });
     if (!user) throw new NotFoundException('User not found');
     if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
     if (dto.role !== undefined && id === callerUserId) throw new BadRequestException('Cannot change your own role');
-    return this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
+    if (dto.email !== undefined && dto.email !== user.email) {
+      const clash = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
+      if (clash) throw new ConflictException('Email already registered in this organization');
+    }
+    try {
+      return await this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
+    } catch (err) {
+      if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
+      throw err;
+    }
   }
 
   async remove(id: string, organizationId: string, callerUserId: string) {

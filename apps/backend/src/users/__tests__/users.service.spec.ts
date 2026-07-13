@@ -23,9 +23,10 @@ const mkPrisma = () => ({
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: ReturnType<typeof mkPrisma>;
+  const previousNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma, { emit: jest.fn() } as unknown as EventEmitter2); process.env.NODE_ENV = 'development'; });
-  afterAll(() => { process.env.NODE_ENV = 'test'; });
+  afterAll(() => { process.env.NODE_ENV = previousNodeEnv; });
 
   describe('findAll', () => {
     it('returns org-scoped users without passwordHash', async () => {
@@ -76,6 +77,14 @@ describe('UsersService', () => {
         service.create({ email: 'student@demo', password: 'Password1', name: 'N' }, ORG_ID),
       ).rejects.toThrow(ConflictException);
     });
+    it('throws ConflictException on Prisma P2002 race condition', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+      const prismaError = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      (prisma.user.create as jest.Mock).mockRejectedValue(prismaError);
+      await expect(
+        service.create({ email: 'race@demo', password: 'Password1', name: 'N' }, ORG_ID),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 
   describe('update', () => {
@@ -103,6 +112,29 @@ describe('UsersService', () => {
       await expect(
         service.update(ADMIN_ID, { name: 'Self' }, ORG_ID, ADMIN_ID),
       ).resolves.toBeDefined();
+    });
+    it('throws 409 if changing email to one already used in the org', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-other', email: 'taken@demo', organizationId: ORG_ID });
+      await expect(
+        service.update('user-student-0001', { email: 'taken@demo' }, ORG_ID, ADMIN_ID),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+    it('throws ConflictException on Prisma P2002 race when updating email', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+      const prismaError = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      (prisma.user.update as jest.Mock).mockRejectedValue(prismaError);
+      await expect(
+        service.update('user-student-0001', { email: 'taken@demo' }, ORG_ID, ADMIN_ID),
+      ).rejects.toThrow(ConflictException);
+    });
+    it('does not check uniqueness when email is unchanged (same as current)', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.update as jest.Mock).mockResolvedValue(mockUser);
+      await service.update('user-student-0001', { email: 'student@demo' }, ORG_ID, ADMIN_ID);
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
     });
   });
 
