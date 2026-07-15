@@ -21,7 +21,7 @@ RUN pnpm --filter @ft-trascendence/backend run build
 FROM node:22-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini=0.19.0-r3
 
 WORKDIR /app
 
