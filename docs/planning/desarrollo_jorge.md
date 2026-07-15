@@ -32,12 +32,18 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`) sobre `jorge`, pushed.**
     Spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
-  - **Epic 3 (Google OAuth). Spec + plan escritos, implementación pendiente.**
+  - **Epic 3 (Google OAuth). Spec + plan + implementación completos. Merged to staging via PR #2.**
     Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md`.
-- **Tests:** 40 tests, 7 suites, 0 fallos (pre-Epic 3).
-- **Runtime:** `make up` ✅ · `POST /auth/login` devuelve `{ user(AuthUser 6), accessToken, refreshToken }` ✅ · `GET /auth/me` con Bearer ✅ · `GET /courses` sin token → 401 (APP_GUARD global) ✅ · `GET /courses` con x-dev-user → 200 (dev fallback) ✅.
-- **Siguiente:** Implementar Epic 3 (5 tasks, ~2-3 commits), luego PR conjunto Epic 2+3 a `staging`.
+  - **Epic 4 (Organizations). Implementado (3 commits, 78 tests total).**
+    Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md`.
+  - **Epic 5 (Admin User CRUD). Implementado (3 commits, 100 tests total).**
+    Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`.
+- **Tests:** 100 tests, 18 suites, 0 fallos.
+- **Runtime:** `make up` ✅ · `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅ · `@Roles('ADMIN')` en todos los endpoints ✅.
+- **Siguiente:** Epic 6 (Users profile API + friends) o PR a `staging` con Epics 1-5.
 
 ---
 
@@ -207,8 +213,27 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Runtime smoke:** `make up` ✅ backend arranca limpio · `/auth/google` y `/auth/google/callback` mapeados ✅ · login email/password sigue funcionando ✅ · Google redirect funciona con creds reales (requiere `GOOGLE_CLIENT_ID`/`SECRET` válidos; en dev sin creds → placeholder, no crashea).
 
 **Estado actual del §1:** Epics 1+2+3 completos en `jorge`, pushed. Total: 45 tests, 8 suites.
-- [ ] PR conjunto Epic 1+2+3 a `staging`.
-- [ ] Avisar al equipo: Google OAuth disponible, requiere creds reales de Google Cloud Console.
+
+### Bloque 4 — 2026-07-11 — Epic 5 Admin User CRUD implementado ✅
+[...]
+**Estado actual del §1:** Epics 1+2+3+4+5 completos en `jorge`, pushed. Total: 100 tests, 18 suites.
+- [ ] PR a `staging` con Epics 1-5.
+
+### Bloque 5 — 2026-07-11 — Epic 6 Profile + Friends implementado ✅
+- ✅ Brainstorm: 3 preguntas → C/A/A (role-aware GET / A avatar / A block). Spec + plan escritos.
+- ✅ Spec: `docs/superpowers/specs/2026-07-11-epic6-profile-friends-design.md`
+- ✅ Plan: `docs/superpowers/plans/2026-07-11-epic6-profile-friends.md`
+- ✅ `38b62fa1` — DTOs: `UpdateProfileDto` (name/bio) + `UpdateFriendshipDto` (status)
+- ✅ `a184cef` — `UsersService`: findOne role-aware + updateProfile + sendFriendRequest + listFriends + 9 tests
+- ✅ `(commit)` — `FriendshipsService` (accept/block transitions) + 5 tests
+- ✅ `9929e09e` — `UsersController`: role-aware GET /:id + PATCH /me + /me/avatar + POST /:id/friend + GET /me/friends. `FriendshipsController`: PATCH /friendships/:id. `FilesModule` exports `FilesService`. `UsersModule` imports `FilesModule`.
+
+**Tests finales:** 118 tests, 19 suites, 0 fallos.
+**Runtime smoke:** `GET /users/:id` → public profile (sin email) ✅ · admin profile (con email) ✅ · `PATCH /users/me` → bio ✅ · `POST /users/:id/friend` → 201 ✅.
+
+**Estado actual del §1:** Epics 1-6 completos en `jorge`, pushed. Total: 118 tests, 19 suites.
+- [ ] PR a `staging` con Epics 4-6.
+- [ ] Epic 7 (frontend auth/admin/org pages) — última epica de Jorge.
 
 ---
 
@@ -231,13 +256,8 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
 2. ~~Brainstorm Epic 2 + spec + plan + implementación.~~ ✅ Hecho (Bloque 2).
-3. ~~Brainstorm Epic 3 + spec + plan.~~ ✅ Hecho (Bloque 3).
-4. **Implementar Epic 3** (Google OAuth) — seguir plan `2026-07-10-epic3-google-oauth.md` (5 tasks).
-5. **PR conjunto Epic 2+3 a `staging`** — crear PR desde `jorge` → `staging` con todos los commits de auth.
-6. Avisar al equipo en el canal:
-   - `@Public()` para endpoints públicos (login, register, refresh, verify-email, google).
-   - `@CurrentUser()` funciona sin `@UseGuards()` (APP_GUARD global).
-   - `VITE_USE_MOCK_AUTH=false` + login con `student@demo`/`demo1234` para auth real.
-   - `VITE_DEV_USER_ID` sigue funcionando como fallback en dev.
-   - Google: requiere `GOOGLE_CLIENT_ID/SECRET` reales para testear; dev sin creds → login email/password.
+3. ~~Brainstorm Epic 3 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3).
+4. ~~Brainstorm Epic 4 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3b).
+5. **PR a `staging`** con Epics 1-4.
+6. **Brainstorm Epic 5** (Advanced permissions — admin user CRUD, role management).
 7. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.

@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { OrganizationsController } from './organizations.controller';
+import { OrganizationsService } from './organizations.service';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
-// Fill in controllers/providers here. Keep sub-resources inside this folder so
-// you don't need to touch app.module.ts again (avoids merge conflicts).
-@Module({})
+@Module({
+  controllers: [OrganizationsController],
+  providers: [OrganizationsService],
+})
 export class OrganizationsModule {}
