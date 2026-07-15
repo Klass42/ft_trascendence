@@ -13,7 +13,8 @@ result
 # Environment
 .env
 .env.local
-!infra/docker/.env.dev
+infra/docker/.env
+!infra/docker/.env.example
 
 # OS
 .DS_Store
