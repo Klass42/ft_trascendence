@@ -1,7 +1,14 @@
 import { Module } from '@nestjs/common';
+import { FilesModule } from '../files/files.module';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+import { FriendshipsController } from './friendships/friendships.controller';
+import { FriendshipsService } from './friendships/friendships.service';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
-// Fill in controllers/providers here. Keep sub-resources inside this folder so
-// you don't need to touch app.module.ts again (avoids merge conflicts).
-@Module({})
+@Module({
+  imports: [FilesModule],
+  controllers: [UsersController, FriendshipsController],
+  providers: [UsersService, FriendshipsService],
+})
 export class UsersModule {}

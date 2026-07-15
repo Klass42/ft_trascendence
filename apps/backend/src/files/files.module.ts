@@ -13,5 +13,6 @@ import { StorageService } from './storage/storage.service';
       useFactory: () => createStorageDriver(),
     },
   ],
+  exports: [FilesService],
 })
 export class FilesModule {}
