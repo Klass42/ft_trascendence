@@ -1,47 +1,29 @@
-.PHONY: help env dev debug ci deps build up down logs images clean
+.PHONY: help dev ci up down down-v logs logs-backend logs-otel status db-migrate db-generate db-push db-studio db-seed
 
-COMPOSE_FILE := infra/docker/docker-compose.dev.yml
-COMPOSE := docker compose -f $(COMPOSE_FILE)
+COMPOSE := docker compose -f infra/docker/docker-compose.yml
 
 # ─── General ───────────────────────────────────────────────
 help: ## Muestra esta ayuda
-	@printf "\033[1;33mComandos disponibles:\033[0m\n"
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F'##' '{printf "\033[32m%-15s\033[0m %s\n", $$1, $$2}'
 
-env: ## Activa direnv
-	direnv allow
-
-# ─── Nix Shells ────────────────────────────────────────────
-dev: ## Ejecuta una shell con todo lo necesario para desarrollar
+# ─── Development ───────────────────────────────────────────
+dev: ## Entra en el devShell de Nix
 	nix develop .#dev
 
-debug: ## Ejecuta una shell con todo lo necesario para debugear
-	nix develop .#debug
-
-ci: ## Ejecuta pipeline CI local
+ci: ## Ejecuta el pipeline de CI local
 	nix develop .#ci --command bash scripts/ci.sh
 
-# ─── Dependencies ──────────────────────────────────────────
-deps: ## Instala dependencias del proyecto (pnpm install)
-	pnpm install
+# ─── Deploy ────────────────────────────────────────────────
+up: ## Despliega el stack completo (build + HTTPS + monitoring)
+	$(COMPOSE) up -d --build
+	@printf "\n\033[1;32mStack desplegado — todas las URLs vía HTTPS:\033[0m\n"
+	@printf "  App:          https://localhost\n"
+	@printf "  Grafana:      https://localhost:3001\n"
+	@printf "  Prometheus:   https://localhost:9090\n"
+	@printf "  Tempo:        https://localhost:3200\n"
+	@printf "  Loki:         https://localhost:3100\n\n"
 
-# ─── Build ─────────────────────────────────────────────────
-build: ## Construye frontend y backend
-	pnpm -r run build
-
-# ─── Docker Compose (Development) ─────────────────────────
-up: ## Levanta el stack de desarrollo completo (app + observability)
-	$(COMPOSE) up -d
-	@printf "\n\033[1;32mStack levantado:\033[0m\n"
-	@printf "  Frontend:    http://localhost:5173\n"
-	@printf "  Backend:     http://localhost:3000\n"
-	@printf "  Grafana:     http://localhost:3001  (admin/admin)\n"
-	@printf "  Prometheus:  http://localhost:9090\n"
-	@printf "  Tempo:       http://localhost:3200\n"
-	@printf "  Loki:        http://localhost:3100\n"
-	@printf "  OTel:        http://localhost:4318\n\n"
-
-down: ## Para el stack de desarrollo
+down: ## Para el stack
 	$(COMPOSE) down
 
 down-v: ## Para el stack y elimina volúmenes
@@ -59,7 +41,7 @@ logs-otel: ## Muestra logs del OTel Collector
 status: ## Muestra estado de los servicios
 	$(COMPOSE) ps
 
-# ─── Base de datos (Prisma) ───────────────────────────────
+# ─── Database (Prisma) ────────────────────────────────────
 PRISMA := pnpm --filter @ft-trascendence/backend exec prisma
 
 db-generate: ## Genera el cliente Prisma
@@ -68,34 +50,12 @@ db-generate: ## Genera el cliente Prisma
 db-push: ## Sincroniza el schema con la BD (dev rápido, sin migraciones)
 	$(PRISMA) db push
 
-db-migrate: ## Crea/aplica una migración de desarrollo (NAME=nombre)
-	$(PRISMA) migrate dev --name $(or $(NAME),init)
+db-migrate: ## Crea una migración de Prisma (NAME=nombre)
+	$(COMPOSE) run --rm -v ../../apps/backend/prisma:/app/prisma backend \
+		sh -c "npx prisma migrate dev --name $(or $(NAME),init)"
 
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio
 
 db-seed: ## Carga datos demo deterministas (1 org, 3 users con demo1234, 1 curso)
 	$(PRISMA) db seed
-
-# ─── Nix OCI Images ───────────────────────────────────────
-images: ## Construye imágenes OCI con Nix
-	nix build .#backend-image
-	nix build .#frontend-image
-	@printf "\033[32mImágenes construidas.\033[0m Carga con: docker load < result\n"
-
-# ─── Kubernetes ────────────────────────────────────────────
-k8s-apply: ## Aplica manifiestos de K8s
-	kubectl apply -f infra/k8s/namespace.yml
-	kubectl apply -f infra/k8s/monitoring/ -R
-	kubectl apply -f infra/k8s/backend/
-	kubectl apply -f infra/k8s/frontend/
-
-k8s-delete: ## Elimina todos los recursos de K8s
-	kubectl delete namespace ft-trascendence --ignore-not-found
-
-# ─── Cleanup ──────────────────────────────────────────────
-clean: ## Limpia artefactos de build
-	pnpm -r run clean
-	rm -rf result
-
-all: help

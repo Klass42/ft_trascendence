@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile --filter @ft-trascendence/backend
 
 # Copy source and build
 COPY apps/backend/ apps/backend/
+RUN pnpm --filter @ft-trascendence/backend exec prisma generate
 RUN pnpm --filter @ft-trascendence/backend run build
 
 # ─── Production stage ───
@@ -25,6 +26,7 @@ RUN apk add --no-cache tini
 WORKDIR /app
 
 COPY --from=builder /app/apps/backend/dist ./dist
+COPY --from=builder /app/apps/backend/prisma ./prisma
 COPY --from=builder /app/apps/backend/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 
@@ -34,4 +36,4 @@ ENV PORT=3000
 EXPOSE 3000
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

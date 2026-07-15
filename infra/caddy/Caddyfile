@@ -1,0 +1,39 @@
+# ft_trascendence — Caddy reverse proxy
+# Terminates TLS for ALL external connections. HTTP on :80 → HTTPS redirect.
+# Monitoring accessed via HTTPS on their standard ports.
+#
+# Caddy auto-generates certificates:
+#   - For "localhost": internal CA (self-signed)
+#   - For a real domain: Let's Encrypt (needs port 80 reachable from internet)
+
+# HTTP → HTTPS redirect (catch-all on port 80)
+http:// {
+	redir https://{host}{uri}
+}
+
+# ─── Application ──────────────────────────────────────────
+{$CADDY_DOMAIN} {
+	handle /health {
+		reverse_proxy backend:3000
+	}
+	handle {
+		reverse_proxy frontend:80
+	}
+}
+
+# ─── Monitoring (HTTPS, same domain, different ports) ─────
+{$CADDY_DOMAIN}:3001 {
+	reverse_proxy grafana:3000
+}
+
+{$CADDY_DOMAIN}:9090 {
+	reverse_proxy prometheus:9090
+}
+
+{$CADDY_DOMAIN}:3200 {
+	reverse_proxy tempo:3200
+}
+
+{$CADDY_DOMAIN}:3100 {
+	reverse_proxy loki:3100
+}

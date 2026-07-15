@@ -1,50 +1,69 @@
-# ft_trascendence - Development Stack
-# Usage: docker compose -f infra/docker/docker-compose.dev.yml up
+# ft_trascendence — Docker Compose
+# Single-command deploy:  make up   (or docker compose -f infra/docker/docker-compose.yml up -d --build)
 #
-# Ports:
-#   Frontend:       http://localhost:5173
-#   Backend:        http://localhost:3000
-#   Grafana:        http://localhost:3001  (admin/admin)
-#   Prometheus:     http://localhost:9090
-#   Tempo:          http://localhost:3200
-#   Loki:           http://localhost:3100
-#   OTel Collector: http://localhost:4318 (HTTP) / localhost:4317 (gRPC)
+# All external connections via Caddy (HTTPS). HTTP → HTTPS redirect on :80.
+# Monitoring services NOT exposed directly — only via Caddy TLS multi-port.
+#
+# URLs:
+#   App:              https://localhost
+#   Grafana:          https://localhost:3001   (admin / set in .env)
+#   Prometheus:       https://localhost:9090
+#   Tempo:             https://localhost:3200
+#   Loki:              https://localhost:3100
+#
+# Prisma migrations run automatically on backend startup (prisma migrate deploy).
 
 services:
+  # ─── HTTPS / Reverse Proxy ───────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "3001:3001"
+      - "9090:9090"
+      - "3200:3200"
+      - "3100:3100"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN:-localhost}
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - app-network
+
   # ─── Application ─────────────────────────────────────────
   backend:
-    image: node:22-alpine
-    working_dir: /app
-    command: >
-      sh -c "corepack enable &&
-             pnpm install &&
-             pnpm --filter @ft-trascendence/backend exec prisma generate &&
-             pnpm --filter @ft-trascendence/backend exec prisma db push --skip-generate &&
-             pnpm --filter @ft-trascendence/backend run dev"
-    volumes:
-      - ../../:/app
-      - backend_node_modules:/app/node_modules
-      - backend_app_node_modules:/app/apps/backend/node_modules
-    ports:
-      - "3000:3000"
+    build:
+      context: ../../
+      dockerfile: apps/backend/Dockerfile
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=postgresql://ft:ft@postgres:5432/ft_dev?schema=public
-      # JWT secrets for Epic 1+ — dev-only non-secret placeholders (AGENTS.md §7).
-      # Ale: tighten before any staging/prod deploy.
-      - JWT_ACCESS_SECRET=dev-not-secret-replace-me
-      - JWT_REFRESH_SECRET=dev-not-secret-replace-me
-      # Google OAuth (Epic 3) — dev defaults. Empty = Google auth disabled in dev.
-      # Set real values for staging/prod.
-
-      - FRONTEND_URL=http://localhost:5173
-      - GOOGLE_CLIENT_ID=
-      - GOOGLE_CLIENT_SECRET=
-      - GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ft}:${POSTGRES_PASSWORD:-ft}@postgres:5432/${POSTGRES_DB:-ft_prod}?schema=public
+      # JWT secrets — dev defaults. Replace for staging/prod.
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-dev-not-secret-replace-me}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-not-secret-replace-me}
+      # Google OAuth — empty = disabled
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-https://localhost/auth/google/callback}
+      # Frontend URL (CORS / OAuth redirect)
+      - FRONTEND_URL=${FRONTEND_URL:-https://localhost}
+      # Object storage (Garage / S3)
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://garage:3900}
+      - S3_REGION=${S3_REGION:-garage}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-change-me}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-change-me}
+      - S3_BUCKET=${S3_BUCKET:-ft-uploads}
+      # Observability
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=ft-backend
-      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,17 +78,11 @@ services:
       - app-network
 
   frontend:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm --filter @ft-trascendence/frontend run dev"
-    volumes:
-      - ../../:/app
-      - frontend_node_modules:/app/node_modules
-      - frontend_app_node_modules:/app/apps/frontend/node_modules
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_BACKEND_URL=http://localhost:3000
+    build:
+      context: ../../
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        - VITE_BACKEND_URL=${VITE_BACKEND_URL:-/api}
     depends_on:
       backend:
         condition: service_healthy
@@ -80,15 +93,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=ft
-      - POSTGRES_PASSWORD=ft
-      - POSTGRES_DB=ft_dev
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=${POSTGRES_USER:-ft}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ft}
+      - POSTGRES_DB=${POSTGRES_DB:-ft_prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ft -d ft_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ft} -d ${POSTGRES_DB:-ft_prod}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -101,10 +112,6 @@ services:
     command: ["--config=/etc/otel-collector.yaml"]
     volumes:
       - ../monitoring/otel-collector/otel-collector.yaml:/etc/otel-collector.yaml:ro
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-      - "8888:8888"   # Collector metrics
     depends_on:
       - prometheus
       - tempo
@@ -124,8 +131,6 @@ services:
     volumes:
       - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
     networks:
       - app-network
 
@@ -135,9 +140,6 @@ services:
     volumes:
       - ../monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
       - tempo_data:/var/tempo
-    ports:
-      - "3200:3200"   # Tempo HTTP
-      - "9095:9095"   # Tempo gRPC
     networks:
       - app-network
 
@@ -147,8 +149,6 @@ services:
     volumes:
       - ../monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
-    ports:
-      - "3100:3100"
     networks:
       - app-network
 
@@ -158,11 +158,9 @@ services:
       - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_FEATURE_TOGGLES_ENABLE=traceQLStreaming,metricsSummary
       - GF_INSTALL_PLUGINS=
@@ -174,15 +172,13 @@ services:
       - app-network
 
 volumes:
-  backend_node_modules:
-  backend_app_node_modules:
-  frontend_node_modules:
-  frontend_app_node_modules:
   postgres_data:
   prometheus_data:
   tempo_data:
   loki_data:
   grafana_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   app-network:

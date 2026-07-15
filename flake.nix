@@ -1,6 +1,10 @@
 {
   description = "ft_trascendence - LMS Platform with full observability stack";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # NOTE: this flake provides ONLY devShells (dev/debug/ci). Production images
+  # are built from apps/{backend,frontend}/Dockerfile via docker-compose.prod.yml
+  # — see infra/docker/. The previous Nix OCI image outputs were removed because
+  # they never packaged dist/ (broken-by-design) and were not wired to any compose.
   outputs = { self, nixpkgs }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
@@ -60,49 +64,6 @@
             pkgs.trivy
           ];
           env.profile = "CI";
-        };
-      });
-
-      # OCI Images built with Nix
-      packages = forAllSystems (system: let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in {
-        backend-image = pkgs.dockerTools.buildLayeredImage {
-          name = "ft-trascendence/backend";
-          tag = "latest";
-          contents = [
-            pkgs.nodejs_22
-            pkgs.tini
-            pkgs.cacert
-          ];
-          config = {
-            Entrypoint = [ "${pkgs.tini}/bin/tini" "--" ];
-            Cmd = [ "${pkgs.nodejs_22}/bin/node" "dist/main.js" ];
-            WorkingDir = "/app";
-            ExposedPorts = { "3000/tcp" = {}; };
-            Env = [
-              "NODE_ENV=production"
-              "PORT=3000"
-            ];
-          };
-          extraCommands = ''
-            mkdir -p app
-          '';
-        };
-
-        frontend-image = pkgs.dockerTools.buildLayeredImage {
-          name = "ft-trascendence/frontend";
-          tag = "latest";
-          contents = [
-            pkgs.nginx
-            pkgs.tini
-            pkgs.cacert
-          ];
-          config = {
-            Entrypoint = [ "${pkgs.tini}/bin/tini" "--" ];
-            Cmd = [ "${pkgs.nginx}/bin/nginx" "-g" "daemon off;" ];
-            ExposedPorts = { "80/tcp" = {}; };
-          };
         };
       });
     };
