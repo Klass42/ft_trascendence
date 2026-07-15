@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { UsersService } from '../users.service';
+import type { NotificationsService } from '../../notifications/notifications.service';
 import type { PrismaService } from '@/prisma/prisma.service';
 
 const ORG_ID = 'org-klass-0001';
@@ -25,7 +25,7 @@ describe('UsersService', () => {
   let prisma: ReturnType<typeof mkPrisma>;
   const previousNodeEnv = process.env.NODE_ENV;
 
-  beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma, { emit: jest.fn() } as unknown as EventEmitter2); process.env.NODE_ENV = 'development'; });
+  beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma, { emit: jest.fn() } as unknown as NotificationsService); process.env.NODE_ENV = 'development'; });
   afterAll(() => { process.env.NODE_ENV = previousNodeEnv; });
 
   describe('findAll', () => {

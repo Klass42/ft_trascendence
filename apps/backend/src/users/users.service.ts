@@ -6,11 +6,11 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
@@ -33,7 +33,7 @@ const selectPublicProfile = {
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly files?: FilesService,
   ) {}
 
@@ -117,7 +117,12 @@ export class UsersService {
     });
     if (existing) throw new ConflictException('Friendship already exists');
     const friendship = await this.prisma.friendship.create({ data: { requesterId: callerId, addresseeId: targetId, status: 'PENDING' } });
-    this.eventEmitter.emit('notification.created', { userId: targetId, type: 'FRIEND_REQUEST', title: 'New friend request', body: 'You have a new friend request', link: null, read: false, createdAt: new Date() });
+    // Persist + push over socket via the real contract (David's NotificationsService).
+    // No-op if the module isn't wired (optional dep), so friend requests never block.
+    await this.notifications?.emit(targetId, 'FRIEND_REQUEST', {
+      title: 'New friend request',
+      body: 'You have a new friend request',
+    });
     return friendship;
   }
 
