@@ -48,8 +48,9 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
     Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md`.
     Commits: `418c8bf8` (spec) + `716fdd66` (RegisterPage/VerifyEmailPage/OAuthCallbackPage).
 - **Epic 7b en curso (este sesión):**
-  - Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md`
-    (commit `52e4b1e8`). Pendiente: revisión de usuario → writing-plans → implementación.
+  - Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`).
+  - Plan escrito y commiteado: `docs/superpowers/plans/2026-07-17-epic7b-admin-pages.md` (commit `394274d4`, 1265 líneas, 8 tareas).
+  - Pendiente: PAUSE para que el usuario cambie de modelo → implementación de las 8 tareas.
 - **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
 - **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
 - **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
@@ -270,7 +271,7 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - ✅ Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`, 546 líneas).
 - ✅ Auto-revisión de spec: typo "Subtitle苞btener" en §10 corregido, fila de tabla "|-any endpoint" → "| 401 on any endpoint" en §15, ambigüedad de back-link en edit page resuelta (añadido link "← Volver a usuarios" en §11).
 
-**Próximo paso:** revisión de spec por el usuario → `writing-plans` skill → PAUSE (cambio de modelo) → implementación.
+**Próximo paso:** PAUSE (el usuario cambia de modelo) → `executing-plans` o `subagent-driven-development` para implementar las 8 tareas del plan.
 
 ---
 
