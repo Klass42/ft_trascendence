@@ -47,15 +47,13 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
     Spec: `docs/superpowers/specs/2026-07-13-epic7a-frontend-auth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md`.
     Commits: `418c8bf8` (spec) + `716fdd66` (RegisterPage/VerifyEmailPage/OAuthCallbackPage).
-- **Epic 7b en curso (este sesión):**
-  - Spec: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`).
-  - Plan: `docs/superpowers/plans/2026-07-17-epic7b-admin-pages.md` (commit `394274d4`, 1265 líneas, 8 tareas).
-  - **Implementado (Bloque 8): 7 commits** (`316aa36b..3bb2f179`), 7/8 tasks (8 = smoke manual).
-    Build `pnpm -r run build` limpio. `make up` con stack completo HTTPS.
-  - Fix cross-cutting: `tsconfig.build.json` excluye `**/*.spec.ts` y `**/__tests__/**`
-    (David's realtime gateway spec importaba `socket.io-client` no instalado; rompía
-    el `nest build` en Docker).
-  - Pendiente: smoke browser manual (18 checks del plan §8).
+- **Epic 7c completado (este sesión):**
+  - Spec: `docs/superpowers/specs/2026-07-17-epic7c-org-pages-design.md` (commit `8c648acb`).
+  - Plan: `docs/superpowers/plans/2026-07-17-epic7c-org-pages.md` (commit `84179f6d`).
+  - Implementado: 5 commits (`113a22db..449bd850`).
+  - Build `pnpm -r run build` limpio. API smoke: org info, 6 members, teacher RBAC 403.
+- **Epic 7 completo:** Epics 7a (auth pages), 7b (admin users), 7c (org). Todo frontend de Jorge shipped.
+- **Siguiente:** smoke browser final → `finishing-a-development-branch`.
 - **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
 - **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
 - **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
@@ -290,6 +288,22 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - ⬜ Browser smoke manual (needs Chrome): 18 checks from plan Task 8 Step 4 (sidebar visibility / RBAC gate / table render / create / edit / delete double-press / self-edit guard / 404 / responsive / console warnings).
 
 **Próximo paso:** smoke browser manual → `finishing-a-development-branch` → Epic 7c (features/org/) después.
+
+### Bloque 9 — 2026-07-17 — Epic 7c implementación ✅
+- ✅ `executing-plans` skill, 6 tareas. Verified on branch `jorge`.
+- ✅ `8c648acb` — Spec escrita: `docs/superpowers/specs/2026-07-17-epic7c-org-pages-design.md`.
+- ✅ `84179f6d` — Plan escrito: `docs/superpowers/plans/2026-07-17-epic7c-org-pages.md`.
+- ✅ `113a22db` — Task 1: `types.ts` (OrgDTO + MemberDTO) + `useOrganization.ts` (useOrg/useOrgMembers hooks, mirror useUsers) + barrel export in hooks/index.ts.
+- ✅ `1b51363d` — Task 2: `OrgSettingsPage.tsx` + `.module.css` (read-only card for all, ADMIN clicks 'Editar' → inline form with name + logoUrl Input, PATCH /organizations/:id, 'Miembros' button navigate → /org/members).
+- ✅ `9471191b` — Task 3: `OrgMembersPage.tsx` + `.module.css` (ADMIN-only, HTML table, delete button double-press 5s in row, self row shows dash, local deletedIds filter after 204).
+- ✅ `3df3be1d` — Task 4: `index.ts` barrel for features/org.
+- ✅ `449bd850` — Task 5: routes.tsx (2 lazy routes: /org index → OrgSettingsPage, /org/members ProtectedRoute ADMIN → OrgMembersPage) + AppLayout.tsx (Building2 icon, 'Organización' nav item visible to all).
+- ✅ API-level smoke: `GET /organizations/me` → 200 (Klass Academy, slug klass) ✅ · admin `GET /organizations/:id/members` → 6 members ✅ · teacher `GET members` → 403 ✅.
+- ⬜ Browser smoke manual (needs Chrome): 20 checks from plan Task 6 Step 4.
+
+**Estado actual:** Epic 7 completo. Total Jorge: Epics 1-7c (backend auth/org/users/RBAC + frontend auth/admin/org). 5 commits Epic 7c hoy. Branch `jorge` pushed.
+
+**Próximo paso:** smoke browser manual final → `finishing-a-development-branch` para PR a `staging`.
 
 ---
 
