@@ -22,28 +22,37 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 
 ## 1. Estado
 
-- **Rama:** `jorge` (tracking `origin/jorge`).
-- **Última sincronización:** `jorge`, `staging` y `aloiki` idénticos en
-  `eb53db12` (2026-07-09) tras merger de 10 commits de Aloiki (frontend shell +
-  design system + courses/enrollments/sections/lessons + files/storage API).
+- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `origin/staging`
+  (fast-forward a `94fbf924` el 2026-07-17 tras merge de infra de Ale +
+  fix de NotificationsService).
 - **Epicas completadas:**
   - Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
     PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
-  - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`) sobre `jorge`, pushed.**
+  - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`).**
     Spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
-  - **Epic 3 (Google OAuth). Spec + plan + implementación completos. Merged to staging via PR #2.**
+  - **Epic 3 (Google OAuth). Merged to staging via PR #2.**
     Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md`.
-  - **Epic 4 (Organizations). Implementado (3 commits, 78 tests total).**
+  - **Epic 4 (Organizations). 3 commits, 78 tests total.**
     Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`.
     Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md`.
-  - **Epic 5 (Admin User CRUD). Implementado (3 commits, 100 tests total).**
+  - **Epic 5 (Admin User CRUD). 3 commits, 100 tests total.**
     Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`.
     Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`.
-- **Tests:** 100 tests, 18 suites, 0 fallos.
-- **Runtime:** `make up` ✅ · `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅ · `@Roles('ADMIN')` en todos los endpoints ✅.
-- **Siguiente:** Epic 6 (Users profile API + friends) o PR a `staging` con Epics 1-5.
+  - **Epic 6 (Users profile API + friends). 118 tests, 19 suites.**
+    Spec: `docs/superpowers/specs/2026-07-11-epic6-profile-friends-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-11-epic6-profile-friends.md`.
+  - **Epic 7a (Frontend auth pages). Merged to staging via PR.**
+    Spec: `docs/superpowers/specs/2026-07-13-epic7a-frontend-auth-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md`.
+    Commits: `418c8bf8` (spec) + `716fdd66` (RegisterPage/VerifyEmailPage/OAuthCallbackPage).
+- **Epic 7b en curso (este sesión):**
+  - Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md`
+    (commit `52e4b1e8`). Pendiente: revisión de usuario → writing-plans → implementación.
+- **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
+- **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
+- **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
 
 ---
 
@@ -234,6 +243,34 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Estado actual del §1:** Epics 1-6 completos en `jorge`, pushed. Total: 118 tests, 19 suites.
 - [ ] PR a `staging` con Epics 4-6.
 - [ ] Epic 7 (frontend auth/admin/org pages) — última epica de Jorge.
+
+### Bloque 6 — 2026-07-13 — Epic 7a Frontend auth pages implementado ✅
+- ✅ Brainstorm + spec: `docs/superpowers/specs/2026-07-13-epic7a-frontend-auth-design.md` (3 preguntas A/B/C: register page dedicated / OAuth callback dedicated route / verify-email included / mock auth flipped off).
+- ✅ Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md` (7 tasks).
+- ✅ `418c8bf8` — spec commit.
+- ✅ `716fdd66` — `RegisterPage` + `VerifyEmailPage` + `OAuthCallbackPage` (hash fragment), `register` method in `AuthProvider`, lazy routes `/register` / `/verify-email` / `/auth/callback`, `VITE_USE_MOCK_AUTH=false` in `.env.development`.
+- ✅ Merged to staging via PR (merge commit `785b7909` "Merge jorge into staging: Epics 4-7a").
+
+**Tests:** sin tests de frontend (no hay infra). Smoke manual documentado en spec §10.
+**Runtime smoke:** `/login` → `/register` link funciona (no 404) ✅ · `/auth/callback#accessToken=...&refreshToken=...` parsea y redirige a dashboard ✅ · `student@demo`/`demo1234` con `VITE_USE_MOCK_AUTH=false` login real ✅.
+
+### Bloque 7 — 2026-07-17 — Epic 7b brainstorm + spec (en curso)
+- ✅ Sync `jorge` ← `origin/staging` (fast-forward a `94fbf924`): trae infra simplificada de Ale (Caddy, `docker-compose.yml` renombrado, prisma migrations, tini pinned) + fix de `NotificationsService` para persistir friend-request notifications.
+- ✅ Consulta engram (`engram_query_graph` con query `frontend admin users organization ProtectedRoute roles AdminAppLayout pattern`): confirma que `ProtectedRoute` ya soporta `roles`, `useIsAdmin/useHasRole/useIsTeacher` existen, `useCourses` es el patrón establecido, `AppLayout` usa flags `staffOnly`/`student`/`teacher` en `NAV_ITEMS`. Spec alineada con el grafo.
+- ✅ Brainstorming skill: 7 preguntas clarificadoras una a una →
+  1. Alcance Epic 7 restante → **solo 7b admin primero** (7c org separado).
+  2. Acciones admin a cubrir → **CRUD completo** (list + create + edit + delete).
+  3. UX editar usuario → **página dedicada `/admin/users/:id`** (no modal, no inline).
+  4. Confirmar borrado → **doble pulsación en ventana de 5s** (no window.confirm, no Modal nueva).
+  5. Layout lista → **tabla HTML `<table>` estilizada** (no cards, no flex rows).
+  6. Nav item → **"Usuarios" → `/admin/users`** con flag `adminOnly: true` nuevo.
+  7. Editar tu propio usuario → **deshabilitar campos out-of-bounds inline** (dropdown rol disabled + botón eliminar oculto).
+- ✅ Propuesta de enfoque A (hook `useUsers`/`useUser` para fetch, mutaciones inline en pages, `UserForm` internal compartido) vs B (hook por acción, YAGNI) vs C (fetch inline sin hooks, duplica lógica). Elegido **A**.
+- ✅ Diseño presentado en 18 secciones, aprobado por el usuario con la nota "cuando toque implementar para y te cambio el modelo".
+- ✅ Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`, 546 líneas).
+- ✅ Auto-revisión de spec: typo "Subtitle苞btener" en §10 corregido, fila de tabla "|-any endpoint" → "| 401 on any endpoint" en §15, ambigüedad de back-link en edit page resuelta (añadido link "← Volver a usuarios" en §11).
+
+**Próximo paso:** revisión de spec por el usuario → `writing-plans` skill → PAUSE (cambio de modelo) → implementación.
 
 ---
 
