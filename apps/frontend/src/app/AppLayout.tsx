@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -8,6 +8,7 @@ import {
   BarChart3,
   LineChart,
   User,
+  Users,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -21,14 +22,25 @@ import styles from './AppLayout.module.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 
-const NAV_ITEMS = [
+interface NavItem {
+  to: string;
+  icon: ReactNode;
+  label: string;
+  staffOnly?: boolean;
+  student?: boolean;
+  teacher?: boolean;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: readonly NavItem[] = [
   { to: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Inicio' },
   { to: '/courses', icon: <BookOpen size={20} />, label: 'Cursos' },
   { to: '/assignments', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
   { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
   { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },
-] as const;
+  { to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios', adminOnly: true },
+];
 
 export function AppLayout() {
   const { user, isLoading, logout } = useAuth();
@@ -110,6 +122,10 @@ export function AppLayout() {
       >
         <nav className={styles.nav}>
           {NAV_ITEMS.map((item) => {
+            // Admin tool — hide from non-admins.
+            if (item.adminOnly && user?.role !== 'ADMIN') {
+              return null;
+            }
             // Analytics dashboard is a staff tool — hide from students.
             if ('staffOnly' in item && item.staffOnly && user?.role === 'STUDENT') {
               return null;
