@@ -63,6 +63,12 @@ const AdminUserCreatePage = lazy(() =>
 const AdminUserEditPage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
 );
+const OrgSettingsPage = lazy(() =>
+  import('@/features/org').then((m) => ({ default: m.OrgSettingsPage }))
+);
+const OrgMembersPage = lazy(() =>
+  import('@/features/org').then((m) => ({ default: m.OrgMembersPage }))
+);
 
 function PageLoader() {
   return (
@@ -237,6 +243,29 @@ const routes: RouteObject[] = [
               <Suspense fallback={<PageLoader />}>
                 <AdminUsersPage />
               </Suspense>
+            ),
+          },
+        ],
+      },
+      {
+        path: 'org',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <OrgSettingsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'members',
+            element: (
+              <ProtectedRoute roles={['ADMIN']}>
+                <Suspense fallback={<PageLoader />}>
+                  <OrgMembersPage />
+                </Suspense>
+              </ProtectedRoute>
             ),
           },
         ],
