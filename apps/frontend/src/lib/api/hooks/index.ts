@@ -29,3 +29,4 @@ export {
   useGradeDistribution,
   downloadAnalyticsCsv,
 } from './useAnalytics';
+export { useUsers, useUser } from './useUsers';
