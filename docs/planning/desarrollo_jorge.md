@@ -48,9 +48,14 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
     Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md`.
     Commits: `418c8bf8` (spec) + `716fdd66` (RegisterPage/VerifyEmailPage/OAuthCallbackPage).
 - **Epic 7b en curso (este sesión):**
-  - Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`).
-  - Plan escrito y commiteado: `docs/superpowers/plans/2026-07-17-epic7b-admin-pages.md` (commit `394274d4`, 1265 líneas, 8 tareas).
-  - Pendiente: PAUSE para que el usuario cambie de modelo → implementación de las 8 tareas.
+  - Spec: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`).
+  - Plan: `docs/superpowers/plans/2026-07-17-epic7b-admin-pages.md` (commit `394274d4`, 1265 líneas, 8 tareas).
+  - **Implementado (Bloque 8): 7 commits** (`316aa36b..3bb2f179`), 7/8 tasks (8 = smoke manual).
+    Build `pnpm -r run build` limpio. `make up` con stack completo HTTPS.
+  - Fix cross-cutting: `tsconfig.build.json` excluye `**/*.spec.ts` y `**/__tests__/**`
+    (David's realtime gateway spec importaba `socket.io-client` no instalado; rompía
+    el `nest build` en Docker).
+  - Pendiente: smoke browser manual (18 checks del plan §8).
 - **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
 - **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
 - **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
@@ -271,7 +276,20 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 - ✅ Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`, 546 líneas).
 - ✅ Auto-revisión de spec: typo "Subtitle苞btener" en §10 corregido, fila de tabla "|-any endpoint" → "| 401 on any endpoint" en §15, ambigüedad de back-link en edit page resuelta (añadido link "← Volver a usuarios" en §11).
 
-**Próximo paso:** PAUSE (el usuario cambia de modelo) → `executing-plans` o `subagent-driven-development` para implementar las 8 tareas del plan.
+### Bloque 8 — 2026-07-17 — Epic 7b implementación ✅
+- ✅ `executing-plans` skill, 8 tareas. Verified on branch `jorge`.
+- ✅ `316aa36b` — Task 1: `types.ts` (UserDTO + CreateUserInput + UpdateUserInput) + `useUsers.ts` (useUsers/useUser hooks, mirror useCourses) + barrel export in `hooks/index.ts`.
+- ✅ `66a01b08` — Task 2: `UserForm.tsx` + `UserForm.module.css` (controlled form, per-field validation, ApiError mapping `status===409` email, isSelf disable role select, diffForPatch export). Fix: `ApiError.isConflict` doesn't exist → used `status === 409`.
+- ✅ `e9fa48f3` — Task 3: `AdminUsersPage.tsx` + `.module.css` (HTML table, responsive, loading/error/empty states, Nuevo/Editar buttons).
+- ✅ `852661c8` — Task 4: `AdminUserCreatePage.tsx` (UserForm mode=create, POST /users, navigate back).
+- ✅ `bbee1c36` — Task 5: `AdminUserEditPage.tsx` + `.module.css` (UserForm mode=edit with diff, useUser load, delete double-press 5s window, isSelf hides delete + disables role). Fix: TS narrowing in async closure → captured `userData = data` const.
+- ✅ `2318388f` — Task 6: `index.ts` barrel for `features/admin`.
+- ✅ `3bb2f179` — Task 7: `routes.tsx` (3 lazy admin routes nested under `ProtectedRoute roles={['ADMIN']}` + `OutLet`) + `AppLayout.tsx` (NavItem interface replacing `as const`, `Users` icon, `adminOnly: true` guard).
+- ✅ `41aec251` — fix: `tsconfig.build.json` excludes spec/test files so Docker `nest build` doesn't fail on `socket.io-client` import in David's realtime gateway spec.
+- ✅ API-level smoke: health `/` ✅ · admin login `admin@demo`/`demo1234` → token ✅ · teacher login `teacher@demo` → token ✅ · admin `GET /users` → 6 users ✅ · teacher `GET /users` → 403 ✅ · admin `POST /users` → 201 create ✅ · admin `DELETE /users/:id` → 204 ✅.
+- ⬜ Browser smoke manual (needs Chrome): 18 checks from plan Task 8 Step 4 (sidebar visibility / RBAC gate / table render / create / edit / delete double-press / self-edit guard / 404 / responsive / console warnings).
+
+**Próximo paso:** smoke browser manual → `finishing-a-development-branch` → Epic 7c (features/org/) después.
 
 ---
 
