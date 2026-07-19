@@ -8,11 +8,14 @@
 de Aloiki) · responsive · estados vacío/carga/error · **sin mock** · validación front+back · a11y ·
 cero errores de consola · **un test E2E Playwright** por flujo.
 
-## Contrato anti-bloqueo
-- **Consumes** la Épica 0 de Aloiki (componentes) → mientras no esté, construye contra sus props
-  publicadas (Modal/Table/FormField/ConfirmDialog…). El `AdminDashboard` lo rellenas en el stub que
-  deja Aloiki (no toques su fichero de split).
-- **Entregas** un endpoint que otros pueden necesitar: `POST /auth/change-password` (ver A5).
+## Anti-bloqueo — trabajo auto-contenido
+No tocas `prisma/` ni ficheros compartidos: **David absorbe lo bloqueante** (schema, split del
+dashboard, harness E2E, endpoints compartidos) en su Épica D0. Tú:
+- Consumes la **Épica 0** (componentes de `@/components/ui`) — ya en `staging`.
+- Rellenas SOLO el stub `AdminDashboard` del split que hace David (no toques Student/Teacher).
+- `POST /auth/change-password` (A5) es de tu dominio (auth) y no bloquea a nadie.
+- Si el roster necesita un endpoint de "staff añade alumno" y no existe, se lo pides a David (D0) — no
+  toques el módulo de enrollments (de Aloiki).
 
 ## Épica A6a — Integrar tu frontend de Organización/Amigos (Epic 7c, HOY sin mergear)
 - [ ] Tu rama `jorge` tiene `OrgSettingsPage`, `OrgMembersPage`, rutas `/org`, hooks `useOrg`/
@@ -25,8 +28,8 @@ cero errores de consola · **un test E2E Playwright** por flujo.
 - [ ] Pestaña **"Alumnos"** en el curso (staff): lista de inscritos (`GET /courses/:id/enrollments`),
       con progreso por alumno (`GET /courses/:id/progress`).
 - [ ] Cambiar rol ASSISTANT/STUDENT (`PATCH /enrollments/:id/role`), expulsar (`DELETE
-      /courses/:courseId/enroll`), **añadir alumno** por email/lista (si falta endpoint de "staff añade a
-      un userId", créalo pequeño en enrollments — es dominio de curso, coordina con Aloiki).
+      /courses/:courseId/enroll`), **añadir alumno** por email/lista (el endpoint "staff añade a un
+      userId" lo provee David en D0 si falta; tú solo lo consumes).
 - [ ] Reutiliza los patrones de tu `OrgMembersPage` (tabla + acciones).
 - [ ] E2E: profesor ve el roster, cambia un rol y expulsa a un alumno.
 
@@ -40,7 +43,8 @@ cero errores de consola · **un test E2E Playwright** por flujo.
 - [ ] E2E: usuario cambia su nombre y su contraseña y vuelve a entrar con la nueva.
 
 ## Épica A4-admin — Des-mockear el AdminDashboard (backend YA existe)
-- [ ] Rellena el stub `AdminDashboard` (de Aloiki) con datos reales: usuarios (`GET /users`), nº cursos,
+- [ ] Rellena el stub `AdminDashboard` (del split que hace David en D0) con datos reales: usuarios
+      (`GET /users`), nº cursos,
       info de organización (`GET /organizations/me`). Elimina KPIs hardcodeados ("1.284 usuarios", etc.).
 - [ ] E2E: admin ve cifras reales, sin datos inventados.
 

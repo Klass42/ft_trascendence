@@ -9,11 +9,13 @@
 validación front+back · accesible (labels/foco/teclado) · **cero errores de consola** · **un test E2E
 Playwright** por flujo (con captura) que debe pasar.
 
-## Contrato anti-bloqueo (entregas TÚ, Semana 1)
-- **Épica 0 primero**: publica las **APIs de los componentes** (props/nombres) en cuanto empieces,
-  aunque la implementación llegue después, para que Jorge y David construyan contra el contrato.
-- **Split del Dashboard**: parte `DashboardPage` en `StudentDashboard`/`TeacherDashboard`/`AdminDashboard`
-  (3 ficheros) y súbelo pronto → Jorge rellena Admin y David rellena Teacher sin tocar tu fichero.
+## Anti-bloqueo — trabajo auto-contenido
+No tocas `prisma/` ni ficheros compartidos: **David absorbe lo bloqueante** (schema, split del
+dashboard, harness E2E, endpoints compartidos) en su Épica D0. Tú consumes:
+- La **Épica 0** (componentes de `@/components/ui`) — ya en `staging`.
+- Los **stubs del split del Dashboard** que crea David: tú rellenas SOLO `StudentDashboard` (no tocas
+  Teacher/Admin).
+- Todo tu backend (cursos/secciones/lecciones/enrollments) **ya existe**.
 
 ## Épica 0 — Design system + lenguaje visual ✅ HECHA (por David, 2026-07-19)
 Ya está en `staging`, no la rehagas. Añadidos a `apps/frontend/src/components/ui/` (exportados en el
@@ -38,11 +40,10 @@ alguno, añádelo aquí siguiendo el mismo patrón (`.module.css` + tokens).
 - [ ] Reordenar por drag (o botones ↑/↓ si drag es mucho).
 - [ ] E2E: profesor añade sección + lección con vídeo y adjunto → alumno la ve en `LessonPage`.
 
-## Épica A-shell — Split + limpieza del Dashboard de ALUMNO
-- [ ] Parte `DashboardPage` en 3 componentes por rol (deja `TeacherDashboard`/`AdminDashboard` como
-      stubs mínimos que rellenan David/Jorge).
-- [ ] **Des-mockea el StudentDashboard**: quita racha/promedio/"próxima entrega" hardcodeados
-      (`mock-data`); usa progreso real (`useMyProgress`) y la próxima tarea real (de sus cursos).
+## Épica A-shell — Rellenar el StudentDashboard (el split lo hace David en D0)
+- [ ] En el stub `StudentDashboard` que crea David: **des-mockea** — quita racha/promedio/"próxima
+      entrega" hardcodeados (`mock-data`); usa progreso real (`useMyProgress`) y la próxima tarea real
+      (de sus cursos). No toques `TeacherDashboard`/`AdminDashboard`.
 - [ ] Elimina el import de `@/lib/mock-data` de tu parte.
 - [ ] E2E: dashboard de alumno sin datos inventados, sin errores de consola.
 
