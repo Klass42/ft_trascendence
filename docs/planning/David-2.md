@@ -56,13 +56,18 @@ lleva **todo lo compartido/bloqueante** y ellos solo tocan UI auto-contenida sob
 - [x] E2E `teacher-dashboard.spec.ts`: cifras reales (sin "142"), fila pendiente, y navegación al
       gradebook.
 
-## Épica A6b — Presence a amigos (cierra tu TODO diferido; Friends API ya existe)
-- [ ] En `RealtimeGateway`, al conectar/desconectar, además de sellar `User.onlineAt`, **emite
-      online/offline a los amigos** del usuario (usa la relación `Friendship` ACCEPTED; consúmela vía
-      Prisma o el servicio de Jorge). Evento socket `presence:update`.
-- [ ] Frontend: en la lista de amigos (de Jorge) o navbar, refleja estado en vivo. Reconexión grácil.
-- [ ] Quita el `// TODO(presence)`.
-- [ ] E2E/integración: con dos usuarios amigos, uno conecta → el otro recibe `presence:update` online.
+## Épica A6b — Presence a amigos ✅ HECHA (PR → staging)
+- [x] `RealtimeGateway`: cuenta sockets vivos por usuario (in-memory); en la transición
+      online↔offline (primer socket sube / último baja) emite `presence:update` {userId, online} a los
+      AMIGOS ACCEPTED (query `Friendship`, simétrica). Sigue sellando `onlineAt`. `// TODO(presence)` quitado.
+- [x] Endpoint de lectura `GET /me/presence/friends` (`PresenceService`/`PresenceController` en
+      `realtime`): amigos + estado online (autoridad = contador en memoria del gateway).
+- [x] Frontend: `PresenceProvider` (fetch inicial + socket `presence:update` + resync en cada
+      (re)connect) y widget `FriendsPresence` en la navbar (Dropdown con dot online/offline y contador).
+- [x] Seed: amistad ACCEPTED lucia↔diego para demo/test.
+- [x] Test de integración (`realtime.gateway.spec.ts`): dos amigos, uno conecta → el otro recibe
+      `presence:update` online (y offline al desconectar); no llega a no-amigos. E2E `presence.spec.ts`:
+      el widget refleja el flip en vivo (socket real de lucia contra el gateway).
 
 ## Consumes
 - Épica 0 de Aloiki (componentes) · split del Dashboard (Aloiki) · Friends API (Jorge, ya en staging).
