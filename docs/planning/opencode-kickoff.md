@@ -18,12 +18,12 @@ Fase A **ya existe casi entero** — esto es cablear UI, no reinventar endpoints
 Trabaja en la rama `aloiki` (mergea a `staging` vía PR, nunca a master). Eres el frontend-lead.
 Implementa tu Fase A siguiendo docs/planning/Aloiki-2.md y los estándares de docs/planning/LMS-redesign.md §6.
 
-ORDEN (tu Épica 0 desbloquea a todos, hazla PRIMERO y publica pronto las APIs de los componentes):
-1. Épica 0 — Amplía apps/frontend/src/components/ui con: Modal, Select, Textarea, DatePicker, Tabs,
-   Table, Toast/useToast, EmptyState, FormField, Badge, Dropdown, ConfirmDialog (usa tokens.css,
-   accesibles, responsive). Escribe docs/planning/ui-language.md (espaciado, color, tipografía,
-   patrones de página/form/tabla). Publica la lista de componentes y props.
-2. Split del Dashboard: parte DashboardPage en StudentDashboard/TeacherDashboard/AdminDashboard (deja
+NOTA: la Épica 0 (design system) YA ESTÁ HECHA y en staging (Modal, Select, Textarea, DatePicker, Tabs,
+Table, Toast/useToast, EmptyState, FormField, Badge, Dropdown, ConfirmDialog + docs/planning/ui-language.md).
+Compón esos componentes; NO los rehagas.
+
+ORDEN:
+1. Split del Dashboard: parte DashboardPage en StudentDashboard/TeacherDashboard/AdminDashboard (deja
    Teacher y Admin como stubs mínimos para David y Jorge). De-mockea el StudentDashboard (quita racha/
    promedio/próxima-entrega hardcodeados; usa useMyProgress y la próxima tarea real). Elimina el import
    de @/lib/mock-data.
