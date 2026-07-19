@@ -16,18 +16,21 @@ lleva **todo lo compartido/bloqueante** y ellos solo tocan UI auto-contenida sob
   **split del Dashboard** + stubs, el **harness E2E** del repo, y cualquier **endpoint compartido** que
   falte. Aloiki y Jorge no tocan `prisma/` ni ficheros compartidos.
 
-## Épica D0 — Desbloqueos (haz esto PRIMERO, antes que A7/A4/A6b)
-- [ ] **Schema Fase A (un único PR):** `Assignment.openAt/closeAt`, modelo `AssignmentFile` (adjuntos
-      de enunciado, análogo a `SubmissionFile`), y cualquier campo que pidan A1–A6 (confírmalo con
-      Aloiki/Jorge antes). Migración + `prisma generate`. Nadie más toca el schema.
-- [ ] **Split del Dashboard:** parte `DashboardPage` en `StudentDashboard`/`TeacherDashboard`/
-      `AdminDashboard` (3 ficheros con stub mínimo). Aloiki rellena Student, Jorge Admin, tú Teacher —
-      sin tocar el fichero de otro.
-- [ ] **Harness E2E en el repo:** añade Playwright (config + carpeta `e2e/` + un flujo de ejemplo +
-      script `test:e2e`) para que "un test E2E por flujo" sea real para todos.
-- [ ] **Endpoints compartidos que falten:** p.ej. "staff añade a un alumno al curso" en enrollments si
-      Jorge lo necesita para el roster. Créalos tú y publícalos.
-- [ ] Cuando D0 esté en `staging`, avisa al equipo (los desbloquea).
+## Épica D0 — Desbloqueos ✅ HECHA (David/Opus, 2026-07-19, en staging)
+- [x] **Schema Fase A:** `Assignment.openAt/closeAt` + modelo `AssignmentFile` (análogo a
+      `SubmissionFile`) + relación inversa en `File`. Aplicado vía `prisma db push` + `prisma generate`.
+      ⚠️ **Drift pre-existente**: el repo tiene `migrations/…_init` pero la app arranca con `db push`
+      (compose), así que `migrate dev` pide reset. NO lo forcé. **Para Jorge/Ale**: reconciliar la
+      historia de migraciones (fuera de Fase A). El cambio llega al equipo vía el `db push` del arranque.
+- [x] **Split del Dashboard:** `DashboardPage` ahora es un dispatcher por rol →
+      `StudentDashboard` (Aloiki), `TeacherDashboard` (David), `AdminDashboard` (Jorge) + `DashboardHeader`
+      compartido. Refactor puro (comportamiento preservado); cada uno de-mockea el suyo con un `// TODO`.
+- [x] **Harness E2E:** ya existía (`apps/frontend/playwright.config.ts` + `e2e/courses.spec.ts`, 16
+      tests). Añadido el script `test:e2e`/`test:e2e:ui`. Ejecuta: `pnpm --filter frontend test:e2e`
+      (requiere la stack levantada + `VITE_DEV_USER_ID` en `.env.development.local`).
+- [x] **Endpoints compartidos:** "staff añade alumno" NO requiere endpoint nuevo — el existente
+      `POST /courses/:courseId/enroll?userId=X` ya acepta un userId explícito (módulo de Aloiki, patrón
+      temporal). Cuando Aloiki migre enrollments a `@CurrentUser`, David añadirá un endpoint dedicado.
 
 ## Épica A7 — Autoría de tareas: editar/borrar + plazos + recursos
 - [ ] **Editar/borrar tarea** desde `AssignmentsPage` (staff): `PATCH/DELETE /assignments/:id` (ya
