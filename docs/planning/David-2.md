@@ -32,26 +32,29 @@ lleva **todo lo compartido/bloqueante** y ellos solo tocan UI auto-contenida sob
       `POST /courses/:courseId/enroll?userId=X` ya acepta un userId explícito (módulo de Aloiki, patrón
       temporal). Cuando Aloiki migre enrollments a `@CurrentUser`, David añadirá un endpoint dedicado.
 
-## Épica A7 — Autoría de tareas: editar/borrar + plazos + recursos
-- [ ] **Editar/borrar tarea** desde `AssignmentsPage` (staff): `PATCH/DELETE /assignments/:id` (ya
-      existen) — hoy solo se pueden crear.
-- [ ] **Plazos de inicio y fin**: usa `Assignment.openAt/closeAt` (creados por ti en D0). Refleja el
-      estado en UI (no abierta / abierta / cerrada) y hazlo cumplir en el backend al entregar (rechaza
-      fuera de ventana). Form con `DatePicker` + `Modal` del design system.
-- [ ] **Recursos del profesor en la tarea**: adjuntos de enunciado con `AssignmentFile` (creado en D0)
-      + FilesService, reusando el patrón de `SubmissionFile`.
-- [ ] Muestra el `dueAt`/estado con claridad en la lista (el usuario no "veía" los plazos).
-- [ ] E2E: profesor crea tarea con apertura/cierre, la edita, adjunta un recurso; alumno no puede
-      entregar fuera de ventana.
+## Épica A7 — Autoría de tareas: editar/borrar + plazos + recursos ✅ HECHA (PR #5 → staging)
+- [x] **Editar/borrar tarea** desde `AssignmentsPage` (staff): Editar (Modal + `PATCH`) y Borrar
+      (`ConfirmDialog` + toast). Componente reutilizable `AssignmentForm` (crear/editar).
+- [x] **Plazos de inicio y fin**: `openAt`/`closeAt` en DTOs + servicio (valida orden
+      `openAt ≤ dueAt ≤ closeAt`). `submit()` rechaza fuera de ventana (`400`: no abierta / cerrada);
+      borradores permitidos. UI con `DatePicker` + `Badge` de estado (No abierta/Abierta/Cerrada).
+- [x] **Recursos del profesor**: `AssignmentFile` enlazado por `fileIds` (validado org+uploader como
+      `SubmissionFile`); devueltos en el detalle; `DELETE /assignments/:id/files/:fileId`. UI con
+      `FileUpload` (crear/editar) + lista de recursos visible para todo miembro.
+- [x] `dueAt`/estado claros en la lista y el detalle.
+- [x] E2E `assignments-authoring.spec.ts`: profesor crea tarea cerrada con recurso, la edita, alumno
+      no puede entregar (API), y se borra. Backend `pnpm test` 127/127.
 
-## Épica A4-teacher — Des-mockear el TeacherDashboard (tu dominio: entregas/calificación)
-- [ ] Rellena el stub `TeacherDashboard` (de Aloiki) con datos reales: **"Por calificar"** = entregas
-      SUBMITTED/LATE sin nota de sus cursos (deriva de tus endpoints de submissions/grading), **cursos
-      activos** reales, **nº de alumnos** reales (de enrollments). Elimina `mock-data` ("142 alumnos",
-      lista de entregas falsa).
-- [ ] Si falta un endpoint agregado ("entregas pendientes de calificar del profesor"), créalo en tu
-      dominio (assignments/grading) — es tuyo.
-- [ ] E2E: dashboard de profesor con cifras reales, click en "por calificar" lleva al gradebook.
+## Épica A4-teacher — Des-mockear el TeacherDashboard ✅ HECHA (PR → staging)
+- [x] `TeacherDashboard` con datos reales vía `GET /me/teaching/summary` (nuevo, en `grading`):
+      **cursos activos** (cursos PUBLISHED que imparte), **alumnos totales** (distintos, de enrollments),
+      **por calificar** = entregas SUBMITTED/LATE sin nota de sus cursos. Sin `mock-data`.
+- [x] Endpoint agregado `getTeachingSummary(actingUserId)` en `GradingService` + ruta en
+      `GradingController`; tenancy implícita (solo cursos donde el actor está inscrito). Tests unit.
+- [x] Estados carga/vacío/error (Spinner/EmptyState/retry). Click en "Por calificar" (tarjeta o fila)
+      → `/grades` (gradebook).
+- [x] E2E `teacher-dashboard.spec.ts`: cifras reales (sin "142"), fila pendiente, y navegación al
+      gradebook.
 
 ## Épica A6b — Presence a amigos (cierra tu TODO diferido; Friends API ya existe)
 - [ ] En `RealtimeGateway`, al conectar/desconectar, además de sellar `User.onlineAt`, **emite
