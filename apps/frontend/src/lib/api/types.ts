@@ -120,11 +120,13 @@ export type {
 
 export type {
   AssignmentDTO,
+  AssignmentFileDTO,
   SubmissionDTO,
   SubmissionFileDTO,
   SubmissionAuthorDTO,
   SubmissionStatus,
   CreateAssignmentInput,
+  UpdateAssignmentInput,
   CreateSubmissionInput,
 } from './types/assignment';
 

@@ -1,25 +1,41 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Button, Spinner } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Modal,
+  Select,
+  Spinner,
+  useToast,
+} from '@/components/ui';
 import {
   useAuth,
   useCourses,
   useAssignments,
   useMySubmission,
+  useDeleteAssignment,
 } from '@/lib/api';
 import type { AssignmentDTO } from '@/lib/api';
-import { formatDate, isOverdue } from './helpers';
+import {
+  formatDate,
+  isOverdue,
+  windowState,
+  WINDOW_BADGE,
+} from './helpers';
+import { AssignmentForm } from './AssignmentForm';
+import { AssignmentAttachments } from './AssignmentAttachments';
 import { SubmissionForm } from './SubmissionForm';
 import { SubmissionsList } from './SubmissionsList';
-import { CreateAssignmentForm } from './CreateAssignmentForm';
 
 /**
  * Assignments workspace, connected to the real API.
  *
  * A course selector scopes the list; picking an assignment opens its detail.
  * Students see their submission + a submit form; staff (teacher/assistant) can
- * create assignments and review every submission. The tenant is derived
- * server-side from identity, so nothing here trusts a client-supplied org.
+ * create/edit/delete assignments and review every submission. The tenant is
+ * derived server-side from identity, so nothing here trusts a client org.
  */
 export function AssignmentsPage() {
   const { user } = useAuth();
@@ -95,39 +111,28 @@ export function AssignmentsPage() {
 
         {/* Course selector */}
         {courses && courses.length > 0 && (
-          <select
-            value={courseId ?? ''}
-            onChange={(e) => {
-              setCourseId(e.target.value);
-              setSelectedId(null);
-              setCreating(false);
-            }}
-            style={{
-              marginLeft: 'auto',
-              padding: '8px 12px',
-              borderRadius: 9,
-              border: '1px solid var(--color-border-primary)',
-              background: 'var(--color-bg-primary)',
-              color: 'var(--color-text-primary)',
-              fontSize: 14,
-              fontFamily: 'inherit',
-            }}
-          >
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
+          <div style={{ marginLeft: 'auto', minWidth: 220 }}>
+            <Select
+              aria-label="Curso"
+              value={courseId ?? ''}
+              onChange={(e) => {
+                setCourseId(e.target.value);
+                setSelectedId(null);
+                setCreating(false);
+              }}
+              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+            />
+          </div>
         )}
       </div>
 
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
-        <p style={{ color: 'var(--color-text-muted)' }}>
-          No hay cursos disponibles.
-        </p>
+        <EmptyState
+          title="No hay cursos disponibles"
+          description="Cuando tengas cursos, sus tareas aparecerán aquí."
+        />
       )}
 
       {courseId && (
@@ -144,11 +149,12 @@ export function AssignmentsPage() {
             {isStaff && (
               <div style={{ marginBottom: 14 }}>
                 {creating ? (
-                  <CreateAssignmentForm
+                  <AssignmentForm
                     courseId={courseId}
-                    onCreated={() => {
+                    onSaved={(a) => {
                       setCreating(false);
                       refetchAssignments();
+                      selectAssignment(a.id);
                     }}
                     onCancel={() => setCreating(false)}
                   />
@@ -169,15 +175,22 @@ export function AssignmentsPage() {
             )}
 
             {assignments && assignments.length === 0 && !assignmentsLoading && (
-              <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-                Este curso no tiene tareas todavía.
-              </p>
+              <EmptyState
+                title="Sin tareas todavía"
+                description={
+                  isStaff
+                    ? 'Crea la primera tarea con el botón de arriba.'
+                    : 'Este curso aún no tiene tareas.'
+                }
+              />
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {assignments?.map((a) => {
                 const active = a.id === selectedId;
                 const overdue = isOverdue(a.dueAt);
+                const state = windowState(a.openAt, a.closeAt);
+                const badge = WINDOW_BADGE[state];
                 return (
                   <button
                     key={a.id}
@@ -199,8 +212,20 @@ export function AssignmentsPage() {
                       fontFamily: 'inherit',
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 14.5 }}>
-                      {a.title}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, fontSize: 14.5 }}>
+                        {a.title}
+                      </span>
+                      <Badge variant={badge.variant} dot>
+                        {badge.label}
+                      </Badge>
                     </div>
                     <div
                       style={{
@@ -239,6 +264,11 @@ export function AssignmentsPage() {
                 key={selected.id}
                 assignment={selected}
                 isStaff={isStaff}
+                onChanged={refetchAssignments}
+                onDeleted={() => {
+                  setSelectedId(null);
+                  refetchAssignments();
+                }}
               />
             )}
           </div>
@@ -253,10 +283,19 @@ export function AssignmentsPage() {
 function AssignmentDetail({
   assignment,
   isStaff,
+  onChanged,
+  onDeleted,
 }: {
   assignment: AssignmentDTO;
   isStaff: boolean;
+  onChanged: () => void;
+  onDeleted: () => void;
 }) {
+  const { toast } = useToast();
+  const { remove, isLoading: deleting } = useDeleteAssignment();
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   // Students-only: load the acting user's own submission for this assignment.
   const {
     data: mine,
@@ -264,22 +303,75 @@ function AssignmentDetail({
     refetch: refetchMine,
   } = useMySubmission(isStaff ? null : assignment.id);
 
+  const state = windowState(assignment.openAt, assignment.closeAt);
+  const badge = WINDOW_BADGE[state];
+
+  async function handleDelete() {
+    try {
+      await remove(assignment.id);
+      toast({ variant: 'success', message: 'Tarea eliminada.' });
+      setConfirmDelete(false);
+      onDeleted();
+    } catch (err) {
+      toast({
+        variant: 'error',
+        message:
+          err instanceof Error ? err.message : 'No se pudo eliminar la tarea.',
+      });
+    }
+  }
+
   return (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 6px' }}>
-        {assignment.title}
-      </h2>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>
+              {assignment.title}
+            </h2>
+            <Badge variant={badge.variant} dot>
+              {badge.label}
+            </Badge>
+          </div>
+        </div>
+        {isStaff && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Editar
+            </Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              Borrar
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div
         style={{
           fontSize: 13,
           color: 'var(--color-text-muted)',
           marginBottom: 16,
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
         }}
       >
-        {assignment.dueAt
-          ? `Fecha límite: ${formatDate(assignment.dueAt)}`
-          : 'Sin fecha límite'}{' '}
-        · {assignment.maxScore} pts
+        <span>
+          {assignment.openAt ? `Abre ${formatDate(assignment.openAt)} · ` : ''}
+          {assignment.dueAt
+            ? `Entrega ${formatDate(assignment.dueAt)}`
+            : 'Sin fecha límite'}
+          {assignment.closeAt ? ` · Cierra ${formatDate(assignment.closeAt)}` : ''}
+        </span>
+        <span>· {assignment.maxScore} pts</span>
       </div>
 
       {assignment.description && (
@@ -289,17 +381,20 @@ function AssignmentDetail({
             lineHeight: 1.55,
             color: 'var(--color-text-secondary)',
             whiteSpace: 'pre-wrap',
-            marginBottom: 22,
+            marginBottom: 18,
           }}
         >
           {assignment.description}
         </p>
       )}
 
+      <AssignmentAttachments files={assignment.files ?? []} />
+
       <div
         style={{
           borderTop: '1px solid var(--color-border-primary)',
           paddingTop: 18,
+          marginTop: 18,
         }}
       >
         {isStaff ? (
@@ -319,6 +414,37 @@ function AssignmentDetail({
           />
         )}
       </div>
+
+      {/* Edit modal (staff) */}
+      <Modal
+        open={editing}
+        onClose={() => setEditing(false)}
+        title="Editar tarea"
+        size="lg"
+      >
+        <AssignmentForm
+          courseId={assignment.courseId}
+          initial={assignment}
+          inModal
+          onSaved={() => {
+            setEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </Modal>
+
+      {/* Delete confirmation (staff) */}
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Borrar tarea"
+        message={`¿Seguro que quieres borrar «${assignment.title}»? Se eliminarán también sus entregas. Esta acción no se puede deshacer.`}
+        confirmLabel="Borrar"
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

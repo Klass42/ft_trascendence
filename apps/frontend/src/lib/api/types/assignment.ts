@@ -17,15 +17,27 @@ export type SubmissionStatus = 'DRAFT' | 'SUBMITTED' | 'LATE' | 'GRADED';
 // Assignment
 // =============================================================================
 
+/** A teacher's prompt attachment on an assignment (mirrors SubmissionFileDTO). */
+export interface AssignmentFileDTO {
+  assignmentId: string;
+  fileId: string;
+  file: FileDTO;
+}
+
 export interface AssignmentDTO {
   id: string;
   courseId: string;
   title: string;
   description: string | null;
+  /** Submission window (all optional). */
+  openAt: string | null;
   dueAt: string | null;
+  closeAt: string | null;
   maxScore: number;
   createdAt: string;
   updatedAt: string;
+  /** Teacher's prompt attachments; present on the assignment reads. */
+  files?: AssignmentFileDTO[];
 }
 
 // =============================================================================
@@ -70,8 +82,22 @@ export interface SubmissionDTO {
 export interface CreateAssignmentInput {
   title: string;
   description?: string;
+  openAt?: string;
   dueAt?: string;
+  closeAt?: string;
   maxScore?: number;
+  fileIds?: string[];
+}
+
+/** PATCH payload; `null` on a window field clears that bound. */
+export interface UpdateAssignmentInput {
+  title?: string;
+  description?: string;
+  openAt?: string | null;
+  dueAt?: string | null;
+  closeAt?: string | null;
+  maxScore?: number;
+  fileIds?: string[];
 }
 
 export interface CreateSubmissionInput {

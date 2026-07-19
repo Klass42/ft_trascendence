@@ -14,6 +14,8 @@ describe('SubmissionsService', () => {
   const COURSE_ID = 'course-web-101';
   const ORG_ID = 'org-klass-0001';
   const ASSIGNMENT_ID = 'assignment-web-101-1';
+  const ASSIGNMENT_CLOSED = 'assignment-closed';
+  const ASSIGNMENT_NOT_OPEN = 'assignment-not-open';
   const STUDENT = 'user-lucia-001';
   const TEACHER = 'user-diego-001';
 
@@ -29,16 +31,32 @@ describe('SubmissionsService', () => {
             : null,
       },
       assignment: {
-        findUnique: async ({ where }: any) =>
-          where.id === ASSIGNMENT_ID
-            ? {
-                id: ASSIGNMENT_ID,
-                courseId: COURSE_ID,
-                title: 'Práctica 1',
-                dueAt: new Date(2999, 0, 1), // far future → not LATE
-                course: { id: COURSE_ID, organizationId: ORG_ID },
-              }
-            : null,
+        findUnique: async ({ where }: any) => {
+          const base = {
+            courseId: COURSE_ID,
+            title: 'Práctica 1',
+            course: { id: COURSE_ID, organizationId: ORG_ID },
+          };
+          if (where.id === ASSIGNMENT_ID) {
+            return { ...base, id: ASSIGNMENT_ID, dueAt: new Date(2999, 0, 1) }; // far future → not LATE
+          }
+          if (where.id === ASSIGNMENT_CLOSED) {
+            return {
+              ...base,
+              id: ASSIGNMENT_CLOSED,
+              dueAt: new Date(2000, 0, 2),
+              closeAt: new Date(2000, 0, 3), // already past → rejected
+            };
+          }
+          if (where.id === ASSIGNMENT_NOT_OPEN) {
+            return {
+              ...base,
+              id: ASSIGNMENT_NOT_OPEN,
+              openAt: new Date(2999, 0, 1), // far future → not open yet
+            };
+          }
+          return null;
+        },
       },
       enrollment: {
         findUnique: async ({ where }: any) => {
@@ -134,5 +152,52 @@ describe('SubmissionsService', () => {
       status: SubmissionStatus.SUBMITTED,
     });
     expect(emitted).toHaveLength(1);
+  });
+
+  it('rejects a submission after the assignment has closed', async () => {
+    const prisma = buildPrismaFake();
+    const notifications = {
+      emit: async () => ({ id: 'n-1' }),
+    } as unknown as NotificationsService;
+    const assignments = new AssignmentsService(prisma);
+    const service = new SubmissionsService(prisma, assignments, notifications);
+
+    await expect(
+      service.submit(ASSIGNMENT_CLOSED, STUDENT, {
+        text: 'Tarde',
+        status: SubmissionStatus.SUBMITTED,
+      }),
+    ).rejects.toThrow(/cerrada/i);
+  });
+
+  it('rejects a submission before the assignment opens', async () => {
+    const prisma = buildPrismaFake();
+    const notifications = {
+      emit: async () => ({ id: 'n-1' }),
+    } as unknown as NotificationsService;
+    const assignments = new AssignmentsService(prisma);
+    const service = new SubmissionsService(prisma, assignments, notifications);
+
+    await expect(
+      service.submit(ASSIGNMENT_NOT_OPEN, STUDENT, {
+        text: 'Demasiado pronto',
+        status: SubmissionStatus.SUBMITTED,
+      }),
+    ).rejects.toThrow(/no está abierta/i);
+  });
+
+  it('allows saving a DRAFT even outside the window', async () => {
+    const prisma = buildPrismaFake();
+    const notifications = {
+      emit: async () => ({ id: 'n-1' }),
+    } as unknown as NotificationsService;
+    const assignments = new AssignmentsService(prisma);
+    const service = new SubmissionsService(prisma, assignments, notifications);
+
+    const draft = await service.submit(ASSIGNMENT_NOT_OPEN, STUDENT, {
+      text: 'Borrador anticipado',
+      status: SubmissionStatus.DRAFT,
+    });
+    expect(draft.status).toBe(SubmissionStatus.DRAFT);
   });
 });
