@@ -138,6 +138,7 @@ model File {
 
   lessonAttachments LessonAttachment[]
   submissionFiles   SubmissionFile[]
+  assignmentFiles   AssignmentFile[]
 
   @@unique([bucket, objectKey])
   @@index([organizationId])
@@ -244,14 +245,29 @@ model Assignment {
   course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
   title       String
   description String?
-  dueAt       DateTime?
+  openAt      DateTime? // submissions accepted from this moment (null = open now)
+  dueAt       DateTime? // soft deadline; submissions after this are marked LATE
+  closeAt     DateTime? // hard close; submissions rejected after this (null = never)
   maxScore    Float     @default(100)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   submissions Submission[]
+  files       AssignmentFile[] // teacher's prompt attachments
 
   @@index([courseId])
+}
+
+/// Files a teacher attaches to an assignment (the prompt/resources), as opposed
+/// to SubmissionFile (files a student hands in). Mirrors the SubmissionFile join.
+model AssignmentFile {
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  fileId       String
+  file         File       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([assignmentId, fileId])
+  @@index([fileId])
 }
 
 model Submission {
