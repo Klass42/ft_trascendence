@@ -27,6 +27,8 @@ describe('RealtimeGateway (integration)', () => {
   let port: number;
   const clients: Socket[] = [];
 
+  // p-alice and p-bob are ACCEPTED friends; everyone else has no friends.
+  const FRIENDS = new Set(['p-alice', 'p-bob']);
   const prismaMock = {
     notification: {
       create: async ({ data }: { data: Record<string, unknown> }) => ({
@@ -38,6 +40,15 @@ describe('RealtimeGateway (integration)', () => {
     },
     // presence stamp (connect/disconnect) — accept and ignore
     user: { update: async () => ({}) },
+    friendship: {
+      findMany: async ({ where }: { where: any }) => {
+        const uid = where.OR?.[0]?.requesterId as string | undefined;
+        if (uid && FRIENDS.has(uid)) {
+          return [{ requesterId: 'p-alice', addresseeId: 'p-bob' }];
+        }
+        return [];
+      },
+    },
   };
 
   beforeAll(async () => {
@@ -104,6 +115,45 @@ describe('RealtimeGateway (integration)', () => {
     expect(payload.title).toBe('Hi Alice');
     expect(payload.userId).toBe('user-alice');
     alice.close();
+  });
+
+  it('broadcasts presence:update online to a friend when a user connects', async () => {
+    // Bob comes online first and listens; Alice (his friend) then connects.
+    const bob = await connect('p-bob');
+    const online = new Promise<{ userId: string; online: boolean }>((resolve) =>
+      bob.on('presence:update', resolve),
+    );
+
+    const alice = await connect('p-alice');
+
+    const payload = await online;
+    expect(payload).toEqual({ userId: 'p-alice', online: true });
+
+    // When Alice disconnects, Bob is told she went offline.
+    const offline = new Promise<{ userId: string; online: boolean }>((resolve) =>
+      bob.on('presence:update', resolve),
+    );
+    alice.close();
+    const off = await offline;
+    expect(off).toEqual({ userId: 'p-alice', online: false });
+
+    bob.close();
+  });
+
+  it('does not send presence to non-friends', async () => {
+    // Carol is nobody's friend; Dave connecting must not reach her.
+    const carol = await connect('p-carol');
+    let leaked = false;
+    carol.on('presence:update', () => {
+      leaked = true;
+    });
+
+    const dave = await connect('p-dave');
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(leaked).toBe(false);
+    carol.close();
+    dave.close();
   });
 
   it("does not deliver a notification to a different user's socket", async () => {

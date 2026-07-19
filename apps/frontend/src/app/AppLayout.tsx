@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/lib/api';
 import { Spinner } from '@/components/ui';
 import { NotificationsProvider, NotificationBell } from '@/features/notifications';
+import { PresenceProvider, FriendsPresence } from '@/features/presence';
 import styles from './AppLayout.module.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
@@ -68,6 +69,7 @@ export function AppLayout() {
 
   return (
     <NotificationsProvider>
+    <PresenceProvider>
     <div className={styles.layout}>
       {/* ===== Navbar ===== */}
       <header className={styles.navbar}>
@@ -87,6 +89,7 @@ export function AppLayout() {
         </div>
 
         <div className={styles.navbarRight}>
+          <FriendsPresence />
           <NotificationBell />
           <NavLink to="/profile" className={styles.avatar}>
             {initials}
@@ -160,6 +163,7 @@ export function AppLayout() {
         <Outlet />
       </main>
     </div>
+    </PresenceProvider>
     </NotificationsProvider>
   );
 }

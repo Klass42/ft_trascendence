@@ -18,7 +18,13 @@
  *   user-student-0001 / user-teacher-0001 / user-admin-0001 … Jorge's demo logins
  *     (VITE_DEV_USER_ID default, see docs/planning/desarrollo_jorge.md)
  */
-import { PrismaClient, GlobalRole, CourseRole, CourseStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  GlobalRole,
+  CourseRole,
+  CourseStatus,
+  FriendStatus,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -97,6 +103,19 @@ async function main(): Promise<void> {
     where: { courseId_userId: { courseId: course.id, userId: lucia.id } },
     update: {},
     create: { courseId: course.id, userId: lucia.id, role: CourseRole.STUDENT, progress: 25 },
+  });
+
+  // ── An accepted friendship so presence (A6b) is demonstrable ────────────
+  await prisma.friendship.upsert({
+    where: {
+      requesterId_addresseeId: { requesterId: lucia.id, addresseeId: diego.id },
+    },
+    update: { status: FriendStatus.ACCEPTED },
+    create: {
+      requesterId: lucia.id,
+      addresseeId: diego.id,
+      status: FriendStatus.ACCEPTED,
+    },
   });
 
   // ── One section + lesson so the course isn't empty ──────────────────────
