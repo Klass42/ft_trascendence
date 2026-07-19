@@ -15,13 +15,12 @@ Playwright** por flujo (con captura) que debe pasar.
 - **Split del Dashboard**: parte `DashboardPage` en `StudentDashboard`/`TeacherDashboard`/`AdminDashboard`
   (3 ficheros) y súbelo pronto → Jorge rellena Admin y David rellena Teacher sin tocar tu fichero.
 
-## Épica 0 — Design system + lenguaje visual (DESBLOQUEA A TODOS)
-- [ ] Amplía `apps/frontend/src/components/ui/`: **Modal, Select, Textarea, DatePicker, Tabs, Table,
-      Toast/useToast, EmptyState, FormField, Badge, Dropdown, ConfirmDialog** (más los que veas). Usa
-      `tokens.css`; accesibles y responsive.
-- [ ] `docs/planning/ui-language.md` (o en Storybook si lo montas): espaciado, color, tipografía,
-      patrón de página (cabecera, acciones, estados vacío/carga/error), patrón de formulario y de tabla.
-- [ ] Publica en tu plan/README la lista de componentes y sus props para que el resto componga.
+## Épica 0 — Design system + lenguaje visual ✅ HECHA (por David, 2026-07-19)
+Ya está en `staging`, no la rehagas. Añadidos a `apps/frontend/src/components/ui/` (exportados en el
+barrel): **Modal, ConfirmDialog, Dropdown, Toast/useToast (ToastProvider ya montado en main.tsx),
+Select, Textarea, DatePicker, FormField, Table, Tabs, Badge, EmptyState**. Referencia de uso y reglas:
+`docs/planning/ui-language.md`. **Compón estos componentes en A1/A2** (no estilos inline). Si te falta
+alguno, añádelo aquí siguiendo el mismo patrón (`.module.css` + tokens).
 
 ## Épica A1 — Autoría de curso (backend YA existe: `POST/GET/PATCH/DELETE /courses`)
 - [ ] En `/courses`: botón **"Crear curso"** visible a TEACHER/ADMIN → modal/página con título,
