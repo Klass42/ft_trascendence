@@ -31,7 +31,11 @@ function userRoom(userId: string): string {
  *   on the app event bus and this gateway reacts with `@OnEvent`. No module
  *   imports NotificationsService <-> RealtimeModule either way, so there is no
  *   circular dependency and `emit()` is a safe no-op when nobody is connected.
- * - Presence: stamps `User.onlineAt` on connect/disconnect (last-seen).
+ * - Presence: stamps `User.onlineAt` on connect/disconnect (last-seen) AND
+ *   broadcasts `presence:update` {userId, online} to the user's accepted
+ *   friends on the online↔offline transition (first socket up / last down).
+ *   Live sockets are counted in-memory per user (single-process MVP), so extra
+ *   tabs don't spam friends and only real transitions are emitted.
  */
 @WebSocketGateway({
   cors: { origin: FRONTEND_URL, credentials: true },
@@ -40,6 +44,9 @@ export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(RealtimeGateway.name);
+
+  /** userId → number of live sockets. A user is "online" while this is > 0. */
+  private readonly connections = new Map<string, number>();
 
   @WebSocketServer()
   private server!: Server;
@@ -62,6 +69,11 @@ export class RealtimeGateway
     client.data.userId = userId;
     await client.join(userRoom(userId));
     await this.touchOnline(userId);
+
+    const wentOnline = this.addConnection(userId);
+    if (wentOnline) {
+      await this.broadcastPresence(userId, true);
+    }
     this.logger.log(`Socket ${client.id} connected as ${userId}`);
   }
 
@@ -70,9 +82,75 @@ export class RealtimeGateway
     if (!userId) return;
 
     await this.touchOnline(userId);
+
+    const wentOffline = this.removeConnection(userId);
+    if (wentOffline) {
+      await this.broadcastPresence(userId, false);
+    }
     this.logger.log(`Socket ${client.id} (${userId}) disconnected`);
-    // TODO(presence): emitir online/offline A AMIGOS (necesita Friendship de
-    // Jorge). Por ahora solo actualizamos onlineAt (last-seen).
+  }
+
+  /** True when the user has at least one live socket right now. */
+  isOnline(userId: string): boolean {
+    return (this.connections.get(userId) ?? 0) > 0;
+  }
+
+  /** Register a socket; returns true on the 0→1 (offline→online) transition. */
+  private addConnection(userId: string): boolean {
+    const next = (this.connections.get(userId) ?? 0) + 1;
+    this.connections.set(userId, next);
+    return next === 1;
+  }
+
+  /** Deregister a socket; returns true on the 1→0 (online→offline) transition. */
+  private removeConnection(userId: string): boolean {
+    const next = (this.connections.get(userId) ?? 1) - 1;
+    if (next <= 0) {
+      this.connections.delete(userId);
+      return true;
+    }
+    this.connections.set(userId, next);
+    return false;
+  }
+
+  /**
+   * Emit `presence:update` to every accepted friend of `userId`. `to(room)` is
+   * a no-op for friends with no live socket, so this is safe for offline peers.
+   */
+  private async broadcastPresence(
+    userId: string,
+    online: boolean,
+  ): Promise<void> {
+    try {
+      const friendIds = await this.getAcceptedFriendIds(userId);
+      for (const friendId of friendIds) {
+        this.server
+          ?.to(userRoom(friendId))
+          .emit('presence:update', { userId, online });
+      }
+    } catch (err) {
+      // Presence is best-effort; a query hiccup must not break the socket.
+      this.logger.warn(
+        `presence broadcast failed for ${userId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Ids of users who are ACCEPTED friends of `userId` (friendship is symmetric,
+   * so look at both sides of the relation).
+   */
+  async getAcceptedFriendIds(userId: string): Promise<string[]> {
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        status: 'ACCEPTED',
+        OR: [{ requesterId: userId }, { addresseeId: userId }],
+      },
+      select: { requesterId: true, addresseeId: true },
+    });
+    return friendships.map((f) =>
+      f.requesterId === userId ? f.addresseeId : f.requesterId,
+    );
   }
 
   /**
