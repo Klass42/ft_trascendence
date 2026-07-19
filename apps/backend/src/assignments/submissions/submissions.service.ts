@@ -37,7 +37,21 @@ export class SubmissionsService {
       );
 
     const isDraft = dto.status === SubmissionStatus.DRAFT;
-    const isLate = !isDraft && !!assignment.dueAt && assignment.dueAt < new Date();
+    const now = new Date();
+
+    // Enforce the submission window on real submissions (drafts may always be
+    // saved so a student can keep working before the assignment opens). openAt
+    // and closeAt are the hard bounds; dueAt only marks lateness (below).
+    if (!isDraft) {
+      if (assignment.openAt && now < assignment.openAt) {
+        throw new BadRequestException('La tarea aún no está abierta');
+      }
+      if (assignment.closeAt && now > assignment.closeAt) {
+        throw new BadRequestException('La tarea está cerrada');
+      }
+    }
+
+    const isLate = !isDraft && !!assignment.dueAt && assignment.dueAt < now;
     const status = isDraft
       ? SubmissionStatus.DRAFT
       : isLate
