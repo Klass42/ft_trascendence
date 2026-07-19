@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -94,42 +95,82 @@ export class AssignmentsService {
     return { assignment, course: assignment.course, enrollment };
   }
 
+  /** Include shape shared by every read: the teacher's prompt attachments. */
+  private static readonly WITH_FILES = {
+    files: { include: { file: true } },
+  } as const;
+
+  /**
+   * Validate that every id in `fileIds` refers to a File in this org uploaded by
+   * the acting user — the same guard SubmissionsService applies to student
+   * uploads, so a teacher can't attach another tenant's (or user's) file.
+   */
+  private async assertOwnedFiles(
+    fileIds: string[],
+    organizationId: string,
+    uploaderId: string,
+  ): Promise<void> {
+    if (fileIds.length === 0) return;
+    const files = await this.prisma.file.findMany({
+      where: { id: { in: fileIds }, organizationId, uploaderId },
+      select: { id: true },
+    });
+    if (files.length !== fileIds.length) {
+      throw new BadRequestException(
+        'One or more files are invalid or not owned by you',
+      );
+    }
+  }
+
   async create(
     courseId: string,
     actingUserId: string,
     dto: CreateAssignmentDto,
   ) {
-    await this.requireMembership(courseId, actingUserId, STAFF_ROLES);
+    const { course } = await this.requireMembership(
+      courseId,
+      actingUserId,
+      STAFF_ROLES,
+    );
+
+    this.assertWindow(dto.openAt, dto.dueAt, dto.closeAt);
+    const fileIds = dto.fileIds ?? [];
+    await this.assertOwnedFiles(fileIds, course.organizationId, actingUserId);
 
     return this.prisma.assignment.create({
       data: {
         courseId,
         title: dto.title,
         description: dto.description,
+        openAt: dto.openAt ? new Date(dto.openAt) : null,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        closeAt: dto.closeAt ? new Date(dto.closeAt) : null,
         // Fall back to the schema default when omitted.
         ...(dto.maxScore !== undefined && { maxScore: dto.maxScore }),
+        files: { create: fileIds.map((fileId) => ({ fileId })) },
       },
+      include: AssignmentsService.WITH_FILES,
     });
   }
 
-  /** List every assignment of a course (any member). */
+  /** List every assignment of a course (any member), with attachments. */
   async findAll(courseId: string, actingUserId: string) {
     await this.requireMembership(courseId, actingUserId);
 
     return this.prisma.assignment.findMany({
       where: { courseId },
       orderBy: { createdAt: 'desc' },
+      include: AssignmentsService.WITH_FILES,
     });
   }
 
-  /** A single assignment, scoped to a member of its course. */
+  /** A single assignment (with attachments), scoped to a member of its course. */
   async findOne(assignmentId: string, actingUserId: string) {
-    const { assignment } = await this.requireAssignmentMembership(
-      assignmentId,
-      actingUserId,
-    );
-    return assignment;
+    await this.requireAssignmentMembership(assignmentId, actingUserId);
+    return this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: AssignmentsService.WITH_FILES,
+    });
   }
 
   async update(
@@ -137,22 +178,62 @@ export class AssignmentsService {
     actingUserId: string,
     dto: UpdateAssignmentDto,
   ) {
-    await this.requireAssignmentMembership(
+    const { assignment, course } = await this.requireAssignmentMembership(
       assignmentId,
       actingUserId,
       STAFF_ROLES,
     );
+
+    // Validate the resulting window against the merged (existing + patch) values
+    // so a partial update can't leave openAt after closeAt.
+    const merged = {
+      openAt:
+        dto.openAt !== undefined
+          ? dto.openAt
+            ? new Date(dto.openAt)
+            : null
+          : assignment.openAt,
+      dueAt:
+        dto.dueAt !== undefined
+          ? dto.dueAt
+            ? new Date(dto.dueAt)
+            : null
+          : assignment.dueAt,
+      closeAt:
+        dto.closeAt !== undefined
+          ? dto.closeAt
+            ? new Date(dto.closeAt)
+            : null
+          : assignment.closeAt,
+    };
+    this.assertWindow(merged.openAt, merged.dueAt, merged.closeAt);
+
+    if (dto.fileIds !== undefined) {
+      await this.assertOwnedFiles(
+        dto.fileIds,
+        course.organizationId,
+        actingUserId,
+      );
+    }
 
     return this.prisma.assignment.update({
       where: { id: assignmentId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.dueAt !== undefined && {
-          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        }),
+        ...(dto.openAt !== undefined && { openAt: merged.openAt }),
+        ...(dto.dueAt !== undefined && { dueAt: merged.dueAt }),
+        ...(dto.closeAt !== undefined && { closeAt: merged.closeAt }),
         ...(dto.maxScore !== undefined && { maxScore: dto.maxScore }),
+        // Replace the whole attachment set when fileIds is provided.
+        ...(dto.fileIds !== undefined && {
+          files: {
+            deleteMany: {},
+            create: dto.fileIds.map((fileId) => ({ fileId })),
+          },
+        }),
       },
+      include: AssignmentsService.WITH_FILES,
     });
   }
 
@@ -164,5 +245,57 @@ export class AssignmentsService {
     );
 
     await this.prisma.assignment.delete({ where: { id: assignmentId } });
+  }
+
+  /** Detach a single prompt attachment (staff only). Idempotent. */
+  async removeFile(
+    assignmentId: string,
+    fileId: string,
+    actingUserId: string,
+  ) {
+    await this.requireAssignmentMembership(
+      assignmentId,
+      actingUserId,
+      STAFF_ROLES,
+    );
+
+    await this.prisma.assignmentFile.deleteMany({
+      where: { assignmentId, fileId },
+    });
+
+    return this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: AssignmentsService.WITH_FILES,
+    });
+  }
+
+  /**
+   * Guard the ordering of the submission window: openAt ≤ dueAt ≤ closeAt for
+   * whichever bounds are set. Enforced here (create + update) so the invariant
+   * can't be violated from either path.
+   */
+  private assertWindow(
+    open?: string | Date | null,
+    due?: string | Date | null,
+    close?: string | Date | null,
+  ): void {
+    const o = open ? new Date(open).getTime() : null;
+    const d = due ? new Date(due).getTime() : null;
+    const c = close ? new Date(close).getTime() : null;
+    if (o !== null && d !== null && o > d) {
+      throw new BadRequestException(
+        'La fecha de apertura no puede ser posterior a la de entrega',
+      );
+    }
+    if (d !== null && c !== null && d > c) {
+      throw new BadRequestException(
+        'La fecha de entrega no puede ser posterior a la de cierre',
+      );
+    }
+    if (o !== null && c !== null && o > c) {
+      throw new BadRequestException(
+        'La fecha de apertura no puede ser posterior a la de cierre',
+      );
+    }
   }
 }

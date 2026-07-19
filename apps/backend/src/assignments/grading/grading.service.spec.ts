@@ -173,4 +173,82 @@ describe('GradingService', () => {
     expect(cell.status).toBe(SubmissionStatus.GRADED);
     expect(cell.submissionId).toBe(SUBMISSION_ID);
   });
+
+  // ── A4-teacher: aggregated teacher-dashboard summary ─────────────────────
+  describe('getTeachingSummary', () => {
+    function buildSummaryFake() {
+      const prisma = {
+        enrollment: {
+          findMany: async ({ where }: any) => {
+            // Staff-of-the-user lookup (role is `{ in: [...] }`).
+            if (where.userId === TEACHER && where.role?.in) {
+              return [{ course: { id: COURSE_ID, status: 'PUBLISHED' } }];
+            }
+            // Students of the taught courses.
+            if (where.role === CourseRole.STUDENT && where.courseId?.in) {
+              return [{ userId: STUDENT }, { userId: STUDENT }]; // dup → deduped
+            }
+            return [];
+          },
+        },
+        submission: {
+          count: async () => 1,
+          findMany: async () => [
+            {
+              id: SUBMISSION_ID,
+              status: SubmissionStatus.SUBMITTED,
+              updatedAt: new Date('2026-07-19T10:00:00Z'),
+              user: {
+                id: STUDENT,
+                name: 'Lucía Molina',
+                email: 'dev@example.com',
+                avatarUrl: null,
+              },
+              assignment: {
+                id: ASSIGNMENT_ID,
+                title: 'Práctica 1',
+                course: { id: COURSE_ID, title: 'Web 101' },
+              },
+            },
+          ],
+        },
+      } as unknown as PrismaService;
+      return prisma;
+    }
+
+    it('aggregates active courses, distinct students and pending submissions', async () => {
+      const prisma = buildSummaryFake();
+      const service = buildService(prisma, []);
+
+      const summary = await service.getTeachingSummary(TEACHER);
+
+      expect(summary.activeCourses).toBe(1);
+      expect(summary.totalStudents).toBe(1); // deduped
+      expect(summary.pendingCount).toBe(1);
+      expect(summary.pending).toHaveLength(1);
+      expect(summary.pending[0]).toMatchObject({
+        submissionId: SUBMISSION_ID,
+        assignmentTitle: 'Práctica 1',
+        courseTitle: 'Web 101',
+        status: SubmissionStatus.SUBMITTED,
+      });
+      expect(summary.pending[0].student.id).toBe(STUDENT);
+    });
+
+    it('returns zeros for a user who teaches nothing', async () => {
+      const prisma = {
+        enrollment: { findMany: async () => [] },
+        submission: { count: async () => 0, findMany: async () => [] },
+      } as unknown as PrismaService;
+      const service = buildService(prisma, []);
+
+      const summary = await service.getTeachingSummary('user-nobody');
+      expect(summary).toEqual({
+        activeCourses: 0,
+        totalStudents: 0,
+        pendingCount: 0,
+        pending: [],
+      });
+    });
+  });
 });

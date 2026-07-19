@@ -1,4 +1,6 @@
 import {
+  ArrayUnique,
+  IsArray,
   IsDateString,
   IsNumber,
   IsOptional,
@@ -17,12 +19,30 @@ export class UpdateAssignmentDto {
   @IsOptional()
   description?: string;
 
+  // Submission window. Pass an explicit `null` to clear a bound; omit to leave
+  // it unchanged. See CreateAssignmentDto for the semantics of each field.
   @IsDateString()
   @IsOptional()
-  dueAt?: string;
+  openAt?: string | null;
+
+  @IsDateString()
+  @IsOptional()
+  dueAt?: string | null;
+
+  @IsDateString()
+  @IsOptional()
+  closeAt?: string | null;
 
   @IsNumber()
   @Min(1)
   @IsOptional()
   maxScore?: number;
+
+  // When present, replaces the assignment's attachment set with these file ids
+  // (empty array clears them). Omit to leave attachments untouched.
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsOptional()
+  fileIds?: string[];
 }
