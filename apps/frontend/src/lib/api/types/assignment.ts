@@ -17,15 +17,27 @@ export type SubmissionStatus = 'DRAFT' | 'SUBMITTED' | 'LATE' | 'GRADED';
 // Assignment
 // =============================================================================
 
+/** A teacher's prompt attachment on an assignment (mirrors SubmissionFileDTO). */
+export interface AssignmentFileDTO {
+  assignmentId: string;
+  fileId: string;
+  file: FileDTO;
+}
+
 export interface AssignmentDTO {
   id: string;
   courseId: string;
   title: string;
   description: string | null;
+  /** Submission window (all optional). */
+  openAt: string | null;
   dueAt: string | null;
+  closeAt: string | null;
   maxScore: number;
   createdAt: string;
   updatedAt: string;
+  /** Teacher's prompt attachments; present on the assignment reads. */
+  files?: AssignmentFileDTO[];
 }
 
 // =============================================================================
@@ -64,14 +76,52 @@ export interface SubmissionDTO {
 }
 
 // =============================================================================
+// Teacher dashboard summary (A4-teacher)
+// =============================================================================
+
+/** One ungraded submission awaiting the teacher's attention. */
+export interface PendingSubmissionDTO {
+  submissionId: string;
+  status: 'SUBMITTED' | 'LATE';
+  submittedAt: string;
+  student: SubmissionAuthorDTO;
+  assignmentId: string;
+  assignmentTitle: string;
+  courseId: string;
+  courseTitle: string;
+}
+
+/** Aggregated figures for the teacher dashboard (GET /me/teaching/summary). */
+export interface TeachingSummaryDTO {
+  activeCourses: number;
+  totalStudents: number;
+  pendingCount: number;
+  pending: PendingSubmissionDTO[];
+}
+
+// =============================================================================
 // Request payloads
 // =============================================================================
 
 export interface CreateAssignmentInput {
   title: string;
   description?: string;
+  openAt?: string;
   dueAt?: string;
+  closeAt?: string;
   maxScore?: number;
+  fileIds?: string[];
+}
+
+/** PATCH payload; `null` on a window field clears that bound. */
+export interface UpdateAssignmentInput {
+  title?: string;
+  description?: string;
+  openAt?: string | null;
+  dueAt?: string | null;
+  closeAt?: string | null;
+  maxScore?: number;
+  fileIds?: string[];
 }
 
 export interface CreateSubmissionInput {

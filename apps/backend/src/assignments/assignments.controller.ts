@@ -52,4 +52,14 @@ export class AssignmentsController {
     await this.assignments.remove(id, user.userId);
     return { deleted: true };
   }
+
+  /** Detach one of the teacher's prompt attachments (staff only). */
+  @Delete('assignments/:id/files/:fileId')
+  async removeFile(
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.assignments.removeFile(id, fileId, user.userId);
+  }
 }

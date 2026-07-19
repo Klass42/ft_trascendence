@@ -204,6 +204,93 @@ export class GradingService {
   }
 
   /**
+   * Teacher dashboard summary for the acting staff user, aggregated across every
+   * course they teach (role TEACHER/ASSISTANT):
+   *  - `activeCourses`  — published courses they teach.
+   *  - `totalStudents`  — distinct students enrolled in those courses.
+   *  - `pending`        — submissions SUBMITTED/LATE without a grade yet, newest
+   *                       first (capped), each with its student/assignment/course.
+   *
+   * Tenancy is implicit: we only ever look at courses the user is enrolled in,
+   * so no organizationId is trusted from the client. Returns zeros/empty when
+   * the user teaches nothing.
+   */
+  async getTeachingSummary(actingUserId: string) {
+    const PENDING_LIMIT = 50;
+
+    const staffEnrollments = await this.prisma.enrollment.findMany({
+      where: { userId: actingUserId, role: { in: STAFF_ROLES } },
+      select: { course: { select: { id: true, status: true } } },
+    });
+    const courseIds = staffEnrollments.map((e) => e.course.id);
+
+    if (courseIds.length === 0) {
+      return {
+        activeCourses: 0,
+        totalStudents: 0,
+        pendingCount: 0,
+        pending: [],
+      };
+    }
+
+    const activeCourses = staffEnrollments.filter(
+      (e) => e.course.status === 'PUBLISHED',
+    ).length;
+
+    // Distinct students across the taught courses.
+    const studentEnrollments = await this.prisma.enrollment.findMany({
+      where: { courseId: { in: courseIds }, role: CourseRole.STUDENT },
+      select: { userId: true },
+    });
+    const totalStudents = new Set(
+      studentEnrollments.map((e) => e.userId),
+    ).size;
+
+    // Ungraded submissions (SUBMITTED or LATE, no score) needing attention.
+    const pendingWhere = {
+      status: { in: [SubmissionStatus.SUBMITTED, SubmissionStatus.LATE] },
+      score: null,
+      assignment: { courseId: { in: courseIds } },
+    };
+    const [pendingCount, pendingRows] = await Promise.all([
+      this.prisma.submission.count({ where: pendingWhere }),
+      this.prisma.submission.findMany({
+        where: pendingWhere,
+        orderBy: { updatedAt: 'desc' },
+        take: PENDING_LIMIT,
+        select: {
+          id: true,
+          status: true,
+          updatedAt: true,
+          user: {
+            select: { id: true, name: true, email: true, avatarUrl: true },
+          },
+          assignment: {
+            select: {
+              id: true,
+              title: true,
+              course: { select: { id: true, title: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const pending = pendingRows.map((s) => ({
+      submissionId: s.id,
+      status: s.status,
+      submittedAt: s.updatedAt,
+      student: s.user,
+      assignmentId: s.assignment.id,
+      assignmentTitle: s.assignment.title,
+      courseId: s.assignment.course.id,
+      courseTitle: s.assignment.course.title,
+    }));
+
+    return { activeCourses, totalStudents, pendingCount, pending };
+  }
+
+  /**
    * The gradebook rendered as CSV: a header row of assignment titles, then one
    * row per student with their score per assignment. Fields are RFC-4180
    * escaped (see {@link csvField}).
