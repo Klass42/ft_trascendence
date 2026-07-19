@@ -76,6 +76,30 @@ export interface SubmissionDTO {
 }
 
 // =============================================================================
+// Teacher dashboard summary (A4-teacher)
+// =============================================================================
+
+/** One ungraded submission awaiting the teacher's attention. */
+export interface PendingSubmissionDTO {
+  submissionId: string;
+  status: 'SUBMITTED' | 'LATE';
+  submittedAt: string;
+  student: SubmissionAuthorDTO;
+  assignmentId: string;
+  assignmentTitle: string;
+  courseId: string;
+  courseTitle: string;
+}
+
+/** Aggregated figures for the teacher dashboard (GET /me/teaching/summary). */
+export interface TeachingSummaryDTO {
+  activeCourses: number;
+  totalStudents: number;
+  pendingCount: number;
+  pending: PendingSubmissionDTO[];
+}
+
+// =============================================================================
 // Request payloads
 // =============================================================================
 

@@ -125,6 +125,8 @@ export type {
   SubmissionFileDTO,
   SubmissionAuthorDTO,
   SubmissionStatus,
+  PendingSubmissionDTO,
+  TeachingSummaryDTO,
   CreateAssignmentInput,
   UpdateAssignmentInput,
   CreateSubmissionInput,

@@ -23,6 +23,12 @@ export class GradingController {
     return this.grading.gradeSubmission(id, user.userId, dto);
   }
 
+  /** Aggregated teacher-dashboard summary across every course the user teaches. */
+  @Get('me/teaching/summary')
+  async teachingSummary(@CurrentUser() user: AuthUser) {
+    return this.grading.getTeachingSummary(user.userId);
+  }
+
   @Get('courses/:id/gradebook')
   async gradebook(@Param('id') courseId: string, @CurrentUser() user: AuthUser) {
     return this.grading.getGradebook(courseId, user.userId);
