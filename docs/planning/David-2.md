@@ -8,22 +8,35 @@
 de Aloiki) · responsive · estados vacío/carga/error · **sin mock** · validación front+back · a11y ·
 cero errores de consola · **un test E2E Playwright** por flujo.
 
-## Contrato anti-bloqueo
-- **Consumes**: componentes de Aloiki (Épica 0) y el stub `TeacherDashboard` que deja en el split del
-  Dashboard (rellenas ese fichero, no tocas el suyo). La API de **Friends** de Jorge ya está en
-  `staging` (backend) → tu presence ya no está bloqueada.
-- **Entregas**: nada que bloquee a otros. Si añades campos al schema (A7), coordina con Jorge (steward
-  de `prisma/`) en un PR pequeño.
+## Contrato anti-bloqueo — TÚ absorbes lo bloqueante
+Decisión (2026-07-19): para que Aloiki y Jorge (modelos pequeños) **nunca esperen a nadie**, David se
+lleva **todo lo compartido/bloqueante** y ellos solo tocan UI auto-contenida sobre backend existente.
+- **Consumes**: componentes de la Épica 0 (ya en staging) · Friends API de Jorge (ya en staging).
+- **Entregas (desbloqueos → Épica D0, PRIMERO)**: TODOS los cambios de **schema** de la Fase A, el
+  **split del Dashboard** + stubs, el **harness E2E** del repo, y cualquier **endpoint compartido** que
+  falte. Aloiki y Jorge no tocan `prisma/` ni ficheros compartidos.
+
+## Épica D0 — Desbloqueos (haz esto PRIMERO, antes que A7/A4/A6b)
+- [ ] **Schema Fase A (un único PR):** `Assignment.openAt/closeAt`, modelo `AssignmentFile` (adjuntos
+      de enunciado, análogo a `SubmissionFile`), y cualquier campo que pidan A1–A6 (confírmalo con
+      Aloiki/Jorge antes). Migración + `prisma generate`. Nadie más toca el schema.
+- [ ] **Split del Dashboard:** parte `DashboardPage` en `StudentDashboard`/`TeacherDashboard`/
+      `AdminDashboard` (3 ficheros con stub mínimo). Aloiki rellena Student, Jorge Admin, tú Teacher —
+      sin tocar el fichero de otro.
+- [ ] **Harness E2E en el repo:** añade Playwright (config + carpeta `e2e/` + un flujo de ejemplo +
+      script `test:e2e`) para que "un test E2E por flujo" sea real para todos.
+- [ ] **Endpoints compartidos que falten:** p.ej. "staff añade a un alumno al curso" en enrollments si
+      Jorge lo necesita para el roster. Créalos tú y publícalos.
+- [ ] Cuando D0 esté en `staging`, avisa al equipo (los desbloquea).
 
 ## Épica A7 — Autoría de tareas: editar/borrar + plazos + recursos
 - [ ] **Editar/borrar tarea** desde `AssignmentsPage` (staff): `PATCH/DELETE /assignments/:id` (ya
       existen) — hoy solo se pueden crear.
-- [ ] **Plazos de inicio y fin**: el modelo solo tiene `dueAt` (fin). Añade `openAt?` (apertura) y
-      `closeAt?` (cierre tras el cual no se entrega) → **cambio de schema pequeño** (coordina con Jorge):
-      `Assignment.openAt`, `Assignment.closeAt`. Refleja el estado en UI (no abierta / abierta / cerrada)
-      y hazlo cumplir en el backend al entregar (rechaza fuera de ventana).
-- [ ] **Recursos del profesor en la tarea**: adjuntos de enunciado (reusa el patrón de
-      `SubmissionFile`/FilesService; requiere un `AssignmentFile` en schema — mismo PR de coordinación).
+- [ ] **Plazos de inicio y fin**: usa `Assignment.openAt/closeAt` (creados por ti en D0). Refleja el
+      estado en UI (no abierta / abierta / cerrada) y hazlo cumplir en el backend al entregar (rechaza
+      fuera de ventana). Form con `DatePicker` + `Modal` del design system.
+- [ ] **Recursos del profesor en la tarea**: adjuntos de enunciado con `AssignmentFile` (creado en D0)
+      + FilesService, reusando el patrón de `SubmissionFile`.
 - [ ] Muestra el `dueAt`/estado con claridad en la lista (el usuario no "veía" los plazos).
 - [ ] E2E: profesor crea tarea con apertura/cierre, la edita, adjunta un recurso; alumno no puede
       entregar fuera de ventana.
