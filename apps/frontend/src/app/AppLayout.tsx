@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -8,7 +8,9 @@ import {
   MessageSquare,
   BarChart3,
   LineChart,
+  Building2,
   User,
+  Users,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +25,17 @@ import styles from './AppLayout.module.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 
-const NAV_ITEMS = [
+interface NavItem {
+  to: string;
+  icon: ReactNode;
+  label: string;
+  staffOnly?: boolean;
+  student?: boolean;
+  teacher?: boolean;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: readonly NavItem[] = [
   { to: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Inicio' },
   { to: '/courses', icon: <BookOpen size={20} />, label: 'Cursos' },
   { to: '/assignments', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
@@ -31,7 +43,9 @@ const NAV_ITEMS = [
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
   { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
   { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },
-] as const;
+  { to: '/org', icon: <Building2 size={20} />, label: 'Organización' },
+  { to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios', adminOnly: true },
+];
 
 export function AppLayout() {
   const { user, isLoading, logout } = useAuth();
@@ -116,6 +130,10 @@ export function AppLayout() {
         <nav className={styles.nav}>
           {NAV_ITEMS.filter((item) => {
             const role = user?.role;
+            // Admin-only tools (e.g. Usuarios) — hide from non-admins.
+            if (item.adminOnly && role !== 'ADMIN') {
+              return false;
+            }
             // Analytics dashboard is a staff tool — hide from students.
             if ('staffOnly' in item && item.staffOnly && role === 'STUDENT') {
               return false;
