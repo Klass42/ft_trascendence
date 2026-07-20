@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import {
   createBrowserRouter,
   Navigate,
+  Outlet,
   type RouteObject,
 } from 'react-router-dom';
 import { Spinner } from '@/components/ui';
@@ -55,6 +56,21 @@ const AnalyticsPage = lazy(() =>
 );
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
+);
+const AdminUsersPage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminUsersPage }))
+);
+const AdminUserCreatePage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminUserCreatePage }))
+);
+const AdminUserEditPage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
+);
+const OrgSettingsPage = lazy(() =>
+  import('@/features/org').then((m) => ({ default: m.OrgSettingsPage }))
+);
+const OrgMembersPage = lazy(() =>
+  import('@/features/org').then((m) => ({ default: m.OrgMembersPage }))
 );
 
 function PageLoader() {
@@ -207,6 +223,63 @@ const routes: RouteObject[] = [
             <ProfilePage />
           </Suspense>
         ),
+      },
+      {
+        path: 'admin',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <Outlet />
+          </ProtectedRoute>
+        ),
+        children: [
+          {
+            path: 'users/new',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminUserCreatePage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'users/:id',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminUserEditPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'users',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminUsersPage />
+              </Suspense>
+            ),
+          },
+        ],
+      },
+      {
+        path: 'org',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <OrgSettingsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'members',
+            element: (
+              <ProtectedRoute roles={['ADMIN']}>
+                <Suspense fallback={<PageLoader />}>
+                  <OrgMembersPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+        ],
       },
     ],
   },
