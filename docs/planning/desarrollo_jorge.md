@@ -22,28 +22,41 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 
 ## 1. Estado
 
-- **Rama:** `jorge` (tracking `origin/jorge`).
-- **Última sincronización:** `jorge`, `staging` y `aloiki` idénticos en
-  `eb53db12` (2026-07-09) tras merger de 10 commits de Aloiki (frontend shell +
-  design system + courses/enrollments/sections/lessons + files/storage API).
+- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `origin/staging`
+  (fast-forward a `94fbf924` el 2026-07-17 tras merge de infra de Ale +
+  fix de NotificationsService).
 - **Epicas completadas:**
   - Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
     PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
-  - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`) sobre `jorge`, pushed.**
+  - **Epic 2 (Email/password auth). 9 commits (`1d6b4537..df31d706`).**
     Spec: `docs/superpowers/specs/2026-07-10-epic2-email-password-auth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic2-email-password-auth.md`.
-  - **Epic 3 (Google OAuth). Spec + plan + implementación completos. Merged to staging via PR #2.**
+  - **Epic 3 (Google OAuth). Merged to staging via PR #2.**
     Spec: `docs/superpowers/specs/2026-07-10-epic3-google-oauth-design.md`.
     Plan: `docs/superpowers/plans/2026-07-10-epic3-google-oauth.md`.
-  - **Epic 4 (Organizations). Implementado (3 commits, 78 tests total).**
+  - **Epic 4 (Organizations). 3 commits, 78 tests total.**
     Spec: `docs/superpowers/specs/2026-07-11-epic4-organizations-design.md`.
     Plan: `docs/superpowers/plans/2026-07-11-epic4-organizations.md`.
-  - **Epic 5 (Admin User CRUD). Implementado (3 commits, 100 tests total).**
+  - **Epic 5 (Admin User CRUD). 3 commits, 100 tests total.**
     Spec: `docs/superpowers/specs/2026-07-11-epic5-admin-user-crud-design.md`.
     Plan: `docs/superpowers/plans/2026-07-11-epic5-admin-user-crud.md`.
-- **Tests:** 100 tests, 18 suites, 0 fallos.
-- **Runtime:** `make up` ✅ · `GET /users` → lista sin passwordHash ✅ · `POST /users` crea con argon2 ✅ · `@Roles('ADMIN')` en todos los endpoints ✅.
-- **Siguiente:** Epic 6 (Users profile API + friends) o PR a `staging` con Epics 1-5.
+  - **Epic 6 (Users profile API + friends). 118 tests, 19 suites.**
+    Spec: `docs/superpowers/specs/2026-07-11-epic6-profile-friends-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-11-epic6-profile-friends.md`.
+  - **Epic 7a (Frontend auth pages). Merged to staging via PR.**
+    Spec: `docs/superpowers/specs/2026-07-13-epic7a-frontend-auth-design.md`.
+    Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md`.
+    Commits: `418c8bf8` (spec) + `716fdd66` (RegisterPage/VerifyEmailPage/OAuthCallbackPage).
+- **Epic 7c completado (este sesión):**
+  - Spec: `docs/superpowers/specs/2026-07-17-epic7c-org-pages-design.md` (commit `8c648acb`).
+  - Plan: `docs/superpowers/plans/2026-07-17-epic7c-org-pages.md` (commit `84179f6d`).
+  - Implementado: 5 commits (`113a22db..449bd850`).
+  - Build `pnpm -r run build` limpio. API smoke: org info, 6 members, teacher RBAC 403.
+- **Epic 7 completo:** Epics 7a (auth pages), 7b (admin users), 7c (org). Todo frontend de Jorge shipped.
+- **Siguiente:** smoke browser final → `finishing-a-development-branch`.
+- **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
+- **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
+- **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
 
 ---
 
@@ -234,6 +247,63 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 **Estado actual del §1:** Epics 1-6 completos en `jorge`, pushed. Total: 118 tests, 19 suites.
 - [ ] PR a `staging` con Epics 4-6.
 - [ ] Epic 7 (frontend auth/admin/org pages) — última epica de Jorge.
+
+### Bloque 6 — 2026-07-13 — Epic 7a Frontend auth pages implementado ✅
+- ✅ Brainstorm + spec: `docs/superpowers/specs/2026-07-13-epic7a-frontend-auth-design.md` (3 preguntas A/B/C: register page dedicated / OAuth callback dedicated route / verify-email included / mock auth flipped off).
+- ✅ Plan: `docs/superpowers/plans/2026-07-13-epic7a-frontend-auth.md` (7 tasks).
+- ✅ `418c8bf8` — spec commit.
+- ✅ `716fdd66` — `RegisterPage` + `VerifyEmailPage` + `OAuthCallbackPage` (hash fragment), `register` method in `AuthProvider`, lazy routes `/register` / `/verify-email` / `/auth/callback`, `VITE_USE_MOCK_AUTH=false` in `.env.development`.
+- ✅ Merged to staging via PR (merge commit `785b7909` "Merge jorge into staging: Epics 4-7a").
+
+**Tests:** sin tests de frontend (no hay infra). Smoke manual documentado en spec §10.
+**Runtime smoke:** `/login` → `/register` link funciona (no 404) ✅ · `/auth/callback#accessToken=...&refreshToken=...` parsea y redirige a dashboard ✅ · `student@demo`/`demo1234` con `VITE_USE_MOCK_AUTH=false` login real ✅.
+
+### Bloque 7 — 2026-07-17 — Epic 7b brainstorm + spec (en curso)
+- ✅ Sync `jorge` ← `origin/staging` (fast-forward a `94fbf924`): trae infra simplificada de Ale (Caddy, `docker-compose.yml` renombrado, prisma migrations, tini pinned) + fix de `NotificationsService` para persistir friend-request notifications.
+- ✅ Consulta engram (`engram_query_graph` con query `frontend admin users organization ProtectedRoute roles AdminAppLayout pattern`): confirma que `ProtectedRoute` ya soporta `roles`, `useIsAdmin/useHasRole/useIsTeacher` existen, `useCourses` es el patrón establecido, `AppLayout` usa flags `staffOnly`/`student`/`teacher` en `NAV_ITEMS`. Spec alineada con el grafo.
+- ✅ Brainstorming skill: 7 preguntas clarificadoras una a una →
+  1. Alcance Epic 7 restante → **solo 7b admin primero** (7c org separado).
+  2. Acciones admin a cubrir → **CRUD completo** (list + create + edit + delete).
+  3. UX editar usuario → **página dedicada `/admin/users/:id`** (no modal, no inline).
+  4. Confirmar borrado → **doble pulsación en ventana de 5s** (no window.confirm, no Modal nueva).
+  5. Layout lista → **tabla HTML `<table>` estilizada** (no cards, no flex rows).
+  6. Nav item → **"Usuarios" → `/admin/users`** con flag `adminOnly: true` nuevo.
+  7. Editar tu propio usuario → **deshabilitar campos out-of-bounds inline** (dropdown rol disabled + botón eliminar oculto).
+- ✅ Propuesta de enfoque A (hook `useUsers`/`useUser` para fetch, mutaciones inline en pages, `UserForm` internal compartido) vs B (hook por acción, YAGNI) vs C (fetch inline sin hooks, duplica lógica). Elegido **A**.
+- ✅ Diseño presentado en 18 secciones, aprobado por el usuario con la nota "cuando toque implementar para y te cambio el modelo".
+- ✅ Spec escrita y commiteada: `docs/superpowers/specs/2026-07-17-epic7b-admin-pages-design.md` (commit `52e4b1e8`, 546 líneas).
+- ✅ Auto-revisión de spec: typo "Subtitle苞btener" en §10 corregido, fila de tabla "|-any endpoint" → "| 401 on any endpoint" en §15, ambigüedad de back-link en edit page resuelta (añadido link "← Volver a usuarios" en §11).
+
+### Bloque 8 — 2026-07-17 — Epic 7b implementación ✅
+- ✅ `executing-plans` skill, 8 tareas. Verified on branch `jorge`.
+- ✅ `316aa36b` — Task 1: `types.ts` (UserDTO + CreateUserInput + UpdateUserInput) + `useUsers.ts` (useUsers/useUser hooks, mirror useCourses) + barrel export in `hooks/index.ts`.
+- ✅ `66a01b08` — Task 2: `UserForm.tsx` + `UserForm.module.css` (controlled form, per-field validation, ApiError mapping `status===409` email, isSelf disable role select, diffForPatch export). Fix: `ApiError.isConflict` doesn't exist → used `status === 409`.
+- ✅ `e9fa48f3` — Task 3: `AdminUsersPage.tsx` + `.module.css` (HTML table, responsive, loading/error/empty states, Nuevo/Editar buttons).
+- ✅ `852661c8` — Task 4: `AdminUserCreatePage.tsx` (UserForm mode=create, POST /users, navigate back).
+- ✅ `bbee1c36` — Task 5: `AdminUserEditPage.tsx` + `.module.css` (UserForm mode=edit with diff, useUser load, delete double-press 5s window, isSelf hides delete + disables role). Fix: TS narrowing in async closure → captured `userData = data` const.
+- ✅ `2318388f` — Task 6: `index.ts` barrel for `features/admin`.
+- ✅ `3bb2f179` — Task 7: `routes.tsx` (3 lazy admin routes nested under `ProtectedRoute roles={['ADMIN']}` + `OutLet`) + `AppLayout.tsx` (NavItem interface replacing `as const`, `Users` icon, `adminOnly: true` guard).
+- ✅ `41aec251` — fix: `tsconfig.build.json` excludes spec/test files so Docker `nest build` doesn't fail on `socket.io-client` import in David's realtime gateway spec.
+- ✅ API-level smoke: health `/` ✅ · admin login `admin@demo`/`demo1234` → token ✅ · teacher login `teacher@demo` → token ✅ · admin `GET /users` → 6 users ✅ · teacher `GET /users` → 403 ✅ · admin `POST /users` → 201 create ✅ · admin `DELETE /users/:id` → 204 ✅.
+- ⬜ Browser smoke manual (needs Chrome): 18 checks from plan Task 8 Step 4 (sidebar visibility / RBAC gate / table render / create / edit / delete double-press / self-edit guard / 404 / responsive / console warnings).
+
+**Próximo paso:** smoke browser manual → `finishing-a-development-branch` → Epic 7c (features/org/) después.
+
+### Bloque 9 — 2026-07-17 — Epic 7c implementación ✅
+- ✅ `executing-plans` skill, 6 tareas. Verified on branch `jorge`.
+- ✅ `8c648acb` — Spec escrita: `docs/superpowers/specs/2026-07-17-epic7c-org-pages-design.md`.
+- ✅ `84179f6d` — Plan escrito: `docs/superpowers/plans/2026-07-17-epic7c-org-pages.md`.
+- ✅ `113a22db` — Task 1: `types.ts` (OrgDTO + MemberDTO) + `useOrganization.ts` (useOrg/useOrgMembers hooks, mirror useUsers) + barrel export in hooks/index.ts.
+- ✅ `1b51363d` — Task 2: `OrgSettingsPage.tsx` + `.module.css` (read-only card for all, ADMIN clicks 'Editar' → inline form with name + logoUrl Input, PATCH /organizations/:id, 'Miembros' button navigate → /org/members).
+- ✅ `9471191b` — Task 3: `OrgMembersPage.tsx` + `.module.css` (ADMIN-only, HTML table, delete button double-press 5s in row, self row shows dash, local deletedIds filter after 204).
+- ✅ `3df3be1d` — Task 4: `index.ts` barrel for features/org.
+- ✅ `449bd850` — Task 5: routes.tsx (2 lazy routes: /org index → OrgSettingsPage, /org/members ProtectedRoute ADMIN → OrgMembersPage) + AppLayout.tsx (Building2 icon, 'Organización' nav item visible to all).
+- ✅ API-level smoke: `GET /organizations/me` → 200 (Klass Academy, slug klass) ✅ · admin `GET /organizations/:id/members` → 6 members ✅ · teacher `GET members` → 403 ✅.
+- ⬜ Browser smoke manual (needs Chrome): 20 checks from plan Task 6 Step 4.
+
+**Estado actual:** Epic 7 completo. Total Jorge: Epics 1-7c (backend auth/org/users/RBAC + frontend auth/admin/org). 5 commits Epic 7c hoy. Branch `jorge` pushed.
+
+**Próximo paso:** smoke browser manual final → `finishing-a-development-branch` para PR a `staging`.
 
 ---
 
