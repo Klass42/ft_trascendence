@@ -116,6 +116,12 @@ export type {
   MyProgressItem,
   CourseStatus,
   CourseRole,
+  CreateCourseInput,
+  UpdateCourseInput,
+  CreateSectionInput,
+  UpdateSectionInput,
+  CreateLessonInput,
+  UpdateLessonInput,
 } from './types/course';
 
 export type {
