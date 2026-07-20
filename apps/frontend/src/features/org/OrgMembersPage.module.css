@@ -1,0 +1,113 @@
+.page {
+  padding: 30px 40px;
+  max-width: 960px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+
+.td {
+  padding: 14px 16px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--color-border-primary);
+  color: var(--color-text-primary);
+}
+
+.tr:last-child .td {
+  border-bottom: none;
+}
+
+.nameCell {
+  font-weight: 600;
+}
+
+.roleBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-accent-muted);
+  color: var(--color-accent-hover);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.emailCell {
+  color: var(--color-text-secondary);
+}
+
+.dangerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.center {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.banner {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(192, 57, 43, 0.08);
+  border: 1px solid rgba(192, 57, 43, 0.35);
+  color: #c0392b;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.loadingWrap {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
+}
+
+@media (max-width: 768px) {
+  .emailCell,
+  .emailHeader {
+    display: none;
+  }
+}
