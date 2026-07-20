@@ -35,6 +35,9 @@ const LessonPage = lazy(() =>
 const AssignmentsPage = lazy(() =>
   import('@/features/assignments').then((m) => ({ default: m.AssignmentsPage }))
 );
+const ActivitiesPage = lazy(() =>
+  import('@/features/activities').then((m) => ({ default: m.ActivitiesPage }))
+);
 const ForumsPage = lazy(() =>
   import('@/features/forums').then((m) => ({ default: m.ForumsPage }))
 );
@@ -146,6 +149,14 @@ const routes: RouteObject[] = [
         element: (
           <Suspense fallback={<PageLoader />}>
             <AssignmentsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/activities',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ActivitiesPage />
           </Suspense>
         ),
       },

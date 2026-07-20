@@ -16,6 +16,8 @@ export { useCreateAssignment } from './useCreateAssignment';
 export { useUpdateAssignment } from './useUpdateAssignment';
 export { useDeleteAssignment } from './useDeleteAssignment';
 export { useTeachingSummary } from './useTeachingSummary';
+export { useActivities, useActivity } from './useActivities';
+export { useActivityMutations } from './useActivityMutations';
 export { useGradebook } from './useGradebook';
 export { useMyGrades } from './useMyGrades';
 export { useGradeSubmission, downloadGradebookCsv } from './useGradeSubmission';
