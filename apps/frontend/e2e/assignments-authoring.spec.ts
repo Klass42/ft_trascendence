@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { actAs, TEACHER as ACT_TEACHER } from './dev-user';
 
 /**
  * A7 — Assignment authoring (teacher) + window enforcement (student).
@@ -19,6 +20,10 @@ const TEACHER = 'user-diego-001';
 const PAST_CLOSE = '2000-01-01T10:00';
 
 test.describe('A7 — Assignment authoring & window', () => {
+  test.beforeEach(async ({ page }) => {
+    await actAs(page, ACT_TEACHER);
+  });
+
   test('teacher creates (with resource) → closed badge → edits → student blocked → delete', async ({
     page,
   }) => {

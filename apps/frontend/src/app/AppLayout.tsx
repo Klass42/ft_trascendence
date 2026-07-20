@@ -112,15 +112,23 @@ export function AppLayout() {
         }`}
       >
         <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => {
+            const role = user?.role;
             // Analytics dashboard is a staff tool — hide from students.
-            if ('staffOnly' in item && item.staffOnly && user?.role === 'STUDENT') {
-              return null;
+            if ('staffOnly' in item && item.staffOnly && role === 'STUDENT') {
+              return false;
             }
-            if ('student' in item && item.student !== undefined && user) {
-              if (item.student && user.role === 'ADMIN') return null;
-              if (item.teacher && user.role === 'STUDENT') return null;
+            // Role-flagged items (e.g. Tareas/Foros = student+teacher) are shown
+            // only to the roles whose flag is set. Items with no flags are shown
+            // to everyone.
+            const restricted = 'student' in item || 'teacher' in item;
+            if (restricted && role) {
+              if (role === 'STUDENT') return 'student' in item && !!item.student;
+              if (role === 'TEACHER') return 'teacher' in item && !!item.teacher;
+              return false; // ADMIN: Tareas/Foros aren't admin tools
             }
+            return true;
+          }).map((item) => {
             return (
               <NavLink
                 key={item.to}
