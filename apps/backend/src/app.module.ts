@@ -18,6 +18,7 @@ import { CoursesModule } from './courses/courses.module';
 import { FilesModule } from './files/files.module';
 // ── Ops & Interaction — dacs-dev ──
 import { AssignmentsModule } from './assignments/assignments.module';
+import { ActivitiesModule } from './activities/activities.module';
 import { ForumsModule } from './forums/forums.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -40,6 +41,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     CoursesModule,
     FilesModule,
     AssignmentsModule,
+    ActivitiesModule,
     ForumsModule,
     NotificationsModule,
     RealtimeModule,

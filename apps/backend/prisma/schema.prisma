@@ -48,7 +48,7 @@ model Organization {
 // ============================================================================
 
 model User {
-  id              String     @id @default(cuid())
+  id              String       @id @default(cuid())
   organizationId  String
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email           String
@@ -56,11 +56,11 @@ model User {
   name            String
   avatarUrl       String?
   bio             String?
-  role            GlobalRole @default(STUDENT)
+  role            GlobalRole   @default(STUDENT)
   onlineAt        DateTime? // updated on activity; drives online status
   emailVerifiedAt DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   sessions          Session[]
   oauthAccounts     OAuthAccount[]
@@ -68,6 +68,8 @@ model User {
   ownedCourses      Course[]           @relation("CourseOwner")
   submissions       Submission[]       @relation("SubmissionAuthor")
   gradedSubmissions Submission[]       @relation("SubmissionGrader")
+  attempts          Attempt[]          @relation("AttemptUser")
+  gradedAttempts    Attempt[]          @relation("AttemptGrader")
   forumThreads      ForumThread[]
   forumPosts        ForumPost[]
   notifications     Notification[]
@@ -166,6 +168,7 @@ model Course {
   sections     Section[]
   enrollments  Enrollment[]
   assignments  Assignment[]
+  activities   Activity[]
   forumThreads ForumThread[]
 
   @@index([organizationId])
@@ -398,4 +401,106 @@ enum NotificationType {
   DEADLINE_REMINDER
   FRIEND_REQUEST
   SYSTEM
+}
+
+// ─── Activity engine (B1) ─────────────────────────────────
+// Rich, auto-gradable activities. Additive to Assignment/Submission, which stay
+// as the MANUAL activity type. See docs/planning/David-B1-design.md.
+
+model Activity {
+  id              String       @id @default(cuid())
+  courseId        String
+  course          Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  type            ActivityType @default(QUIZ)
+  title           String
+  description     String?
+  openAt          DateTime? // submissions accepted from this moment (null = open now)
+  dueAt           DateTime? // soft deadline (attempts after are LATE — informational)
+  closeAt         DateTime? // hard close; attempts rejected after (null = never)
+  maxScore        Float        @default(100)
+  attemptsAllowed Int          @default(1) // 0 = unlimited
+  timeLimitSec    Int? // null = untimed
+  config          Json         @default("{}") // { shuffleQuestions, shuffleOptions, showSolutions } (DTO-validated)
+  status          CourseStatus @default(DRAFT) // DRAFT / PUBLISHED / ARCHIVED
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  questions Question[]
+  attempts  Attempt[]
+
+  @@index([courseId])
+}
+
+model Question {
+  id         String       @id @default(cuid())
+  activityId String
+  activity   Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  kind       QuestionKind
+  prompt     String
+  points     Float        @default(1)
+  order      Int          @default(0)
+  content    Json // shape depends on `kind` (options/blanks/pairs/accepted…), DTO-validated
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  answers Answer[]
+
+  @@index([activityId])
+}
+
+model Attempt {
+  id          String        @id @default(cuid())
+  activityId  String
+  activity    Activity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation("AttemptUser", fields: [userId], references: [id], onDelete: Cascade)
+  attemptNo   Int           @default(1) // 1-based; enforced against attemptsAllowed
+  status      AttemptStatus @default(IN_PROGRESS)
+  startedAt   DateTime      @default(now())
+  submittedAt DateTime?
+  score       Float? // scaled to the activity's maxScore
+  gradedById  String?
+  gradedBy    User?         @relation("AttemptGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+  gradedAt    DateTime?
+
+  answers Answer[]
+
+  @@unique([activityId, userId, attemptNo])
+  @@index([userId])
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  attemptId  String
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  response   Json // student's raw response, shape by kind
+  correct    Boolean? // null = not auto-graded (subjective / pending manual)
+  awarded    Float? // points awarded
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([attemptId, questionId])
+}
+
+enum ActivityType {
+  QUIZ // auto-gradable set of questions
+  LISTENING // audio + questions (B4 media)
+  SPEAKING // record audio → manual/AI grading (B4 media)
+}
+
+enum QuestionKind {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  FILL_BLANK
+  MATCHING
+  ORDERING
+  SHORT_ANSWER
+}
+
+enum AttemptStatus {
+  IN_PROGRESS // started, not submitted
+  SUBMITTED // submitted; objective auto-graded; awaiting manual (if any)
+  GRADED // final score available
 }
