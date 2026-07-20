@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { actAs, TEACHER as ACT_TEACHER } from './dev-user';
 
 /**
  * A4-teacher — TeacherDashboard with real data (no mock).
@@ -18,6 +19,10 @@ const STUDENT = 'user-lucia-001';
 test.describe('A4-teacher — TeacherDashboard (real data)', () => {
   const title = `E2E panel ${Date.now()}`;
   let assignmentId = '';
+
+  test.beforeEach(async ({ page }) => {
+    await actAs(page, ACT_TEACHER);
+  });
 
   test.beforeAll(async ({ request }) => {
     const created = await request.post(

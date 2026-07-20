@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { io, type Socket } from 'socket.io-client';
+import { actAs, TEACHER } from './dev-user';
 
 /**
  * A6b — Friends presence, live.
@@ -29,6 +30,11 @@ function connectAs(userId: string): Promise<Socket> {
 }
 
 test.describe('A6b — friends presence', () => {
+  test.beforeEach(async ({ page }) => {
+    // The browser is Diego (teacher); Lucía connects from Node as the friend.
+    await actAs(page, TEACHER);
+  });
+
   test('friend going online/offline flips the navbar widget live', async ({
     page,
   }) => {

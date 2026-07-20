@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { actAs, STUDENT } from './dev-user';
 
 const COURSE_ID = 'course-web-101';
 const LESSON_ID = 'lesson-web-101-1';
 const BASE_URL = 'http://localhost:3000';
+
+// These flows are the student experience — enroll, lessons, student dashboard.
+// Act as the seeded student regardless of the developer's VITE_DEV_USER_ID.
+test.beforeEach(async ({ page }) => {
+  await actAs(page, STUDENT);
+});
 
 // ═══════════════════════════════════════════════════════════
 // Helpers
@@ -178,12 +185,14 @@ test.describe('F6+F7 — AppLayout', () => {
     await page.goto('/dashboard');
     await page.waitForTimeout(2000);
 
-    // Student should see these nav items (Inicio, Cursos, Datos)
-    // NOTE: Tareas and Foros have student:true + teacher:true but are
-    // currently hidden from students due to a nav filter bug (David's side).
-    for (const item of ['Inicio', 'Cursos', 'Datos']) {
+    // A student sees the shared items plus their role-flagged ones. Tareas and
+    // Foros are student:true + teacher:true, so students must see them too — a
+    // regression guard for the nav filter fix that previously hid them.
+    for (const item of ['Inicio', 'Cursos', 'Tareas', 'Foros', 'Datos']) {
       await expect(page.locator(`text=${item}`).first()).toBeVisible({ timeout: 5000 });
     }
+    // Analytics is staff-only — the student must NOT see it.
+    await expect(page.locator('text=Analíticas')).toHaveCount(0);
   });
 
   test('login page is accessible without auth', async ({ page }) => {
