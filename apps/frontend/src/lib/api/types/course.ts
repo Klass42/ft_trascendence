@@ -119,3 +119,49 @@ export interface MyProgressItem {
   courseId: string;
   percentage: number;
 }
+
+// =============================================================================
+// Request payloads
+// =============================================================================
+
+export interface CreateCourseInput {
+  title: string;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
+  accessCode?: string;
+  status?: CourseStatus;
+}
+
+export interface UpdateCourseInput {
+  title?: string;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
+  accessCode?: string;
+  status?: CourseStatus;
+}
+
+export interface CreateSectionInput {
+  title: string;
+  order?: number;
+}
+
+export interface UpdateSectionInput {
+  title?: string;
+  order?: number;
+}
+
+export interface CreateLessonInput {
+  title: string;
+  contentMd?: string;
+  videoUrl?: string;
+  order?: number;
+}
+
+export interface UpdateLessonInput {
+  title?: string;
+  contentMd?: string;
+  videoUrl?: string;
+  order?: number;
+}
