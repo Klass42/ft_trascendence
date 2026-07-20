@@ -115,6 +115,17 @@ export class DevTokenStorage implements TokenStorage {
   }
 
   getDevUserId(): string | null {
+    // A per-session override (localStorage key `dev-user-id`) takes precedence
+    // over the build-time VITE_DEV_USER_ID. This lets the E2E suite pick a role
+    // per spec (teacher vs. student) without restarting Vite, so the tests are
+    // deterministic regardless of the developer's local .env. Dev-only: this
+    // storage is never instantiated in production (LocalStorageTokenStorage is).
+    try {
+      const override = localStorage.getItem('dev-user-id');
+      if (override) return override;
+    } catch {
+      // localStorage unavailable — fall back to the env user.
+    }
     return this.devUserId;
   }
 }
