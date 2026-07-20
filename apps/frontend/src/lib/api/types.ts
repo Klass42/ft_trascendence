@@ -133,6 +133,22 @@ export type {
 } from './types/assignment';
 
 export type {
+  ActivityType,
+  ActivityStatus,
+  QuestionKind,
+  AttemptStatus,
+  QuestionDTO,
+  ActivityDTO,
+  CreateActivityInput,
+  UpdateActivityInput,
+  CreateQuestionInput,
+  UpdateQuestionInput,
+  AnswerDTO,
+  AttemptDTO,
+  SaveAnswersInput,
+} from './types/activity';
+
+export type {
   GradebookDTO,
   GradebookAssignmentDTO,
   GradebookCellDTO,
