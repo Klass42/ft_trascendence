@@ -73,6 +73,8 @@ export {
   useUpcomingAssignments,
   useUpdateProfile,
   useChangePassword,
+  useEnrollments,
+  useUsersByIds,
 } from './hooks';
 
 // Types
