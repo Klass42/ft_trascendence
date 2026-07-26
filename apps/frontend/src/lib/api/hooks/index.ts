@@ -50,3 +50,5 @@ export {
 } from './useAnalytics';
 export { useUsers, useUser } from './useUsers';
 export { useOrg, useOrgMembers } from './useOrganization';
+export { useUpdateProfile } from './useUpdateProfile';
+export { useChangePassword, type ChangePasswordInput } from './useChangePassword';
