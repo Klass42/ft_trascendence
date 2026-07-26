@@ -31,8 +31,7 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 - **Plan 2 (`Jorge-2.md`, Fase A rediseño LMS):**
   - ✅ A6a (integrar frontend Org) — cerrada con el merge de Epic 7 a staging.
   - ✅ **A5 (Perfil y cuenta reales) — implementada** (Bloque 11). 13 commits, 269 tests, E2E verde.
-  - ⬜ A3 (Roster — pestaña "Alumnos" en curso) — decisiones previas tomadas
-    (lookup endpoint en users, ver engram/memoria).
+  - ✅ **A3 (Roster) — implementada** (Bloque 12). 6 commits, 274 tests, E2E escrito (pendiente run).
   - ⬜ A4-admin (des-mockear AdminDashboard) — pendiente.
 - **Estructura elegida:** 3 specs independientes (patrón Plan 1), orden A5 → A3 → A4-admin.
 - **Epicas completadas:**
@@ -63,10 +62,10 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - Implementado: 5 commits (`113a22db..449bd850`).
   - Build `pnpm -r run build` limpio. API smoke: org info, 6 members, teacher RBAC 403.
 - **Epic 7 completo:** Epics 7a (auth pages), 7b (admin users), 7c (org). Todo frontend de Jorge shipped.
-- **Tests:** 269 tests backend (25 suites, 0 fallos) · 3 E2E profile (verdes).
+- **Tests:** 274 tests backend (25 suites, 0 fallos) · E2E: profile 3/3 + roster pendiente de run.
 - **AuthUser contrato:** 8 campos (`emailNotificationsEnabled` + `preferredLanguage` añadidos en A5).
 - **Runtime:** `make up` ✅ · backend arranca limpio · auth operativo (login/register/change-password).
-- **Siguiente:** A3 — Roster (pestaña "Alumnos" en curso).
+- **Siguiente:** A4-admin (des-mockear AdminDashboard) → luego PR a staging.
 
 ---
 
