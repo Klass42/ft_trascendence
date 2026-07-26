@@ -20,6 +20,8 @@ const adminUser = {
   avatarUrl: null,
   organizationId: 'org-klass-0001',
   role: 'ADMIN' as const,
+  emailNotificationsEnabled: true,
+  preferredLanguage: 'es',
 };
 
 describe('OrganizationsController', () => {

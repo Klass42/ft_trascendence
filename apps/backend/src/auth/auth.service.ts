@@ -26,6 +26,7 @@ export class AuthService {
   private mapUser(user: {
     id: string; email: string; name: string; avatarUrl: string | null;
     organizationId: string; role: 'ADMIN' | 'TEACHER' | 'STUDENT';
+    emailNotificationsEnabled: boolean; preferredLanguage: string;
   }): AuthUser {
     return {
       userId: user.id,
@@ -34,6 +35,8 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       organizationId: user.organizationId,
       role: user.role,
+      emailNotificationsEnabled: user.emailNotificationsEnabled,
+      preferredLanguage: user.preferredLanguage,
     };
   }
 
