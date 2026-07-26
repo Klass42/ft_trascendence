@@ -21,6 +21,7 @@ import {
   type TabItem,
 } from '@/components/ui';
 import { ContentEditor } from './ContentEditor';
+import { RosterPage } from './RosterPage';
 
 const COURSE_COLORS = [
   '#2563eb', '#0f766e', '#d97706', '#7c3aed',
@@ -33,12 +34,6 @@ function hashToColor(title: string): string {
     hash = title.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
-}
-
-/** Placeholder — implemented in Task 5 */
-function RosterPage({ courseId }: { courseId: string }) {
-  void courseId;
-  return <div style={{ padding: '26px 40px' }}>Cargando roster…</div>;
 }
 
 export function CourseDetailPage() {
