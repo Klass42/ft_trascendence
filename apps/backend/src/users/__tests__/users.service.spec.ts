@@ -182,10 +182,10 @@ describe('UsersService', () => {
   // ── updateProfile ──
   describe('updateProfile', () => {
     it('updates name and bio for the caller', async () => {
-      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'New', bio: 'Bio', avatarUrl: null, role: 'STUDENT', onlineAt: null });
+      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'New', bio: 'Bio', avatarUrl: null, role: 'STUDENT', onlineAt: null, email: 'student@demo', organizationId: 'org-klass-0001', emailNotificationsEnabled: true, preferredLanguage: 'es' });
       const r = await service.updateProfile('user-student-0001', { name: 'New', bio: 'Bio' });
       expect(r.name).toBe('New');
-      expect((r as any).email).toBeUndefined();
+      expect(r.email).toBe('student@demo');
     });
 
     it('persists preference fields and selects them back (own profile)', async () => {
