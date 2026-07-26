@@ -22,9 +22,20 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 
 ## 1. Estado
 
-- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `origin/staging`
-  (fast-forward a `94fbf924` el 2026-07-17 tras merge de infra de Ale +
-  fix de NotificationsService).
+- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `staging` en
+  `4d526010` (2026-07-26, fast-forward) — trajo Fase A completa de Aloiki
+  (A1/A2/StudentDashboard), David (D0, A7, A4-teacher, A6b presence, **B1 motor
+  de actividades backend + B2a UI de autoría**) y mi propio Epic 7 mergeado.
+- **Plan 1 (`Jorge.md`) COMPLETO:** Epics 1-7c shipped (backend auth/org/users/
+  RBAC + frontend auth/admin/org). Epic 8 (2FA TOTP) es stretch, fuera de Fase A.
+- **Plan 2 (`Jorge-2.md`, Fase A rediseño LMS):**
+  - ✅ A6a (integrar frontend Org) — cerrada con el merge de Epic 7 a staging.
+  - 🔵 **A5 (Perfil y cuenta reales) — spec escrita** (Bloque 10), pendiente de
+    review de usuario → plan → implementación.
+  - ⬜ A3 (Roster — pestaña "Alumnos" en curso) — decisiones previas tomadas
+    (lookup endpoint en users, ver engram/memoria).
+  - ⬜ A4-admin (des-mockear AdminDashboard) — pendiente.
+- **Estructura elegida:** 3 specs independientes (patrón Plan 1), orden A5 → A3 → A4-admin.
 - **Epicas completadas:**
   - Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
     PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
@@ -53,10 +64,9 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - Implementado: 5 commits (`113a22db..449bd850`).
   - Build `pnpm -r run build` limpio. API smoke: org info, 6 members, teacher RBAC 403.
 - **Epic 7 completo:** Epics 7a (auth pages), 7b (admin users), 7c (org). Todo frontend de Jorge shipped.
-- **Siguiente:** smoke browser final → `finishing-a-development-branch`.
-- **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
-- **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
-- **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
+- **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend: Playwright E2E (harness de David, D0).
+- **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo.
+- **Siguiente:** review de la spec A5 → `writing-plans` → implementación.
 
 ---
 
@@ -305,6 +315,31 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 **Próximo paso:** smoke browser manual final → `finishing-a-development-branch` para PR a `staging`.
 
+### Bloque 10 — 2026-07-26 — Plan 2 arranque: sync + brainstorm + spec A5
+- ✅ Merge `staging` → `jorge` (fast-forward `ee821f44..4d526010`, 133 ficheros): Fase A de
+  Aloiki completa (A1 autoría cursos, A2 ContentBuilder, StudentDashboard), David (D0, A7,
+  A4-teacher, A6b presence, **B1 motor actividades + B2a UI autoría**), y confirmación de que mi
+  Epic 7 (admin + org pages) ya está en staging → **A6a cerrada**.
+- ✅ Auditoría de Plan 1 (`Jorge.md`): todo hecho (Epics 4-6 estaban marcados "pending" en el
+  doc pero implementados; Epic 8 2FA = stretch, fuera de Fase A). → Toca Plan 2 (`Jorge-2.md`).
+- ✅ Auditoría de Plan 2: pendientes **A3** (roster — no hay pestaña "Alumnos"), **A5** (perfil:
+  toggles falsos, avatar no persiste, no hay change-password), **A4-admin** (AdminDashboard
+  100% mock).
+- ✅ Contexto guardado en engram (grafo de conocimiento): estado del Plan 2 + decisiones A5/A3.
+- ✅ Brainstorming skill (4 preguntas): alcance = Plan 2 con **3 specs independientes**, orden
+  **A5 → A3 → A4-admin**. Decisiones A5: prefs REALES (`emailNotificationsEnabled` +
+  `preferredLanguage` en User), schema vía **`db push`** (reconciliación de migraciones = tarea
+  aparte con Ale), change-password **revoca todas las sesiones** y fuerza re-login, error de
+  contraseña actual = **400 (no 401)** por el interceptor de refresh del api-client, 2FA =
+  Badge "Próximamente", avatar se persiste vía `PATCH /users/me {avatarUrl}` tras FileUpload.
+  Decisión A3 (adelantada): lookup por email = nuevo `GET /users/lookup?email=` en mi módulo
+  users (org-scoped, TEACHER/ADMIN).
+- ✅ Spec escrita: `docs/superpowers/specs/2026-07-26-a5-profile-account-design.md`.
+  Auto-revisión: añadida nota de race condition en el E2E (dev-user-id vs redirect a /login).
+- ⬜ Review del usuario → `writing-plans` → implementación.
+
+**Próximo paso:** review spec A5 → plan → implementar (posible PAUSE para cambio de modelo).
+
 ---
 
 ## 5. Decisiones de diseño (resumen — ver spec para detalle)
@@ -324,10 +359,13 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 ## 6. Próximos pasos (inmediatos)
 
-1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
-2. ~~Brainstorm Epic 2 + spec + plan + implementación.~~ ✅ Hecho (Bloque 2).
-3. ~~Brainstorm Epic 3 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3).
-4. ~~Brainstorm Epic 4 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3b).
-5. **PR a `staging`** con Epics 1-4.
-6. **Brainstorm Epic 5** (Advanced permissions — admin user CRUD, role management).
-7. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.
+1. ~~Plan 1 (Epics 1-7c)~~ ✅ Completo y mergeado a `staging`.
+2. **A5 — Perfil y cuenta reales:** spec escrita (Bloque 10) → review → `writing-plans` →
+   implementación → PR a `staging`.
+3. **A3 — Roster:** brainstorm corto (decisiones previas ya tomadas: lookup en users) → spec →
+   plan → implementación.
+4. **A4-admin — Des-mockear AdminDashboard:** spec → plan → implementación.
+5. **Deuda conjunta con Ale:** reconciliar historia de migraciones Prisma (drift
+   `migrations/_init` vs `db push`; lo dejó David anotado en D0).
+6. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por
+   `organizationId`. Rate-limiting en auth endpoints (login/change-password).
