@@ -336,7 +336,14 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
   users (org-scoped, TEACHER/ADMIN).
 - ✅ Spec escrita: `docs/superpowers/specs/2026-07-26-a5-profile-account-design.md`.
   Auto-revisión: añadida nota de race condition en el E2E (dev-user-id vs redirect a /login).
-- ⬜ Review del usuario → `writing-plans` → implementación.
+- ✅ Spec aprobada por el usuario.
+- ✅ Plan escrito: `docs/superpowers/plans/2026-07-26-a5-profile-account.md` (12 tareas, TDD,
+  commits por tarea). Self-review: capturados 2 fallos antes de ejecutar — (1) `lib/api/index.ts`
+  re-exporta hooks POR NOMBRE (hay que tocar 2 barrels), (2) `React.ChangeEvent` → import
+  `type ChangeEvent` de react. Detectado también en Task 2: 3 specs con literales de AuthUser
+  de 6 campos (auth.service, jwt.strategy, dev-auth.guard) que hay que actualizar.
+- ⬜ Ejecución del plan (el usuario elige subagent-driven vs inline; posible PAUSE para cambio
+  de modelo).
 
 **Próximo paso:** review spec A5 → plan → implementar (posible PAUSE para cambio de modelo).
 
