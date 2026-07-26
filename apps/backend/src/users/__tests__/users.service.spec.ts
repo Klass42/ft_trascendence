@@ -278,4 +278,64 @@ describe('UsersService', () => {
       expect(args.select.preferredLanguage).toBeUndefined();
     });
   });
+
+  // ── findByIds ──
+  describe('findByIds', () => {
+    it('returns matching users org-scoped (no passwordHash)', async () => {
+      const users = [
+        { id: 'u1', name: 'Alice', email: 'a@demo', avatarUrl: null },
+        { id: 'u2', name: 'Bob', email: 'b@demo', avatarUrl: '/img.png' },
+      ];
+      (prisma.user.findMany as jest.Mock).mockResolvedValue(users);
+
+      const result = await service.findByIds(['u1', 'u2', 'u3'], ORG_ID);
+
+      expect(result).toEqual(users);
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.where).toEqual({ id: { in: ['u1', 'u2', 'u3'] }, organizationId: ORG_ID });
+      expect(args.select.passwordHash).toBeUndefined();
+      expect(args.select.id).toBe(true);
+      expect(args.select.name).toBe(true);
+      expect(args.select.email).toBe(true);
+      expect(args.select.avatarUrl).toBe(true);
+    });
+
+    it('returns empty array for empty ids without calling Prisma', async () => {
+      const result = await service.findByIds([], ORG_ID);
+
+      expect(result).toEqual([]);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── lookupByEmail ──
+  describe('lookupByEmail', () => {
+    it('returns user DTO when found (teacher caller)', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        id: 'u1', name: 'Sam', email: 'sam@demo', avatarUrl: null, role: 'STUDENT',
+      });
+
+      const result = await service.lookupByEmail('sam@demo', ORG_ID, 'TEACHER');
+
+      expect(result).toEqual({ userId: 'u1', name: 'Sam', email: 'sam@demo', avatarUrl: null });
+      const args = (prisma.user.findFirst as jest.Mock).mock.calls[0][0];
+      expect(args.where).toEqual({ organizationId: ORG_ID, email: 'sam@demo' });
+    });
+
+    it('throws NotFoundException when user not found', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.lookupByEmail('ghost@demo', ORG_ID, 'TEACHER'))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when teacher looks up ADMIN', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        id: 'u-admin', name: 'Admin', email: 'admin@demo', avatarUrl: null, role: 'ADMIN',
+      });
+
+      await expect(service.lookupByEmail('admin@demo', ORG_ID, 'TEACHER'))
+        .rejects.toThrow(ForbiddenException);
+    });
+  });
 });

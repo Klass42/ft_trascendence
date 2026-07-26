@@ -148,4 +148,29 @@ export class UsersService {
     await this.prisma.user.update({ where: { id: userId }, data: { avatarUrl: url } });
     return this.prisma.user.findUnique({ where: { id: userId }, select: selectPublicProfile });
   }
+
+  // ── Batch fetch for roster (A3) ──
+
+  async findByIds(ids: string[], organizationId: string) {
+    if (ids.length === 0) return [];
+    return this.prisma.user.findMany({
+      where: { id: { in: ids }, organizationId },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  // ── Single lookup for add-student modal (A3) ──
+
+  async lookupByEmail(email: string, organizationId: string, callerRole: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { organizationId, email },
+      select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (callerRole === 'TEACHER' && user.role === 'ADMIN') {
+      throw new ForbiddenException('Cannot look up admin users');
+    }
+    return { userId: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl };
+  }
 }
