@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -45,6 +46,23 @@ export class UsersController {
   @Post(':id/friend')
   async sendFriendRequest(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.usersService.sendFriendRequest(user.userId, id, user.organizationId);
+  }
+
+  // ── Roster support routes (A3) ──
+
+  @Get('by-ids')
+  @UseGuards(RolesGuard)
+  @Roles('TEACHER', 'ADMIN')
+  async findByIds(@Query('ids') ids: string, @CurrentUser() user: AuthUser) {
+    const idList = ids ? ids.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    return this.usersService.findByIds(idList, user.organizationId);
+  }
+
+  @Get('lookup')
+  @UseGuards(RolesGuard)
+  @Roles('TEACHER', 'ADMIN')
+  async lookupByEmail(@Query('email') email: string, @CurrentUser() user: AuthUser) {
+    return this.usersService.lookupByEmail(email, user.organizationId, user.role);
   }
 
   // ── Admin CRUD routes (Epic 5) ──
