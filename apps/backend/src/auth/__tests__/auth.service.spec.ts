@@ -17,6 +17,8 @@ const mockUser = {
   role: 'STUDENT' as const,
   onlineAt: null,
   emailVerifiedAt: new Date(),
+  emailNotificationsEnabled: true,
+  preferredLanguage: 'es',
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -111,6 +113,8 @@ describe('AuthService', () => {
         avatarUrl: null,
         organizationId: SEED_ORG_ID,
         role: 'STUDENT',
+        emailNotificationsEnabled: true,
+        preferredLanguage: 'es',
       });
       expect(result.accessToken).toBe('access-token-mock');
       expect(result.refreshToken).toBe('refresh-token-mock');

@@ -4,6 +4,7 @@ import { JwtStrategy, JwtPayload } from '../jwt.strategy';
 const userRow = {
   id: 'user-x', email: 'x@b.co', name: 'X', avatarUrl: null,
   organizationId: 'org-x', role: 'TEACHER' as const,
+  emailNotificationsEnabled: true, preferredLanguage: 'es',
 };
 
 const prisma = {
@@ -17,12 +18,13 @@ const prisma = {
 } as unknown as PrismaService;
 
 describe('JwtStrategy.validate()', () => {
-  it('maps the Prisma user row to AuthUser (6 fields)', async () => {
+  it('maps the Prisma user row to AuthUser (8 fields)', async () => {
     const strategy = new JwtStrategy(prisma as any, prisma as any);
     const out = await strategy.validate({ sub: 'user-x' } as JwtPayload);
     expect(out).toEqual({
       userId: 'user-x', email: 'x@b.co', name: 'X', avatarUrl: null,
       organizationId: 'org-x', role: 'TEACHER',
+      emailNotificationsEnabled: true, preferredLanguage: 'es',
     });
   });
 

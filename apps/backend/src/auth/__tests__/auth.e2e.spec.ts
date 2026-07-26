@@ -77,6 +77,8 @@ class TestAuthGuard implements CanActivate {
           avatarUrl: user.avatarUrl,
           organizationId: user.organizationId,
           role: user.role,
+          emailNotificationsEnabled: user.emailNotificationsEnabled,
+          preferredLanguage: user.preferredLanguage,
         };
         return true;
       }

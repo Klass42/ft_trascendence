@@ -5,6 +5,7 @@ import { DevAuthGuard } from '../dev-auth.guard';
 const userRow = {
   id: 'user-admin-0001', email: 'admin@demo', name: 'Ad',
   avatarUrl: null, organizationId: 'org-klass-0001', role: 'ADMIN' as const,
+  emailNotificationsEnabled: true, preferredLanguage: 'es',
 };
 
 const mkCtx = (devUserId?: string) => {
@@ -62,7 +63,7 @@ describe('DevAuthGuard', () => {
     process.env.NODE_ENV = 'development';
   });
 
-  it('maps the user with all 6 AuthUser fields (incl. email, name, avatarUrl)', async () => {
+  it('maps the user with all 8 AuthUser fields (incl. email, name, avatarUrl)', async () => {
     const guard = new DevAuthGuard(prisma);
     const ctx = mkCtx('user-admin-0001');
     await guard.canActivate(ctx);
@@ -70,6 +71,7 @@ describe('DevAuthGuard', () => {
     expect(req.user).toEqual({
       userId: 'user-admin-0001', email: 'admin@demo', name: 'Ad',
       avatarUrl: null, organizationId: 'org-klass-0001', role: 'ADMIN',
+      emailNotificationsEnabled: true, preferredLanguage: 'es',
     });
   });
 });
