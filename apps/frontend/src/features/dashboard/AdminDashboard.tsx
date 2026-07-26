@@ -1,46 +1,73 @@
-/**
- * AdminDashboard — OWNER: Jorge (Plan 2, A4-admin).
- * TODO(Jorge): de-mock — los KPIs (1.284 usuarios, 96 cursos, …) y la lista de
- * "Usuarios recientes" están hardcodeados. Sustituir por GET /users y
- * GET /organizations/me.
- */
-import { users } from '@/lib/mock-data';
+import { useUsers, useCourses } from '@/lib/api';
+import { Spinner, EmptyState } from '@/components/ui';
 import { DashboardHeader } from './DashboardHeader';
-
-const KPIS = [
-  { label: 'Usuarios', value: '1.284' },
-  { label: 'Cursos', value: '96' },
-  { label: 'Activos ahora', value: '417' },
-  { label: 'Uptime', value: '99,9%', color: '#0f766e' },
-];
+import styles from './AdminDashboard.module.css';
 
 export function AdminDashboard() {
+  const { data: users, isLoading: usersLoading } = useUsers();
+  const { data: courses, isLoading: coursesLoading } = useCourses();
+
+  if (usersLoading || coursesLoading) {
+    return (
+      <>
+        <DashboardHeader title="Panel de administración" roleLabel="Admin" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
+          <Spinner />
+        </div>
+      </>
+    );
+  }
+
+  const userCount = users?.length ?? 0;
+  const courseCount = courses?.length ?? 0;
+  const recentUsers = [...(users ?? [])]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
+
   return (
     <>
       <DashboardHeader title="Panel de administración" roleLabel="Admin" />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 26 }}>
-        {KPIS.map((s) => (
-          <div key={s.label} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 14, padding: 18 }}>
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>{s.label}</div>
-            <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4, color: s.color || 'var(--color-text-primary)' }}>{s.value}</div>
-          </div>
-        ))}
+      <div className={styles.kpis}>
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiLabel}>Usuarios</div>
+          <div className={styles.kpiValue}>{userCount}</div>
+        </div>
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiLabel}>Cursos</div>
+          <div className={styles.kpiValue}>{courseCount}</div>
+        </div>
       </div>
 
-      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>Usuarios recientes</div>
-      <div style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 13, overflow: 'hidden', maxWidth: 720 }}>
-        {users.map((u, i) => (
-          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--color-border-primary)' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-accent-muted)', color: 'var(--color-accent-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, flex: 'none' }}>
-              {u.initials}
-            </div>
-            <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{u.name}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)' }}>{u.role}</span>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', width: 56, textAlign: 'right' }}>{u.joined}</span>
-          </div>
-        ))}
-      </div>
+      <div className={styles.sectionTitle}>Usuarios recientes</div>
+
+      {recentUsers.length === 0 ? (
+        <EmptyState title="Sin usuarios" description="No hay usuarios registrados aún." />
+      ) : (
+        <div className={styles.table}>
+          {recentUsers.map((u) => {
+            const initials = u.name
+              .split(' ')
+              .map((n: string) => n[0])
+              .join('')
+              .toUpperCase()
+              .slice(0, 2);
+            const roleLabel = u.role === 'ADMIN' ? 'Admin' : u.role === 'TEACHER' ? 'Profesor' : 'Alumno';
+            const joined = new Date(u.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+
+            return (
+              <div key={u.id} className={styles.row}>
+                <div className={styles.avatar}>
+                  {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials}
+                </div>
+                <span className={styles.name}>{u.name}</span>
+                <span className={styles.role}>{roleLabel}</span>
+                <span className={styles.date}>{joined}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
