@@ -29,6 +29,13 @@ const selectPublicProfile = {
   id: true, name: true, avatarUrl: true, role: true, bio: true, onlineAt: true,
 } as const;
 
+/** Own profile: public fields + private account data (prefs). Only for /me endpoints. */
+const selectOwnProfile = {
+  ...selectPublicProfile,
+  email: true, organizationId: true,
+  emailNotificationsEnabled: true, preferredLanguage: true,
+} as const;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -104,7 +111,7 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    return this.prisma.user.update({ where: { id: userId }, data: dto, select: selectPublicProfile });
+    return this.prisma.user.update({ where: { id: userId }, data: dto, select: selectOwnProfile });
   }
 
   async sendFriendRequest(callerId: string, targetId: string, callerOrgId: string) {

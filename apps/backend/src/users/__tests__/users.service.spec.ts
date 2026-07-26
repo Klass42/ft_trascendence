@@ -187,6 +187,43 @@ describe('UsersService', () => {
       expect(r.name).toBe('New');
       expect((r as any).email).toBeUndefined();
     });
+
+    it('persists preference fields and selects them back (own profile)', async () => {
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser, emailNotificationsEnabled: false, preferredLanguage: 'en',
+      });
+
+      const r = await service.updateProfile('user-student-0001', {
+        emailNotificationsEnabled: false,
+        preferredLanguage: 'en',
+      });
+
+      const args = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(args.data).toEqual({ emailNotificationsEnabled: false, preferredLanguage: 'en' });
+      expect(args.select.emailNotificationsEnabled).toBe(true);
+      expect(args.select.preferredLanguage).toBe(true);
+      expect(r.emailNotificationsEnabled).toBe(false);
+      expect(r.preferredLanguage).toBe('en');
+    });
+
+    it('persists avatarUrl as a plain string', async () => {
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser, avatarUrl: '/api/files/file-1/url',
+      });
+
+      await service.updateProfile('user-student-0001', { avatarUrl: '/api/files/file-1/url' });
+
+      const args = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(args.data).toEqual({ avatarUrl: '/api/files/file-1/url' });
+    });
+
+    it('rejects an invalid preferredLanguage at the DTO level', async () => {
+      const { UpdateProfileDto } = await import('../dto/update-profile.dto');
+      const { validate } = await import('class-validator');
+      const dto = Object.assign(new UpdateProfileDto(), { preferredLanguage: 'fr' });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+    });
   });
 
   // ── sendFriendRequest ──
@@ -228,6 +265,17 @@ describe('UsersService', () => {
       const r = await service.listFriends(ADMIN_ID);
       expect(r).toHaveLength(1);
       expect((r[0] as any).email).toBeUndefined();
+    });
+
+    it('keeps prefs out of the public profile select (listFriends)', async () => {
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.listFriends('user-student-0001');
+
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.select.emailNotificationsEnabled).toBeUndefined();
+      expect(args.select.preferredLanguage).toBeUndefined();
     });
   });
 });
