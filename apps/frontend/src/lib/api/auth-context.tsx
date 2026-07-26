@@ -44,6 +44,8 @@ const MOCK_USER: AuthUser = {
   avatarUrl: null,
   organizationId: 'org-klass-0001',
   role: 'STUDENT', // STUDENT to see the student dashboard
+  emailNotificationsEnabled: true,
+  preferredLanguage: 'es',
 };
 
 const USE_MOCK_AUTH = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_AUTH === 'true';
