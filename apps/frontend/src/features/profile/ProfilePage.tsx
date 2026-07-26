@@ -1,181 +1,257 @@
-import { useState } from 'react';
-import { useAuth } from '@/lib/api';
-import { FileUpload, type FileValue } from '@/components/ui';
+import { useEffect, useState, type ChangeEvent } from 'react';
+import { useAuth, useUpdateProfile, useChangePassword } from '@/lib/api';
+import {
+  Badge,
+  Button,
+  Card,
+  FileUpload,
+  Input,
+  Select,
+  Spinner,
+  Toggle,
+  useToast,
+  type FileValue,
+} from '@/components/ui';
+import styles from './ProfilePage.module.css';
+
+const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
 
 export function ProfilePage() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const { updateProfile, isSaving: isSavingProfile } = useUpdateProfile();
+  const { changePassword, isSaving: isSavingPassword } = useChangePassword();
+
   const [avatarFiles, setAvatarFiles] = useState<FileValue[]>([]);
 
-  const initials = user?.name
-    ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-    : '?';
+  const handleAvatarChange = async (files: FileValue[]) => {
+    setAvatarFiles(files);
+    const done = files.find((f) => f.status === 'done' && f.url);
+    if (done?.url) {
+      try {
+        await updateProfile({ avatarUrl: done.url });
+        toast({ variant: 'success', message: 'Foto de perfil actualizada' });
+      } catch {
+        toast({ variant: 'error', message: 'No se pudo guardar la foto de perfil' });
+      }
+    }
+  };
 
-  const roleLabel = user?.role === 'STUDENT' ? 'Alumno' : user?.role === 'TEACHER' ? 'Profesor' : 'Admin';
+  const [name, setName] = useState(user?.name ?? '');
+  const [nameError, setNameError] = useState<string>();
+  useEffect(() => {
+    setName(user?.name ?? '');
+  }, [user?.name]);
 
-  const avatarUrl = avatarFiles.find((f) => f.status === 'done')?.url || user?.avatarUrl;
+  const handleSaveName = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameError('El nombre no puede estar vacío');
+      return;
+    }
+    setNameError(undefined);
+    try {
+      await updateProfile({ name: trimmed });
+      toast({ variant: 'success', message: 'Nombre actualizado' });
+    } catch {
+      toast({ variant: 'error', message: 'No se pudo actualizar el nombre' });
+    }
+  };
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState<{
+    current?: string;
+    next?: string;
+    confirm?: string;
+  }>({});
+
+  const handleChangePassword = async () => {
+    const errors: typeof passwordErrors = {};
+    if (!currentPassword) errors.current = 'Introduce tu contraseña actual';
+    if (newPassword.length < 8 || !PASSWORD_RULE.test(newPassword)) {
+      errors.next = 'Mínimo 8 caracteres, con mayúscula, minúscula y número';
+    }
+    if (confirmPassword !== newPassword) errors.confirm = 'Las contraseñas no coinciden';
+    setPasswordErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      await changePassword({ currentPassword, newPassword });
+    } catch (err) {
+      setPasswordErrors({
+        current: (err as Error).message || 'No se pudo cambiar la contraseña',
+      });
+    }
+  };
+
+  const handleToggleNotifications = async (next: boolean) => {
+    try {
+      await updateProfile({ emailNotificationsEnabled: next });
+      toast({
+        variant: 'success',
+        message: next ? 'Notificaciones activadas' : 'Notificaciones desactivadas',
+      });
+    } catch {
+      toast({ variant: 'error', message: 'No se pudo guardar la preferencia' });
+    }
+  };
+
+  const handleLanguageChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    try {
+      await updateProfile({ preferredLanguage: e.target.value });
+      toast({ variant: 'success', message: 'Idioma guardado' });
+    } catch {
+      toast({ variant: 'error', message: 'No se pudo guardar el idioma' });
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className={styles.loading}>
+        <Spinner />
+      </div>
+    );
+  }
+
+  const initials = user.name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+  const roleLabel =
+    user.role === 'STUDENT' ? 'Alumno' : user.role === 'TEACHER' ? 'Profesor' : 'Admin';
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 640 }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 22px', letterSpacing: '-0.02em' }}>
-        Perfil
-      </h1>
+    <div className={styles.page}>
+      <h1 className={styles.title}>Perfil</h1>
 
-      <div
-        style={{
-          background: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border-primary)',
-          borderRadius: 15,
-          padding: 24,
-          display: 'flex',
-          gap: 18,
-          alignItems: 'center',
-          marginBottom: 18,
-        }}
-      >
-        <div
-          style={{
-            width: 66,
-            height: 66,
-            borderRadius: '50%',
-            background: avatarUrl ? 'transparent' : 'var(--color-accent-primary)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 800,
-            fontSize: 24,
-            flex: 'none',
-            overflow: 'hidden',
-          }}
-        >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            initials
-          )}
-        </div>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{user?.name || 'Usuario'}</div>
-          <div style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>
-            {roleLabel} · Klass
+      <Card title="Identidad" className={styles.section}>
+        <div className={styles.identityRow}>
+          <div className={styles.avatar}>
+            {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials}
           </div>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 18 }}>
-        <FileUpload
-          accept="image/*"
-          maxSizeBytes={5 * 1024 * 1024}
-          multiple={false}
-          maxFiles={1}
-          organizationId={user?.organizationId || ''}
-          uploaderId={user?.userId}
-          value={avatarFiles}
-          onChange={setAvatarFiles}
-          autoUpload
-          hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
-        />
-      </div>
-
-      <div
-        style={{
-          background: 'var(--color-bg-secondary)',
-          border: '1px solid var(--color-border-primary)',
-          borderRadius: 15,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '15px 20px',
-            borderBottom: '1px solid var(--color-border-primary)',
-          }}
-        >
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Notificaciones por email</div>
-            <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-              Resumen semanal de actividad
+            <div className={styles.displayName}>{user.name}</div>
+            <div className={styles.meta}>
+              {roleLabel} · {user.email}
             </div>
           </div>
-          <div
-            style={{
-              width: 42,
-              height: 24,
-              borderRadius: 20,
-              background: 'var(--color-accent-primary)',
-              position: 'relative',
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                top: 2,
-                right: 2,
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: '#fff',
-              }}
-            />
+        </div>
+
+        <div className={styles.upload}>
+          <FileUpload
+            accept="image/*"
+            maxSizeBytes={5 * 1024 * 1024}
+            multiple={false}
+            maxFiles={1}
+            organizationId={user.organizationId}
+            uploaderId={user.userId}
+            value={avatarFiles}
+            onChange={handleAvatarChange}
+            autoUpload
+            hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
+          />
+        </div>
+
+        <div className={styles.nameForm}>
+          <Input
+            label="Nombre"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            error={nameError}
+          />
+          <div>
+            <Button
+              onClick={handleSaveName}
+              loading={isSavingProfile}
+              disabled={name.trim() === user.name}
+            >
+              Guardar cambios
+            </Button>
           </div>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '15px 20px',
-            borderBottom: '1px solid var(--color-border-primary)',
-          }}
-        >
+      </Card>
+
+      <Card title="Seguridad" className={styles.section}>
+        <div className={styles.passwordForm}>
+          <Input
+            label="Contraseña actual"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            error={passwordErrors.current}
+          />
+          <Input
+            label="Nueva contraseña"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            error={passwordErrors.next}
+            hint="Mínimo 8 caracteres, con mayúscula, minúscula y número"
+          />
+          <Input
+            label="Confirmar contraseña"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            error={passwordErrors.confirm}
+          />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Autenticación en dos pasos</div>
-            <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-              Protege tu cuenta con TOTP
+            <Button onClick={handleChangePassword} loading={isSavingPassword}>
+              Cambiar contraseña
+            </Button>
+          </div>
+        </div>
+
+        <div className={styles.row}>
+          <div>
+            <div className={styles.rowTitle}>Autenticación en dos pasos</div>
+            <div className={styles.rowHint}>Protege tu cuenta con TOTP</div>
+          </div>
+          <Badge variant="info">Próximamente</Badge>
+        </div>
+      </Card>
+
+      <Card title="Preferencias" className={styles.section}>
+        <div className={styles.row}>
+          <div>
+            <div className={styles.rowTitle}>Notificaciones por email</div>
+            <div className={styles.rowHint}>Resumen semanal de actividad</div>
+          </div>
+          <Toggle
+            checked={user.emailNotificationsEnabled}
+            onChange={handleToggleNotifications}
+            disabled={isSavingProfile}
+            aria-label="Notificaciones por email"
+          />
+        </div>
+        <div className={styles.row}>
+          <div>
+            <div className={styles.rowTitle}>Idioma</div>
+            <div className={styles.rowHint}>
+              El idioma de la interfaz llegará en una próxima versión
             </div>
           </div>
-          <div
-            style={{
-              width: 42,
-              height: 24,
-              borderRadius: 20,
-              background: 'var(--color-border-secondary)',
-              position: 'relative',
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                top: 2,
-                left: 2,
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                background: '#fff',
-              }}
-            />
-          </div>
+          <Select
+            value={user.preferredLanguage}
+            onChange={handleLanguageChange}
+            disabled={isSavingProfile}
+            fullWidth={false}
+            aria-label="Idioma"
+            options={[
+              { value: 'es', label: 'Español' },
+              { value: 'en', label: 'English' },
+            ]}
+            className={styles.languageSelect}
+          />
         </div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '15px 20px',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Idioma</div>
-            <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>Español</div>
-          </div>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 600, cursor: 'pointer' }}>
-            Cambiar
-          </span>
-        </div>
-      </div>
+      </Card>
     </div>
   );
 }
