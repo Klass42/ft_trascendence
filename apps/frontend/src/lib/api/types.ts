@@ -16,6 +16,8 @@ export interface AuthUser {
   avatarUrl: string | null;
   organizationId: string;
   role: GlobalRole;
+  emailNotificationsEnabled: boolean;
+  preferredLanguage: string;
 }
 
 export interface AuthTokens {
