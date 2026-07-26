@@ -23,6 +23,8 @@ export {
 
 // Hooks
 export {
+  useUsers,
+  useUser,
   useCourses,
   useCourseDetail,
   useSections,
