@@ -71,6 +71,8 @@ export {
   useAttachFile,
   useDetachFile,
   useUpcomingAssignments,
+  useUpdateProfile,
+  useChangePassword,
 } from './hooks';
 
 // Types
