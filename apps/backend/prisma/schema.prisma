@@ -59,7 +59,9 @@ model User {
   role            GlobalRole   @default(STUDENT)
   onlineAt        DateTime? // updated on activity; drives online status
   emailVerifiedAt DateTime?
-  createdAt       DateTime     @default(now())
+  emailNotificationsEnabled Boolean  @default(true)
+  preferredLanguage         String   @default("es")
+  createdAt                 DateTime @default(now())
   updatedAt       DateTime     @updatedAt
 
   sessions          Session[]
