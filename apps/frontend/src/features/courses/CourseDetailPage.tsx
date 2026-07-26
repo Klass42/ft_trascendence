@@ -17,6 +17,8 @@ import {
   FormField,
   useToast,
   ConfirmDialog,
+  Tabs,
+  type TabItem,
 } from '@/components/ui';
 import { ContentEditor } from './ContentEditor';
 
@@ -31,6 +33,12 @@ function hashToColor(title: string): string {
     hash = title.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
+}
+
+/** Placeholder — implemented in Task 5 */
+function RosterPage({ courseId }: { courseId: string }) {
+  void courseId;
+  return <div style={{ padding: '26px 40px' }}>Cargando roster…</div>;
 }
 
 export function CourseDetailPage() {
@@ -287,92 +295,115 @@ export function CourseDetailPage() {
         )}
       </div>
 
-      {editing && isTeacher && courseId ? (
-        <ContentEditor courseId={courseId} />
-      ) : (
-        <div style={{ padding: '26px 40px', maxWidth: 820 }}>
-          {sections?.map((sec) => (
-            <div key={sec.id}>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: '.05em',
-                  textTransform: 'uppercase',
-                  color: 'var(--color-text-muted)',
-                  margin: '0 0 8px',
-                }}
-              >
-                {sec.title}
-              </div>
-              <div
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border-primary)',
-                  borderRadius: 13,
-                  overflow: 'hidden',
-                  marginBottom: 18,
-                }}
-              >
-                {sec.lessons?.map((l) => {
-                  const isDone = completedLessons?.includes(l.id);
-                  return (
-                    <div
-                      key={l.id}
-                      onClick={() => !isNotEnrolled && navigate(`/courses/${courseId}/lessons/${l.id}`)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 13,
-                        padding: '13px 16px',
-                        borderBottom: '1px solid var(--color-border-primary)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {isDone ? (
-                        <span
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: '50%',
-                            background: '#0f766e',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flex: 'none',
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
+      {(() => {
+        const lessonListContent = (
+          <div style={{ padding: '26px 40px', maxWidth: 820 }}>
+            {sections?.map((sec) => (
+              <div key={sec.id}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '.05em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                    margin: '0 0 8px',
+                  }}
+                >
+                  {sec.title}
+                </div>
+                <div
+                  style={{
+                    background: 'var(--color-bg-secondary)',
+                    border: '1px solid var(--color-border-primary)',
+                    borderRadius: 13,
+                    overflow: 'hidden',
+                    marginBottom: 18,
+                  }}
+                >
+                  {sec.lessons?.map((l) => {
+                    const isDone = completedLessons?.includes(l.id);
+                    return (
+                      <div
+                        key={l.id}
+                        onClick={() => !isNotEnrolled && navigate(`/courses/${courseId}/lessons/${l.id}`)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 13,
+                          padding: '13px 16px',
+                          borderBottom: '1px solid var(--color-border-primary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isDone ? (
+                          <span
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              background: '#0f766e',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flex: 'none',
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              background: 'var(--color-accent-primary)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flex: 'none',
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                          </span>
+                        )}
+                        <span style={{ flex: 1, fontSize: 14.5, fontWeight: isDone ? 500 : 600, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
+                          {l.title}
                         </span>
-                      ) : (
-                        <span
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: '50%',
-                            background: 'var(--color-accent-primary)',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flex: 'none',
-                          }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                        </span>
-                      )}
-                      <span style={{ flex: 1, fontSize: 14.5, fontWeight: isDone ? 500 : 600, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
-                        {l.title}
-                      </span>
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        );
+
+        if (isTeacher && courseId) {
+          return (
+            <Tabs
+              tabs={[
+                {
+                  id: 'content',
+                  label: 'Contenido',
+                  content: editing
+                    ? <ContentEditor courseId={courseId} />
+                    : lessonListContent,
+                },
+                {
+                  id: 'students',
+                  label: 'Alumnos',
+                  content: <RosterPage courseId={courseId} />,
+                },
+              ] satisfies TabItem[]}
+            />
+          );
+        }
+
+        return lessonListContent;
+      })()}
 
       {/* Edit modal */}
       <Modal
