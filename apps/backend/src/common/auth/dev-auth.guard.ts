@@ -6,7 +6,7 @@ import type { AuthUser } from './auth-user.type';
 
 /**
  * Pre-login dev guard: resolves the `x-dev-user` header (a seeded userId)
- * to a User row and sets `req.user` as the 6-field AuthUser.
+ * to a User row and sets `req.user` as the 8-field AuthUser.
  *
  * - The frontend sends this header automatically when VITE_DEV_USER_ID is set
  *   (apps/frontend/src/lib/api/client.ts).
@@ -45,6 +45,8 @@ export class DevAuthGuard implements CanActivate {
       avatarUrl: user.avatarUrl,
       organizationId: user.organizationId,
       role: user.role,
+      emailNotificationsEnabled: user.emailNotificationsEnabled,
+      preferredLanguage: user.preferredLanguage,
     };
     return true;
   }

@@ -23,6 +23,7 @@ export { FormField, type FormFieldProps, type FieldControlProps } from './FormFi
 export { Textarea, type TextareaProps } from './Textarea';
 export { Select, type SelectProps, type SelectOption } from './Select';
 export { DatePicker, type DatePickerProps } from './DatePicker';
+export { Toggle, type ToggleProps } from './Toggle';
 
 // Overlays
 export { Modal, type ModalProps } from './Modal';

@@ -182,10 +182,47 @@ describe('UsersService', () => {
   // ── updateProfile ──
   describe('updateProfile', () => {
     it('updates name and bio for the caller', async () => {
-      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'New', bio: 'Bio', avatarUrl: null, role: 'STUDENT', onlineAt: null });
+      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'New', bio: 'Bio', avatarUrl: null, role: 'STUDENT', onlineAt: null, email: 'student@demo', organizationId: 'org-klass-0001', emailNotificationsEnabled: true, preferredLanguage: 'es' });
       const r = await service.updateProfile('user-student-0001', { name: 'New', bio: 'Bio' });
       expect(r.name).toBe('New');
-      expect((r as any).email).toBeUndefined();
+      expect(r.email).toBe('student@demo');
+    });
+
+    it('persists preference fields and selects them back (own profile)', async () => {
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser, emailNotificationsEnabled: false, preferredLanguage: 'en',
+      });
+
+      const r = await service.updateProfile('user-student-0001', {
+        emailNotificationsEnabled: false,
+        preferredLanguage: 'en',
+      });
+
+      const args = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(args.data).toEqual({ emailNotificationsEnabled: false, preferredLanguage: 'en' });
+      expect(args.select.emailNotificationsEnabled).toBe(true);
+      expect(args.select.preferredLanguage).toBe(true);
+      expect(r.emailNotificationsEnabled).toBe(false);
+      expect(r.preferredLanguage).toBe('en');
+    });
+
+    it('persists avatarUrl as a plain string', async () => {
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        ...mockUser, avatarUrl: '/api/files/file-1/url',
+      });
+
+      await service.updateProfile('user-student-0001', { avatarUrl: '/api/files/file-1/url' });
+
+      const args = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(args.data).toEqual({ avatarUrl: '/api/files/file-1/url' });
+    });
+
+    it('rejects an invalid preferredLanguage at the DTO level', async () => {
+      const { UpdateProfileDto } = await import('../dto/update-profile.dto');
+      const { validate } = await import('class-validator');
+      const dto = Object.assign(new UpdateProfileDto(), { preferredLanguage: 'fr' });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
     });
   });
 
@@ -228,6 +265,77 @@ describe('UsersService', () => {
       const r = await service.listFriends(ADMIN_ID);
       expect(r).toHaveLength(1);
       expect((r[0] as any).email).toBeUndefined();
+    });
+
+    it('keeps prefs out of the public profile select (listFriends)', async () => {
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.listFriends('user-student-0001');
+
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.select.emailNotificationsEnabled).toBeUndefined();
+      expect(args.select.preferredLanguage).toBeUndefined();
+    });
+  });
+
+  // ── findByIds ──
+  describe('findByIds', () => {
+    it('returns matching users org-scoped (no passwordHash)', async () => {
+      const users = [
+        { id: 'u1', name: 'Alice', email: 'a@demo', avatarUrl: null },
+        { id: 'u2', name: 'Bob', email: 'b@demo', avatarUrl: '/img.png' },
+      ];
+      (prisma.user.findMany as jest.Mock).mockResolvedValue(users);
+
+      const result = await service.findByIds(['u1', 'u2', 'u3'], ORG_ID);
+
+      expect(result).toEqual(users);
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.where).toEqual({ id: { in: ['u1', 'u2', 'u3'] }, organizationId: ORG_ID });
+      expect(args.select.passwordHash).toBeUndefined();
+      expect(args.select.id).toBe(true);
+      expect(args.select.name).toBe(true);
+      expect(args.select.email).toBe(true);
+      expect(args.select.avatarUrl).toBe(true);
+    });
+
+    it('returns empty array for empty ids without calling Prisma', async () => {
+      const result = await service.findByIds([], ORG_ID);
+
+      expect(result).toEqual([]);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── lookupByEmail ──
+  describe('lookupByEmail', () => {
+    it('returns user DTO when found (teacher caller)', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        id: 'u1', name: 'Sam', email: 'sam@demo', avatarUrl: null, role: 'STUDENT',
+      });
+
+      const result = await service.lookupByEmail('sam@demo', ORG_ID, 'TEACHER');
+
+      expect(result).toEqual({ userId: 'u1', name: 'Sam', email: 'sam@demo', avatarUrl: null });
+      const args = (prisma.user.findFirst as jest.Mock).mock.calls[0][0];
+      expect(args.where).toEqual({ organizationId: ORG_ID, email: 'sam@demo' });
+    });
+
+    it('throws NotFoundException when user not found', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.lookupByEmail('ghost@demo', ORG_ID, 'TEACHER'))
+        .rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when teacher looks up ADMIN', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({
+        id: 'u-admin', name: 'Admin', email: 'admin@demo', avatarUrl: null, role: 'ADMIN',
+      });
+
+      await expect(service.lookupByEmail('admin@demo', ORG_ID, 'TEACHER'))
+        .rejects.toThrow(ForbiddenException);
     });
   });
 });

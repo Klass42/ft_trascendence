@@ -50,3 +50,7 @@ export {
 } from './useAnalytics';
 export { useUsers, useUser } from './useUsers';
 export { useOrg, useOrgMembers } from './useOrganization';
+export { useUpdateProfile } from './useUpdateProfile';
+export { useChangePassword, type ChangePasswordInput } from './useChangePassword';
+export { useEnrollments, type EnrollmentRow } from './useEnrollments';
+export { useUsersByIds } from './useUsersByIds';

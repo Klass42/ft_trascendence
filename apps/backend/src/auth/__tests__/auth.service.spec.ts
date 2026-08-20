@@ -1,4 +1,4 @@
-import { ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -17,6 +17,8 @@ const mockUser = {
   role: 'STUDENT' as const,
   onlineAt: null,
   emailVerifiedAt: new Date(),
+  emailNotificationsEnabled: true,
+  preferredLanguage: 'es',
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -111,6 +113,8 @@ describe('AuthService', () => {
         avatarUrl: null,
         organizationId: SEED_ORG_ID,
         role: 'STUDENT',
+        emailNotificationsEnabled: true,
+        preferredLanguage: 'es',
       });
       expect(result.accessToken).toBe('access-token-mock');
       expect(result.refreshToken).toBe('refresh-token-mock');
@@ -252,6 +256,76 @@ describe('AuthService', () => {
     it('does not throw when session already gone', async () => {
       mockSessionFindUnique.mockResolvedValue(null);
       await expect(service.logout('ghost-token')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('changePassword', () => {
+    it('updates the hash and revokes all sessions on success', async () => {
+      const hash = await argon2.hash('Vieja1234');
+      mockUserFindUnique.mockResolvedValue({ ...mockUser, passwordHash: hash });
+      mockUserUpdate.mockResolvedValue({});
+      mockSessionDeleteMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.changePassword('user-student-0001', {
+        currentPassword: 'Vieja1234',
+        newPassword: 'Nueva1234',
+      });
+
+      expect(result).toEqual({ changed: true });
+      const updateData = (mockUserUpdate.mock.calls[0][0] as { data: { passwordHash: string } }).data;
+      expect(await argon2.verify(updateData.passwordHash, 'Nueva1234')).toBe(true);
+      expect(mockSessionDeleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
+    });
+
+    it('throws 400 when the current password is wrong (hash and sessions untouched)', async () => {
+      const hash = await argon2.hash('Vieja1234');
+      mockUserFindUnique.mockResolvedValue({ ...mockUser, passwordHash: hash });
+
+      await expect(
+        service.changePassword('user-student-0001', { currentPassword: 'Mal12345', newPassword: 'Nueva1234' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockSessionDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 for OAuth-only accounts (passwordHash null)', async () => {
+      mockUserFindUnique.mockResolvedValue({ ...mockUser, passwordHash: null });
+
+      await expect(
+        service.changePassword('user-google-0001', { currentPassword: 'x', newPassword: 'Nueva1234' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it('throws 401 when the user no longer exists', async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePassword('ghost', { currentPassword: 'x', newPassword: 'Nueva1234' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('rejects a weak new password at the DTO level', async () => {
+      const { ChangePasswordDto } = await import('../dto/change-password.dto');
+      const { validate } = await import('class-validator');
+      const dto = Object.assign(new ChangePasswordDto(), {
+        currentPassword: 'Vieja1234',
+        newPassword: 'debil',
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects unknown fields through the global ValidationPipe config', async () => {
+      const { ValidationPipe, BadRequestException: BRE } = await import('@nestjs/common');
+      const { ChangePasswordDto } = await import('../dto/change-password.dto');
+      const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+      await expect(
+        pipe.transform(
+          { currentPassword: 'Vieja1234', newPassword: 'Nueva1234', isAdmin: true },
+          { type: 'body', metatype: ChangePasswordDto },
+        ),
+      ).rejects.toThrow(BRE);
     });
   });
 

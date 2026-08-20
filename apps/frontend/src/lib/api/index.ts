@@ -23,6 +23,8 @@ export {
 
 // Hooks
 export {
+  useUsers,
+  useUser,
   useCourses,
   useCourseDetail,
   useSections,
@@ -71,6 +73,10 @@ export {
   useAttachFile,
   useDetachFile,
   useUpcomingAssignments,
+  useUpdateProfile,
+  useChangePassword,
+  useEnrollments,
+  useUsersByIds,
 } from './hooks';
 
 // Types
