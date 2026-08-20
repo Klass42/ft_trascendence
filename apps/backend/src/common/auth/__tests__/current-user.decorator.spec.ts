@@ -7,6 +7,7 @@ describe('currentUserFactory (@CurrentUser)', () => {
     const user: AuthUser = {
       userId: 'user-1', email: 'a@b.co', name: 'A',
       avatarUrl: null, organizationId: 'org-1', role: 'STUDENT',
+      emailNotificationsEnabled: true, preferredLanguage: 'es',
     };
     const ctx = {
       switchToHttp: () => ({ getRequest: () => ({ user }) }),

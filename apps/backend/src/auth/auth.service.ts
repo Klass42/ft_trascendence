@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -12,6 +13,7 @@ import { PrismaService } from '@/prisma/prisma.service';
 import type { AuthUser } from '@/common/auth/auth-user.type';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
+import type { ChangePasswordDto } from './dto/change-password.dto';
 
 const SEED_ORG_ID = 'org-klass-0001';
 
@@ -26,6 +28,7 @@ export class AuthService {
   private mapUser(user: {
     id: string; email: string; name: string; avatarUrl: string | null;
     organizationId: string; role: 'ADMIN' | 'TEACHER' | 'STUDENT';
+    emailNotificationsEnabled: boolean; preferredLanguage: string;
   }): AuthUser {
     return {
       userId: user.id,
@@ -34,6 +37,8 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       organizationId: user.organizationId,
       role: user.role,
+      emailNotificationsEnabled: user.emailNotificationsEnabled,
+      preferredLanguage: user.preferredLanguage,
     };
   }
 
@@ -199,6 +204,27 @@ export class AuthService {
     if (session) {
       await this.prisma.session.delete({ where: { id: session.id } });
     }
+  }
+
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<{ changed: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException('Account has no password (OAuth only)');
+    }
+    const valid = await argon2.verify(user.passwordHash, dto.currentPassword);
+    if (!valid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+    const passwordHash = await argon2.hash(dto.newPassword);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.prisma.session.deleteMany({ where: { userId } });
+    return { changed: true };
   }
 
   async getMe(userId: string): Promise<AuthUser> {

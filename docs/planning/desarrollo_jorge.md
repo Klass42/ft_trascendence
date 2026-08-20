@@ -22,9 +22,18 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
 
 ## 1. Estado
 
-- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `origin/staging`
-  (fast-forward a `94fbf924` el 2026-07-17 tras merge de infra de Ale +
-  fix de NotificationsService).
+- **Rama:** `jorge` (tracking `origin/jorge`). Sincronizada con `staging` en
+  `4d526010` (2026-07-26, fast-forward) — trajo Fase A completa de Aloiki
+  (A1/A2/StudentDashboard), David (D0, A7, A4-teacher, A6b presence, **B1 motor
+  de actividades backend + B2a UI de autoría**) y mi propio Epic 7 mergeado.
+- **Plan 1 (`Jorge.md`) COMPLETO:** Epics 1-7c shipped (backend auth/org/users/
+  RBAC + frontend auth/admin/org). Epic 8 (2FA TOTP) es stretch, fuera de Fase A.
+- **Plan 2 (`Jorge-2.md`, Fase A rediseño LMS):**
+  - ✅ A6a (integrar frontend Org) — cerrada con el merge de Epic 7 a staging.
+  - ✅ **A5 (Perfil y cuenta reales) — implementada** (Bloque 11). 13 commits, 269 tests, E2E verde.
+  - ✅ **A3 (Roster) — implementada** (Bloque 12). 6 commits, 274 tests, E2E escrito (pendiente run).
+  - ⬜ A4-admin (des-mockear AdminDashboard) — pendiente.
+- **Estructura elegida:** 3 specs independientes (patrón Plan 1), orden A5 → A3 → A4-admin.
 - **Epicas completadas:**
   - Epic 1 (Auth contracts + seed). 9 commits desde `eb53db12`.
     PR abierto a `staging`. Spec: `docs/superpowers/specs/2026-07-09-epic1-auth-contracts-seed-design.md`.
@@ -53,10 +62,10 @@ siempre viene de un contrato de frontend/Aloiki que cambió.
   - Implementado: 5 commits (`113a22db..449bd850`).
   - Build `pnpm -r run build` limpio. API smoke: org info, 6 members, teacher RBAC 403.
 - **Epic 7 completo:** Epics 7a (auth pages), 7b (admin users), 7c (org). Todo frontend de Jorge shipped.
-- **Siguiente:** smoke browser final → `finishing-a-development-branch`.
-- **Tests:** 118 tests, 19 suites, 0 fallos (backend). Frontend sin infra de tests.
-- **Runtime:** `make up` ✅ · backend arranca limpio · auth (login/register/refresh/logout/me/google) operativo · users/organizations CRUD operativo · staging actualizado con infra simplificada de Ale (Caddy, docker-compose.yml rename, prisma migrations).
-- **Siguiente:** revisión de spec de 7b → `writing-plans` → PAUSE (el usuario cambia de modelo) → implementación.
+- **Tests:** 274 tests backend (25 suites, 0 fallos) · E2E: profile 3/3 + roster pendiente de run.
+- **AuthUser contrato:** 8 campos (`emailNotificationsEnabled` + `preferredLanguage` añadidos en A5).
+- **Runtime:** `make up` ✅ · backend arranca limpio · auth operativo (login/register/change-password).
+- **Siguiente:** A4-admin (des-mockear AdminDashboard) → luego PR a staging.
 
 ---
 
@@ -305,6 +314,80 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 **Próximo paso:** smoke browser manual final → `finishing-a-development-branch` para PR a `staging`.
 
+### Bloque 10 — 2026-07-26 — Plan 2 arranque: sync + brainstorm + spec A5
+- ✅ Merge `staging` → `jorge` (fast-forward `ee821f44..4d526010`, 133 ficheros): Fase A de
+  Aloiki completa (A1 autoría cursos, A2 ContentBuilder, StudentDashboard), David (D0, A7,
+  A4-teacher, A6b presence, **B1 motor actividades + B2a UI autoría**), y confirmación de que mi
+  Epic 7 (admin + org pages) ya está en staging → **A6a cerrada**.
+- ✅ Auditoría de Plan 1 (`Jorge.md`): todo hecho (Epics 4-6 estaban marcados "pending" en el
+  doc pero implementados; Epic 8 2FA = stretch, fuera de Fase A). → Toca Plan 2 (`Jorge-2.md`).
+- ✅ Auditoría de Plan 2: pendientes **A3** (roster — no hay pestaña "Alumnos"), **A5** (perfil:
+  toggles falsos, avatar no persiste, no hay change-password), **A4-admin** (AdminDashboard
+  100% mock).
+- ✅ Contexto guardado en engram (grafo de conocimiento): estado del Plan 2 + decisiones A5/A3.
+- ✅ Brainstorming skill (4 preguntas): alcance = Plan 2 con **3 specs independientes**, orden
+  **A5 → A3 → A4-admin**. Decisiones A5: prefs REALES (`emailNotificationsEnabled` +
+  `preferredLanguage` en User), schema vía **`db push`** (reconciliación de migraciones = tarea
+  aparte con Ale), change-password **revoca todas las sesiones** y fuerza re-login, error de
+  contraseña actual = **400 (no 401)** por el interceptor de refresh del api-client, 2FA =
+  Badge "Próximamente", avatar se persiste vía `PATCH /users/me {avatarUrl}` tras FileUpload.
+  Decisión A3 (adelantada): lookup por email = nuevo `GET /users/lookup?email=` en mi módulo
+  users (org-scoped, TEACHER/ADMIN).
+- ✅ Spec escrita: `docs/superpowers/specs/2026-07-26-a5-profile-account-design.md`.
+  Auto-revisión: añadida nota de race condition en el E2E (dev-user-id vs redirect a /login).
+- ✅ Spec aprobada por el usuario.
+- ✅ Plan escrito: `docs/superpowers/plans/2026-07-26-a5-profile-account.md` (12 tareas, TDD,
+  commits por tarea). Self-review: capturados 2 fallos antes de ejecutar — (1) `lib/api/index.ts`
+  re-exporta hooks POR NOMBRE (hay que tocar 2 barrels), (2) `React.ChangeEvent` → import
+  `type ChangeEvent` de react. Detectado también en Task 2: 3 specs con literales de AuthUser
+  de 6 campos (auth.service, jwt.strategy, dev-auth.guard) que hay que actualizar.
+- ⬜ Ejecución del plan (el usuario elige subagent-driven vs inline; posible PAUSE para cambio
+  de modelo).
+- ✅ **A5 implementada completo — Bloque 11 (subagent-driven, tareas 1-12).**
+  Ver abajo §4 para el log detallado.
+
+**Próximo paso:** A5 completa. Siguiente: **A3 — Roster** (pestaña "Alumnos" en curso).
+brainstorm → spec → plan → implementación.
+
+### Bloque 11 — 2026-07-26 — A5 implementación completa (subagent-driven) ✅
+
+Implementado vía `subagent-driven-development` skill con 12 tareas. Cada tarea pasó por
+implementador → spec compliance review → code quality review antes de pasar a la siguiente.
+Se usaron 3 agentes por tarea (~36 invocaciones totales).
+
+| Task | Commit | Descripción |
+|------|--------|-------------|
+| 1 | `a88989be` | Schema: `emailNotificationsEnabled` + `preferredLanguage` en User, db push |
+| 2 | `7b33dc81` | AuthUser 6→8 campos (3 sitios prod + 6 specs). tsc cazó 3 extras |
+| 2 fix | `3771b16d` | JSDoc DevAuthGuard (6→8) |
+| 2 fix | `c7dca177` | Precisión JSDoc AuthUser |
+| 3 | `9410b862` | `ChangePasswordDto` + `AuthService.changePassword` (TDD, 6 tests) |
+| 4 | `9094204d` | Ruta `POST /auth/change-password` en controllador |
+| 5 | `32a580d1` | `UpdateProfileDto` + `selectOwnProfile` (TDD, 4 tests) |
+| 5 fix | `479aff96` | Fix assertion obsoleta en test updateProfile |
+| 6 | `c32dc330` | Frontend AuthUser 8 campos + MOCK_USER |
+| 7 | `8cef2715` | Toggle accesible (`role=switch`) en design system |
+| 8 | `32a3d40c` | Hooks `useUpdateProfile` + `useChangePassword` (+ barrels dobles) |
+| 9 | `18a47f7a` | ProfilePage real (3 Cards: Identidad, Seguridad, Preferencias) |
+| 11 | (*pendiente*) | E2E `profile.spec.ts` (se commitea con este bloque) |
+
+**Números:** 13 commits de código (269 tests backend, 0 fallos) · 3 tests E2E (pasados contra
+backend dev + frontend dev + postgres de docker). Cobertura E2E: nombre persiste · prefs
+(email + idioma) persisten · change-password revoca sesiones (old refresh 401, old login 401,
+new login 200/201) + toast y redirect a /login en UI.
+
+**Decisiones de implementación capturadas en self-review:**
+- `lib/api/index.ts` re-exporta hooks POR NOMBRE → los hooks nuevos se añaden en DOS barrels
+- Login de NestJS sin `@HttpCode` devuelve 201 (no 200) — E2E usa `ok()`
+- E2E de contraseña no puede probar UI de login con dev activo (VITE_DEV_USER_ID env) → API
+  assertion en vez de UI
+- tsc cazó 3 literales AuthUser extra no listados en el plan (auth.e2e.spec.ts,
+  organizations.controller.spec.ts, current-user.decorator.spec.ts)
+- Docker compose Caddy no arranca por conflicto puerto 9090 (Prometheus) — smoke se hizo
+  con backend dev local contra postgres del compose
+
+**Siguiente:** A3 — Roster (pestaña "Alumnos" en curso).
+
 ---
 
 ## 5. Decisiones de diseño (resumen — ver spec para detalle)
@@ -324,10 +407,11 @@ existe `make db-seed`** — Epic 1 lo añade. Define `PRISMA := pnpm --filter
 
 ## 6. Próximos pasos (inmediatos)
 
-1. ~~Commitear docs, ejecutar Bloque 1, PR a `staging`.~~ ✅ Hecho (PR #2).
-2. ~~Brainstorm Epic 2 + spec + plan + implementación.~~ ✅ Hecho (Bloque 2).
-3. ~~Brainstorm Epic 3 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3).
-4. ~~Brainstorm Epic 4 + spec + plan + implementación.~~ ✅ Hecho (Bloque 3b).
-5. **PR a `staging`** con Epics 1-4.
-6. **Brainstorm Epic 5** (Advanced permissions — admin user CRUD, role management).
-7. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por `organizationId`.
+1. ~~Plan 1 (Epics 1-7c)~~ ✅ Completo y mergeado a `staging`.
+2. ~~**A5 — Perfil y cuenta reales:** spec → plan → implementación.~~ ✅ Completa. 13 commits, 269 tests backend, 3 E2E verdes.
+3. **A3 — Roster:** pestaña "Alumnos" en curso (staff). Pendiente de brainstoming + spec.
+4. **A4-admin — Des-mockear AdminDashboard:** backend datos reales, UI reescrita (design system).
+5. **Deuda conjunta con Ale:** reconciliar historia de migraciones Prisma (drift
+   `migrations/_init` vs `db push`; lo dejó David anotado en D0).
+6. Seguimiento de seguridad: scope `GET /files/:id/url` y `DELETE /files/:id` por
+   `organizationId`. Rate-limiting en auth endpoints (login/change-password).
