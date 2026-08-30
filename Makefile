@@ -6,14 +6,21 @@ PRISMA := pnpm --filter @ft-trascendence/backend exec prisma
 # ─── Nix Check & Install (Sin Sudo) ───────────────────────
 nix-check:
 	@if ! command -v nix > /dev/null 2>&1; then \
-		echo "\033[1;33mNix no está instalado. Iniciando instalación en modo usuario (sin sudo)...\033[0m"; \
-		curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm; \
-		if [ -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then \
-			. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh; \
+		echo "\033[1;33mNix no está instalado. Iniciando instalación monousuario (sin sudo)...\033[0m"; \
+		curl -L https://nixos.org/nix/install | sh -s -- --no-daemon; \
+		echo "\033[1;36mConfigurando PATH y recargando entorno...\033[0m"; \
+		if [ -f $$HOME/.nix-profile/etc/profile.d/nix.sh ]; then \
+			. $$HOME/.nix-profile/etc/profile.d/nix.sh; \
 		fi; \
 	else \
 		echo "\033[1;32mNix ya está instalado.\033[0m"; \
 	fi
+	@if [ -f $$HOME/.nix-profile/etc/profile.d/nix.sh ]; then \
+		. $$HOME/.nix-profile/etc/profile.d/nix.sh; \
+	fi
+	@echo 'export PATH="$$HOME/.nix-profile/bin:$$PATH"' >> $$HOME/.bashrc
+	@echo 'if [ -e $$HOME/.nix-profile/etc/profile.d/nix.sh ]; then . $$HOME/.nix-profile/etc/profile.d/nix.sh; fi' >> $$HOME/.bashrc
+	@echo "\033[1;32m¡Nix configurado con éxito! Ejecuta 'source ~/.bashrc' si lo necesitas en otras terminales abiertas.\033[0m"
 
 # ─── General ───────────────────────────────────────────────
 help: ## Muestra esta ayuda
