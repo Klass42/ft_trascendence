@@ -40,6 +40,7 @@ const mkJwtService = () => ({
   decode: jest.fn(),
 }) as unknown as JwtService;
 
+let mockOrganizationUpsert: jest.Mock;
 let mockUserFindFirst: jest.Mock;
 let mockUserCreate: jest.Mock;
 let mockSessionCreate: jest.Mock;
@@ -53,6 +54,9 @@ let mockOAuthAccountFindUnique: jest.Mock;
 let mockOAuthAccountCreate: jest.Mock;
 
 const mkPrisma = () => ({
+  organization: {
+    upsert: (...a: unknown[]) => mockOrganizationUpsert(...a),
+  },
   user: {
     findFirst: (...a: unknown[]) => mockUserFindFirst(...a),
     create: (...a: unknown[]) => mockUserCreate(...a),
@@ -77,6 +81,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    mockOrganizationUpsert = jest.fn().mockResolvedValue({ id: SEED_ORG_ID });
     mockUserFindFirst = jest.fn();
     mockUserCreate = jest.fn();
     mockSessionCreate = jest.fn();
@@ -118,6 +123,11 @@ describe('AuthService', () => {
       });
       expect(result.accessToken).toBe('access-token-mock');
       expect(result.refreshToken).toBe('refresh-token-mock');
+      expect(mockOrganizationUpsert).toHaveBeenCalledWith({
+        where: { id: SEED_ORG_ID },
+        update: {},
+        create: { id: SEED_ORG_ID, name: 'Klass Academy', slug: 'klass' },
+      });
     });
 
     it('throws 409 on duplicate email within org', async () => {

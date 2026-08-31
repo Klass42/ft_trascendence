@@ -15,7 +15,7 @@ import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { ChangePasswordDto } from './dto/change-password.dto';
 
-const SEED_ORG_ID = 'org-klass-0001';
+const DEFAULT_ORG_ID = 'org-klass-0001';
 
 @Injectable()
 export class AuthService {
@@ -44,6 +44,18 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private async ensureDefaultOrganization(): Promise<void> {
+    await this.prisma.organization.upsert({
+      where: { id: DEFAULT_ORG_ID },
+      update: {},
+      create: {
+        id: DEFAULT_ORG_ID,
+        name: 'Klass Academy',
+        slug: 'klass',
+      },
+    });
   }
 
   private async issueTokens(userId: string): Promise<{
@@ -85,8 +97,10 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
+    await this.ensureDefaultOrganization();
+
     const existing = await this.prisma.user.findFirst({
-      where: { organizationId: SEED_ORG_ID, email: dto.email },
+      where: { organizationId: DEFAULT_ORG_ID, email: dto.email },
     });
     if (existing) {
       throw new ConflictException('Email already registered in this organization');
@@ -97,7 +111,7 @@ export class AuthService {
 
     const user = await this.prisma.user.create({
       data: {
-        organizationId: SEED_ORG_ID,
+        organizationId: DEFAULT_ORG_ID,
         email: dto.email,
         name: dto.name,
         passwordHash,
@@ -125,7 +139,7 @@ export class AuthService {
     refreshToken: string;
   }> {
     const user = await this.prisma.user.findFirst({
-      where: { organizationId: SEED_ORG_ID, email: dto.email },
+      where: { organizationId: DEFAULT_ORG_ID, email: dto.email },
     });
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
@@ -257,6 +271,8 @@ export class AuthService {
     name: string;
     avatarUrl: string | null;
   }): Promise<{ accessToken: string; refreshToken: string }> {
+    await this.ensureDefaultOrganization();
+
     const oauthAccount = await this.prisma.oAuthAccount.findUnique({
       where: {
         provider_providerUserId: {
@@ -272,7 +288,7 @@ export class AuthService {
       userId = oauthAccount.userId;
     } else {
       const existingUser = await this.prisma.user.findFirst({
-        where: { organizationId: SEED_ORG_ID, email: profile.email },
+        where: { organizationId: DEFAULT_ORG_ID, email: profile.email },
       });
 
       if (existingUser) {
@@ -287,7 +303,7 @@ export class AuthService {
       } else {
         const newUser = await this.prisma.user.create({
           data: {
-            organizationId: SEED_ORG_ID,
+            organizationId: DEFAULT_ORG_ID,
             email: profile.email,
             name: profile.name,
             avatarUrl: profile.avatarUrl,
