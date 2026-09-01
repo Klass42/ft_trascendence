@@ -8,8 +8,6 @@ WORKDIR /app
 # Copy workspace config
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
 COPY apps/backend/package.json apps/backend/
-
-# Install dependencies
 RUN pnpm install --frozen-lockfile --filter @ft-trascendence/backend
 
 # Copy source and build

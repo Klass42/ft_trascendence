@@ -34,9 +34,11 @@ Thumbs.db
 # Docker volumes
 docker-data/
 
-# Nix
+# Nix / nix-portable (binary + extracted store live under .cache/)
 result
 result-*
+.cache/nix-portable/
+nix-portable
 
 # TypeScript
 *.tsbuildinfo

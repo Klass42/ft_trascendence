@@ -1,3 +1,4 @@
+# Listen / remote-write ports MUST match .env.example (TEMPO_PORT, PROMETHEUS_PORT).
 stream_over_http_enabled: true
 
 server:

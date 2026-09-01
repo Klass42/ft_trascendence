@@ -1,10 +1,6 @@
 {
   description = "ft_trascendence - LMS Platform with full observability stack";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # NOTE: this flake provides ONLY devShells (dev/debug/ci). Production images
-  # are built from apps/{backend,frontend}/Dockerfile via docker-compose.prod.yml
-  # — see infra/docker/. The previous Nix OCI image outputs were removed because
-  # they never packaged dist/ (broken-by-design) and were not wired to any compose.
   outputs = { self, nixpkgs }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
@@ -26,15 +22,9 @@
           pkgs.docker-compose
           pkgs.skopeo
         ];
-        k8sPackages = [
-          pkgs.kubectl
-          pkgs.kubernetes-helm
-          pkgs.k9s
-          pkgs.kustomize
-        ];
       in {
         dev = pkgs.mkShell {
-          packages = commonPackages ++ nodePackages ++ containerPackages ++ k8sPackages;
+          packages = commonPackages ++ nodePackages ++ containerPackages;
           env.profile = "DEV";
           shellHook = ''
             echo "ft_trascendence dev environment loaded"

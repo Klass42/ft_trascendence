@@ -1,39 +1,50 @@
 # ft_trascendence — Caddy reverse proxy
-# Terminates TLS for ALL external connections. HTTP on :80 → HTTPS redirect.
-# Monitoring accessed via HTTPS on their standard ports.
+# All listen ports, upstreams, and the public domain come from .env.example
+# (injected as container env; Caddy expands {$VAR}).
 #
-# Caddy auto-generates certificates:
-#   - For "localhost": internal CA (self-signed)
-#   - For a real domain: Let's Encrypt (needs port 80 reachable from internet)
+# TLS:
+#   - "localhost": internal CA (self-signed)
+#   - real domain: Let's Encrypt (needs port 80 reachable from the internet)
 
-# HTTP → HTTPS redirect (catch-all on port 80)
-http:// {
-	redir https://{host}{uri}
+# HTTP → HTTPS redirect (include HTTPS port — campus is not on :443)
+http://:{$CADDY_HTTP_PORT} {
+	redir {$APP_URL}{uri}
 }
 
 # ─── Application ──────────────────────────────────────────
-{$CADDY_DOMAIN} {
+{$CADDY_DOMAIN}:{$CADDY_HTTPS_PORT} {
 	handle /health {
-		reverse_proxy backend:3000
+		reverse_proxy {$BACKEND_HOST}:{$BACKEND_PORT}
 	}
+
+	# Strip /api prefix — Nest has no global prefix (matches Vite + nginx).
+	handle_path /api* {
+		reverse_proxy {$BACKEND_HOST}:{$BACKEND_PORT}
+	}
+
+	# Socket.io (Epic E) — WebSocket upgrade is automatic in reverse_proxy.
+	handle /socket.io* {
+		reverse_proxy {$BACKEND_HOST}:{$BACKEND_PORT}
+	}
+
 	handle {
-		reverse_proxy frontend:80
+		reverse_proxy {$FRONTEND_HOST}:{$FRONTEND_PORT}
 	}
 }
 
-# ─── Monitoring (HTTPS, same domain, different ports) ─────
-{$CADDY_DOMAIN}:3001 {
-	reverse_proxy grafana:3000
+# ─── Monitoring (HTTPS, same domain, dedicated host ports) ─
+{$CADDY_DOMAIN}:{$GRAFANA_HOST_PORT} {
+	reverse_proxy {$GRAFANA_HOST}:{$GRAFANA_PORT}
 }
 
-{$CADDY_DOMAIN}:9090 {
-	reverse_proxy prometheus:9090
+{$CADDY_DOMAIN}:{$PROMETHEUS_HOST_PORT} {
+	reverse_proxy {$PROMETHEUS_HOST}:{$PROMETHEUS_PORT}
 }
 
-{$CADDY_DOMAIN}:3200 {
-	reverse_proxy tempo:3200
+{$CADDY_DOMAIN}:{$TEMPO_HOST_PORT} {
+	reverse_proxy {$TEMPO_HOST}:{$TEMPO_PORT}
 }
 
-{$CADDY_DOMAIN}:3100 {
-	reverse_proxy loki:3100
+{$CADDY_DOMAIN}:{$LOKI_HOST_PORT} {
+	reverse_proxy {$LOKI_HOST}:{$LOKI_PORT}
 }

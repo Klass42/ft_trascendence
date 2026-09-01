@@ -117,30 +117,40 @@ non-free (SSPL/BSL/RSAL) — this excludes post-2024 Redis and MongoDB. That's w
 ```
 apps/backend      NestJS 10 API (OTel-instrumented). Only /, /health exist today.
 apps/frontend     Vite + React 19 SPA (currently a health dashboard).
-infra/docker      docker-compose.dev.yml  (app + postgres + full observability).
+infra/docker      docker-compose.yml + .env.example (app + postgres + observability + Caddy).
 infra/monitoring  otel-collector, prometheus, tempo, loki, grafana configs + dashboards.
 infra/k8s         k8s manifests + HPA (aspirational; compose is the dev/eval path).
 infra/nix         Nix-built OCI images (backend/frontend).
-flake.nix         devShells: dev / debug / ci.
+flake.nix         devShells: dev / debug / ci (entered via nix-portable, not a Nix install).
 Makefile          task runner (see below).
+infra/docker/.env.example  single source of truth for ports, URLs, image tags, credentials.
 MVP_DESIGN.md     product plan (partly stale — see §1).
 ```
 
 Common commands (prefer the Makefile):
 
 ```bash
-make up          # docker compose up -d  (full dev stack + observability)
-make down        # stop; make down-v also drops volumes
+make             # default: nix-portable + compose up --build from .env.example + seed
+make up          # same as `make`
+make help        # list targets
+make down        # stop; make fclean also drops volumes
 make logs        # follow logs; make logs-backend for just the API
 make status      # compose ps
-make build       # pnpm -r run build
-make deps        # pnpm install
+make dev         # nix-portable → flake devShell (Node 22, pnpm, docker)
+make ci          # nix-portable → flake ci shell + scripts/ci.sh
+make env         # create infra/docker/.env from .env.example (local overlays)
 pnpm dev         # run apps in watch mode (parallel)
 pnpm -r run lint # lint all packages
 ```
 
-Dev ports: frontend `5173`, backend `3000`, Grafana `3001` (admin/admin), Prometheus `9090`,
-Tempo `3200`, Loki `3100`, OTel `4317`/`4318`.
+Ports, public URLs, image tags, and credentials live in **`infra/docker/.env.example`**.
+Compose and the Makefile import that file (`--env-file`); optional `infra/docker/.env`
+overlays it. Do not hardcode ports in the Makefile or compose.
+
+Default published URLs (change in `.env.example`; unprivileged 41xx for campus):
+App `https://localhost:4443`, Grafana `https://localhost:4150` (admin/admin),
+Prometheus `:4160`, Tempo `:4161`, Loki `:4165`. HTTP redirect `:4180`.
+Dev-without-compose: frontend `5173`, backend `3000`.
 
 ## 7. Code conventions
 
@@ -149,8 +159,9 @@ Tempo `3200`, Loki `3100`, OTel `4317`/`4318`.
   other import) or instrumentation breaks.
 - Frontend talks to the API via `/api` (Vite proxy in dev, nginx proxy in the image).
 - Validate every input in **both** layers (class-validator/DTOs on Nest; form validation on React).
-- No secrets in code or committed env files. Exception: `infra/docker/.env.dev` is intentionally
-  committed (non-secret dev defaults) and whitelisted in `.gitignore`.
+- No secrets in code or gitignored `.env` files. The committed contract is
+  `infra/docker/.env.example` (non-secret dev defaults: ports, URLs, placeholder
+  credentials). Real secrets go in gitignored `infra/docker/.env` (`make env`).
 - Conventional-style commit prefixes already in use (`infra:`, `init:`); keep them.
 
 ## 8. Definition of Done (per feature)

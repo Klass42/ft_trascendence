@@ -41,13 +41,14 @@ directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
 ## Working here
 
-- Prefer the **Makefile** (`make up`, `make down`, `make logs`, `make build`). Full dev stack +
-  observability comes up with `make up`.
+- Prefer the **Makefile** (`make up`, `make down`, `make logs`). Full dev stack +
+  observability comes up with `make up`. Ports/URLs live in `infra/docker/.env.example`.
+  Local Nix is **nix-portable** (`make dev` / `make ci`), not a system Nix install.
 - **Every tenant-scoped DB query must filter by `organizationId`** — a missing filter is a
   security bug, not a style nit.
 - Keep `import './telemetry/otel-sdk'` as the **first line of `apps/backend/src/main.ts`**.
 - Validate inputs in **both** frontend and backend — it's a mandatory requirement.
-- Don't commit secrets. `infra/docker/.env.dev` is the one intentionally-committed env file.
+- Don't commit secrets. `infra/docker/.env.example` is the committed contract; real values go in gitignored `infra/docker/.env`.
 - When you touch modules/points or the schema, re-check the real rules in `en.subject.pdf`, not
   MVP_DESIGN.
 
