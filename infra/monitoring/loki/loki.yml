@@ -1,3 +1,4 @@
+# Listen port MUST match params.env LOKI_PORT.
 auth_enabled: false
 
 server:

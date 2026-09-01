@@ -4,7 +4,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: $PROMETHEUS_URL
     isDefault: true
     jsonData:
       httpMethod: POST
@@ -18,7 +18,7 @@ datasources:
     type: tempo
     access: proxy
     uid: tempo
-    url: http://tempo:3200
+    url: $TEMPO_URL
     jsonData:
       httpMethod: GET
       tracesToMetrics:
@@ -49,7 +49,7 @@ datasources:
     type: loki
     access: proxy
     uid: loki
-    url: http://loki:3100
+    url: $LOKI_URL
     jsonData:
       derivedFields:
         - datasourceUid: tempo

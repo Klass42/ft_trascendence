@@ -1,19 +1,21 @@
+# Endpoints and listen ports come from params.env via ${env:VAR}
+# (OpenTelemetry Collector env expansion). Hostnames stay as compose service names.
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317
+        endpoint: 0.0.0.0:${env:OTEL_GRPC_PORT}
       http:
-        endpoint: 0.0.0.0:4318
+        endpoint: 0.0.0.0:${env:OTEL_HTTP_PORT}
 
 processors:
   batch:
-    timeout: 5s
-    send_batch_size: 1024
+    timeout: ${env:OTEL_BATCH_TIMEOUT}
+    send_batch_size: ${env:OTEL_BATCH_SIZE}
   memory_limiter:
     check_interval: 1s
-    limit_mib: 512
-    spike_limit_mib: 128
+    limit_mib: ${env:OTEL_MEMORY_LIMIT_MIB}
+    spike_limit_mib: ${env:OTEL_MEMORY_SPIKE_MIB}
   resource:
     attributes:
       - key: service.instance.id
@@ -21,25 +23,21 @@ processors:
         action: upsert
 
 exporters:
-  # Metrics -> Prometheus
   prometheusremotewrite:
-    endpoint: http://prometheus:9090/api/v1/write
+    endpoint: ${env:PROMETHEUS_REMOTE_WRITE_URL}
     resource_to_telemetry_conversion:
       enabled: true
 
-  # Traces -> Tempo
   otlp/tempo:
-    endpoint: tempo:4317
+    endpoint: ${env:TEMPO_OTLP_ENDPOINT}
     tls:
       insecure: true
 
-  # Logs -> Loki
   otlphttp/loki:
-    endpoint: http://loki:3100/otlp
+    endpoint: ${env:LOKI_OTLP_ENDPOINT}
     tls:
       insecure: true
 
-  # Debug (stdout) - useful during development
   debug:
     verbosity: basic
 
@@ -64,4 +62,4 @@ service:
     logs:
       level: info
     metrics:
-      address: 0.0.0.0:8888
+      address: 0.0.0.0:${env:OTEL_METRICS_PORT}

@@ -1,3 +1,5 @@
+# Scrape targets use docker service names. Ports MUST match params.env:
+#   PROMETHEUS_PORT, OTEL_METRICS_PORT, BACKEND_PORT
 global:
   scrape_interval: 15s
   evaluation_interval: 15s

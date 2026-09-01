@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 #  ft_trascendence — CI pipeline
-#  Run locally with:  make ci   (uses the Nix `ci` devShell)
+#  Run locally with:  make ci   (nix-portable + flake `ci` devShell)
 #  Run in GitHub Actions via .github/workflows/ci.yaml
 #
 #  Blocking checks (fail CI): infra linters + build + schema validation.

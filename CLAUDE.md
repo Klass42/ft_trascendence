@@ -41,8 +41,9 @@ directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
 ## Working here
 
-- Prefer the **Makefile** (`make up`, `make down`, `make logs`, `make build`). Full dev stack +
-  observability comes up with `make up`.
+- Prefer the **Makefile** (`make up`, `make down`, `make logs`). Full dev stack +
+  observability comes up with `make up`. Ports/URLs live in `infra/docker/params.env`.
+  Local Nix is **nix-portable** (`make dev` / `make ci`), not a system Nix install.
 - **Every tenant-scoped DB query must filter by `organizationId`** — a missing filter is a
   security bug, not a style nit.
 - Keep `import './telemetry/otel-sdk'` as the **first line of `apps/backend/src/main.ts`**.

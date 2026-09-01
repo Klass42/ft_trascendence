@@ -2,8 +2,10 @@
   description = "ft_trascendence - LMS Platform with full observability stack";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   # NOTE: this flake provides ONLY devShells (dev/debug/ci). Production images
-  # are built from apps/{backend,frontend}/Dockerfile via docker-compose.prod.yml
-  # — see infra/docker/. The previous Nix OCI image outputs were removed because
+  # are built from apps/{backend,frontend}/Dockerfile via infra/docker/docker-compose.yml
+  # (params in infra/docker/params.env). Enter these shells with `make dev` / `make ci`
+  # (nix-portable on Linux — no Nix daemon install). The previous Nix OCI image outputs
+  # were removed because
   # they never packaged dist/ (broken-by-design) and were not wired to any compose.
   outputs = { self, nixpkgs }:
     let
