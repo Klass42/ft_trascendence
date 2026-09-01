@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator';
@@ -35,16 +36,21 @@ export class AppAuthGuard implements CanActivate {
     if (isPublic) return true;
 
     try {
-      return await (this.jwtAuthGuard.canActivate(ctx) as Promise<boolean>);
+      const allowed = await (this.jwtAuthGuard.canActivate(ctx) as Promise<boolean>);
+      this.assertTenantRoute(ctx); return allowed;
     } catch {
       if (process.env.NODE_ENV !== 'production') {
         try {
-          return await this.devAuthGuard.canActivate(ctx);
+          const allowed = await this.devAuthGuard.canActivate(ctx); this.assertTenantRoute(ctx); return allowed;
         } catch {
           throw new UnauthorizedException();
         }
       }
       throw new UnauthorizedException();
     }
+  }
+  private assertTenantRoute(ctx: ExecutionContext) {
+    const req = ctx.switchToHttp().getRequest<{ path?: string; user?: { organizationId: string } }>();
+    if (!req.path?.startsWith('/platform') && !req.path?.startsWith('/auth') && !req.user?.organizationId) throw new ForbiddenException('Organization membership required');
   }
 }

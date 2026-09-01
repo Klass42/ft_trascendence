@@ -23,6 +23,7 @@ import { ForumsModule } from './forums/forums.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { PlatformModule } from './platform/platform.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     NotificationsModule,
     RealtimeModule,
     AnalyticsModule,
+    PlatformModule,
   ],
   controllers: [AppController],
   providers: [

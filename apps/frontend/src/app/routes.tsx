@@ -8,6 +8,8 @@ import {
 import { Spinner } from '@/components/ui';
 import { AppLayout } from './AppLayout';
 import { ProtectedRoute } from './ProtectedRoute';
+import { PlatformRoute } from './PlatformRoute';
+import { PlatformLayout } from './PlatformLayout';
 
 const LoginPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.LoginPage }))
@@ -72,6 +74,9 @@ const OrgSettingsPage = lazy(() =>
 const OrgMembersPage = lazy(() =>
   import('@/features/org').then((m) => ({ default: m.OrgMembersPage }))
 );
+const PlatformOrganizationsPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationsPage })));
+const PlatformOrganizationFormPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationFormPage })));
+const PlatformLoginPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformLoginPage })));
 
 function PageLoader() {
   return (
@@ -89,6 +94,20 @@ function PageLoader() {
 }
 
 const routes: RouteObject[] = [
+  {
+    path: '/platform/login',
+    element: <Suspense fallback={<PageLoader />}><PlatformLoginPage /></Suspense>,
+  },
+  {
+    path: '/platform',
+    element: <PlatformRoute />,
+    children: [{ element: <PlatformLayout />, children: [
+      { index: true, element: <Navigate to="organizations" replace /> },
+      { path: 'organizations', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
+      { path: 'organizations/new', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationFormPage /></Suspense> },
+      { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
+    ] }],
+  },
   {
     path: '/login',
     element: (

@@ -6,6 +6,7 @@ import {
   Post,
   Query,
   HttpStatus,
+  Param,
   Req,
   Res,
   UseGuards,
@@ -21,6 +22,9 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ResolveOrganizationDto } from './dto/resolve-organization.dto';
+import { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import { PlatformLoginDto } from './dto/platform-login.dto';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('auth')
@@ -41,6 +45,24 @@ export class AuthController {
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
+
+  @Public()
+  @Post('platform-login')
+  async platformLogin(@Body() dto: PlatformLoginDto) {
+    return this.authService.platformLogin(dto);
+  }
+
+  @Public()
+  @Post('resolve-organization')
+  async resolveOrganization(@Body() dto: ResolveOrganizationDto) { return this.authService.resolveOrganization(dto.slug); }
+
+  @Public()
+  @Get('invitations/:token')
+  async invitation(@Param('token') token: string) { return this.authService.invitation(token); }
+
+  @Public()
+  @Post('invitations/:token/accept')
+  async acceptInvitation(@Param('token') token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
 
   @Public()
   @Post('refresh')

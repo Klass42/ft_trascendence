@@ -141,7 +141,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <div className={styles.upload}>
+        {user.organizationId && <div className={styles.upload}>
           <FileUpload
             accept="image/*"
             maxSizeBytes={5 * 1024 * 1024}
@@ -154,7 +154,7 @@ export function ProfilePage() {
             autoUpload
             hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
           />
-        </div>
+        </div>}
 
         <div className={styles.nameForm}>
           <Input

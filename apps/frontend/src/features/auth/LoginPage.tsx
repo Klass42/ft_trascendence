@@ -22,6 +22,7 @@ export function LoginPage() {
   const { login, loginWithGoogle, isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState('');
+  const [organizationSlug, setOrganizationSlug] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +42,7 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(organizationSlug, email, password);
       navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
@@ -90,6 +91,15 @@ export function LoginPage() {
 
             {/* Email */}
             <Input
+              label="Organization code"
+              placeholder="your-school"
+              value={organizationSlug}
+              onChange={(e) => setOrganizationSlug(e.target.value.toLowerCase())}
+              required
+              autoComplete="organization"
+              autoFocus
+            />
+            <Input
               type="email"
               label="Email"
               placeholder="you@example.com"
@@ -98,7 +108,6 @@ export function LoginPage() {
               leftIcon={<Mail size={18} />}
               required
               autoComplete="email"
-              autoFocus
             />
 
             {/* Password */}

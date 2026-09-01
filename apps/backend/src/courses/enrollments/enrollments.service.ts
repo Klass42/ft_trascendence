@@ -51,16 +51,15 @@ export class EnrollmentsService {
       throw new ConflictException('Already enrolled');
     }
 
-    await this.prisma.user.upsert({
+    // Never manufacture a user from a client-controlled id. Besides producing
+    // unusable accounts, that used to make enrollment an identity-creation API.
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      create: {
-        id: userId,
-        organizationId,
-        email: `${userId}@placeholder.local`,
-        name: userId,
-      },
-      update: {},
+      select: { id: true, organizationId: true },
     });
+    if (!user || user.organizationId !== organizationId) {
+      throw new NotFoundException('User not found in this organization');
+    }
 
     const enrollment = await this.prisma.enrollment.create({
       data: { courseId, userId },

@@ -8,14 +8,16 @@
 // =============================================================================
 
 export type GlobalRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
+export type PlatformRole = 'NONE' | 'SUPERADMIN';
 
 export interface AuthUser {
   userId: string;
   email: string;
   name: string;
   avatarUrl: string | null;
-  organizationId: string;
+  organizationId: string | null;
   role: GlobalRole;
+  platformRole: PlatformRole;
   emailNotificationsEnabled: boolean;
   preferredLanguage: string;
 }

@@ -54,6 +54,10 @@ services:
       - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-https://localhost/auth/google/callback}
       # Frontend URL (CORS / OAuth redirect)
       - FRONTEND_URL=${FRONTEND_URL:-https://localhost}
+      # Optional first-launch platform administrator (no tenant membership).
+      - PLATFORM_SUPERADMIN_EMAIL=${PLATFORM_SUPERADMIN_EMAIL:-}
+      - PLATFORM_SUPERADMIN_PASSWORD=${PLATFORM_SUPERADMIN_PASSWORD:-}
+      - PLATFORM_SUPERADMIN_NAME=${PLATFORM_SUPERADMIN_NAME:-Platform Administrator}
       # Object storage (Garage / S3)
       - S3_ENDPOINT=${S3_ENDPOINT:-http://garage:3900}
       - S3_REGION=${S3_REGION:-garage}

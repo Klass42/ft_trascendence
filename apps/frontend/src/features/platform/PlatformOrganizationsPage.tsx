@@ -1,0 +1,3 @@
+import { useEffect, useState } from 'react'; import { Link } from 'react-router-dom'; import { apiClient } from '@/lib/api';
+type Organization = { id: string; name: string; slug: string; status: string };
+export function PlatformOrganizationsPage() { const [items, setItems] = useState<Organization[]>([]); useEffect(() => { apiClient.get<Organization[]>('/platform/organizations').then(setItems).catch(() => setItems([])); }, []); return <section style={{ padding: 32 }}><Link to="/platform/organizations/new">Provision organization</Link><h1>Organizations</h1>{items.map(org => <p key={org.id}><Link to={`/platform/organizations/${org.id}`}>{org.name}</Link> — {org.status}</p>)}</section>; }
