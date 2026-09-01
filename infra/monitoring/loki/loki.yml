@@ -1,4 +1,4 @@
-# Listen port MUST match params.env LOKI_PORT.
+# Listen port MUST match .env.example LOKI_PORT.
 auth_enabled: false
 
 server:

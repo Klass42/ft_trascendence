@@ -1,4 +1,4 @@
-# Endpoints and listen ports come from params.env via ${env:VAR}
+# Endpoints and listen ports come from .env.example via ${env:VAR}
 # (OpenTelemetry Collector env expansion). Hostnames stay as compose service names.
 receivers:
   otlp:

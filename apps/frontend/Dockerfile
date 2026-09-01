@@ -1,35 +1,31 @@
-# ─── Build stage ───
-FROM node:22-alpine AS builder
-
+FROM node:24-slim AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
+FROM base AS deps
 WORKDIR /app
-
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
+# changed: filter needs the workspace package or pnpm matches 0 projects and skips node_modules
 COPY apps/frontend/package.json apps/frontend/
-
 RUN pnpm install --frozen-lockfile --filter @ft-trascendence/frontend
 
-COPY apps/frontend/ apps/frontend/
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
 ARG VITE_BACKEND_URL=/api
 ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
 
 RUN pnpm --filter @ft-trascendence/frontend run build
 
-# ─── Production stage ───
-FROM nginx:alpine AS production
-
-COPY --from=builder /app/apps/frontend/dist /usr/share/nginx/html
-
-# envsubst on ${BACKEND_HOST}/${BACKEND_PORT} at start (official nginx image).
-# $host / $uri / $remote_addr are left alone — they are not in the container env.
-COPY apps/frontend/nginx.conf /etc/nginx/templates/default.conf.template
-
-ENV BACKEND_HOST=backend
-ENV BACKEND_PORT=3000
-ENV FRONTEND_PORT=80
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN pnpm add -g serve
+COPY --from=builder --chown=node:node /app/apps/frontend/dist ./dist
+EXPOSE 5173
+USER node
+# same listen port as vite.config.ts (FRONTEND_PORT, default 5173 — USER node cannot bind 80)
+CMD ["sh", "-c", "serve -s dist -l ${FRONTEND_PORT:-5173}"]

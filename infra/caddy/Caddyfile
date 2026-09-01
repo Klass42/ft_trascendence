@@ -1,5 +1,5 @@
 # ft_trascendence — Caddy reverse proxy
-# All listen ports, upstreams, and the public domain come from params.env
+# All listen ports, upstreams, and the public domain come from .env.example
 # (injected as container env; Caddy expands {$VAR}).
 #
 # TLS:

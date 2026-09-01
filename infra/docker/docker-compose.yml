@@ -1,18 +1,17 @@
 # ft_trascendence — Docker Compose
 # Single-command deploy:  make up
 #
-# All interpolation comes from infra/docker/params.env (passed via --env-file).
+# All interpolation comes from infra/docker/.env.example (passed via --env-file).
 # Optional local overrides: infra/docker/.env (gitignored, last file wins).
 #
 # All external connections via Caddy (HTTPS). HTTP → HTTPS redirect.
 # Monitoring is NOT exposed directly — only via Caddy TLS multi-port.
 #
-# Public URLs are defined in params.env (APP_URL, GRAFANA_URL, …).
+# Public URLs are defined in .env.example (APP_URL, GRAFANA_URL, …).
 
 name: ${COMPOSE_PROJECT_NAME}
 
 services:
-  # ─── HTTPS / Reverse Proxy ───────────────────────────────
   caddy:
     image: ${CADDY_IMAGE}
     ports:
@@ -27,7 +26,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     env_file:
-      - params.env
+      - .env.example
     environment:
       CADDY_DOMAIN: ${CADDY_DOMAIN}
       CADDY_HTTP_PORT: ${CADDY_HTTP_PORT}
@@ -55,11 +54,24 @@ services:
     networks:
       - app-network
 
-  # ─── Application ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../
+      dockerfile: ${FRONTEND_IMAGE}
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL}
+    environment:
+      FRONTEND_PORT: ${FRONTEND_PORT}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app-network
+
   backend:
     build:
       context: ../../
-      dockerfile: apps/backend/Dockerfile
+      dockerfile: ${BACKEND_IMAGE}
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${BACKEND_PORT}
@@ -75,7 +87,7 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://${OTEL_COLLECTOR_HOST}:${OTEL_HTTP_PORT}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME}
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment=${DEPLOY_ENVIRONMENT}
     depends_on:
@@ -91,26 +103,6 @@ services:
     networks:
       - app-network
 
-  frontend:
-    build:
-      context: ../../
-      dockerfile: apps/frontend/Dockerfile
-      args:
-        VITE_BACKEND_URL: ${VITE_BACKEND_URL}
-        BACKEND_HOST: ${BACKEND_HOST}
-        BACKEND_PORT: ${BACKEND_PORT}
-    environment:
-      BACKEND_HOST: ${BACKEND_HOST}
-      BACKEND_PORT: ${BACKEND_PORT}
-      FRONTEND_PORT: ${FRONTEND_PORT}
-      NGINX_ENVSUBST_FILTER: BACKEND_HOST|BACKEND_PORT|FRONTEND_PORT
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - app-network
-
-  # ─── Database ────────────────────────────────────────────
   postgres:
     image: ${POSTGRES_IMAGE}
     environment:
@@ -127,7 +119,6 @@ services:
     networks:
       - app-network
 
-  # ─── Observability ───────────────────────────────────────
   otel-collector:
     image: ${OTEL_COLLECTOR_IMAGE}
     command: ["--config=/etc/otel-collector.yaml"]
