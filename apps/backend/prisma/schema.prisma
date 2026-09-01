@@ -35,12 +35,18 @@ model Organization {
   name      String
   slug      String   @unique // used in URLs; not a subdomain
   logoUrl   String?
+  status OrganizationStatus @default(ACTIVE)
+  primaryColor String?
+  defaultLanguage String @default("es")
+  timezone String @default("Europe/Madrid")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   users   User[]
   courses Course[]
   files   File[]
+  invitations OrganizationInvitation[]
+  auditLogs AuditLog[]
 }
 
 // ============================================================================
@@ -49,14 +55,15 @@ model Organization {
 
 model User {
   id              String       @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email           String
   passwordHash    String? // null when the account is OAuth-only
   name            String
   avatarUrl       String?
   bio             String?
   role            GlobalRole   @default(STUDENT)
+  platformRole    PlatformRole @default(NONE)
   onlineAt        DateTime? // updated on activity; drives online status
   emailVerifiedAt DateTime?
   emailNotificationsEnabled Boolean  @default(true)
@@ -79,10 +86,46 @@ model User {
   lessonCompletions LessonCompletion[]
   friendsInitiated  Friendship[]       @relation("FriendRequester")
   friendsReceived   Friendship[]       @relation("FriendAddressee")
+  invitationsSent  OrganizationInvitation[] @relation("InvitationInviter")
+  auditLogs        AuditLog[] @relation("AuditActor")
 
   // Email is unique WITHIN an organization (tenant-scoped), not globally.
   @@unique([organizationId, email])
   @@index([organizationId])
+}
+
+model OrganizationInvitation {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email String
+  role GlobalRole
+  tokenHash String @unique
+  status InvitationStatus @default(PENDING)
+  expiresAt DateTime
+  acceptedAt DateTime?
+  invitedById String?
+  invitedBy User? @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([organizationId, status])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action String
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  targetUserId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model Session {
@@ -368,6 +411,24 @@ enum GlobalRole {
   ADMIN
   TEACHER
   STUDENT
+}
+
+enum PlatformRole {
+  NONE
+  SUPERADMIN
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
 }
 
 enum CourseRole {

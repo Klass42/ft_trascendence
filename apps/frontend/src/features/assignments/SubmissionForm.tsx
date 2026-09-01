@@ -228,7 +228,7 @@ export function SubmissionForm({
             />
           </div>
 
-          {user && (
+          {user?.organizationId && (
             <FileUpload
               organizationId={user.organizationId}
               uploaderId={user.userId}

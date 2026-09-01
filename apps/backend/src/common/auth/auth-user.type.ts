@@ -1,4 +1,5 @@
 export type GlobalRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
+export type PlatformRole = 'NONE' | 'SUPERADMIN';
 
 /**
  * Identity of the authenticated user. MUST match the frontend contract in
@@ -10,8 +11,10 @@ export interface AuthUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  /** Empty only for a platform account; AppAuthGuard rejects it on tenant routes. */
   organizationId: string;
   role: GlobalRole;
+  platformRole?: PlatformRole;
   emailNotificationsEnabled: boolean;
   preferredLanguage: string;
 }

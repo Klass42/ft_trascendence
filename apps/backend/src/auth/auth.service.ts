@@ -14,8 +14,8 @@ import type { AuthUser } from '@/common/auth/auth-user.type';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { ChangePasswordDto } from './dto/change-password.dto';
-
-const DEFAULT_ORG_ID = 'org-klass-0001';
+import type { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import type { PlatformLoginDto } from './dto/platform-login.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,7 +27,7 @@ export class AuthService {
 
   private mapUser(user: {
     id: string; email: string; name: string; avatarUrl: string | null;
-    organizationId: string; role: 'ADMIN' | 'TEACHER' | 'STUDENT';
+    organizationId: string | null; role: 'ADMIN' | 'TEACHER' | 'STUDENT'; platformRole: 'NONE' | 'SUPERADMIN';
     emailNotificationsEnabled: boolean; preferredLanguage: string;
   }): AuthUser {
     return {
@@ -35,8 +35,9 @@ export class AuthService {
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      organizationId: user.organizationId,
+      organizationId: user.organizationId ?? '',
       role: user.role,
+      platformRole: user.platformRole,
       emailNotificationsEnabled: user.emailNotificationsEnabled,
       preferredLanguage: user.preferredLanguage,
     };
@@ -46,16 +47,10 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  private async ensureDefaultOrganization(): Promise<void> {
-    await this.prisma.organization.upsert({
-      where: { id: DEFAULT_ORG_ID },
-      update: {},
-      create: {
-        id: DEFAULT_ORG_ID,
-        name: 'Klass Academy',
-        slug: 'klass',
-      },
-    });
+  private async activeOrganization(slug: string) {
+    const organization = await this.prisma.organization.findUnique({ where: { slug } });
+    if (!organization || organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid organization or credentials');
+    return organization;
   }
 
   private async issueTokens(userId: string): Promise<{
@@ -97,10 +92,10 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    await this.ensureDefaultOrganization();
+    const organization = await this.activeOrganization(dto.organizationSlug!);
 
     const existing = await this.prisma.user.findFirst({
-      where: { organizationId: DEFAULT_ORG_ID, email: dto.email },
+      where: { organizationId: organization.id, email: dto.email },
     });
     if (existing) {
       throw new ConflictException('Email already registered in this organization');
@@ -111,7 +106,7 @@ export class AuthService {
 
     const user = await this.prisma.user.create({
       data: {
-        organizationId: DEFAULT_ORG_ID,
+        organizationId: organization.id,
         email: dto.email,
         name: dto.name,
         passwordHash,
@@ -138,9 +133,7 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const user = await this.prisma.user.findFirst({
-      where: { organizationId: DEFAULT_ORG_ID, email: dto.email },
-    });
+    const user = await this.prisma.user.findFirst({ where: { organization: { slug: dto.organizationSlug!, status: 'ACTIVE' }, email: dto.email } });
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -158,6 +151,17 @@ export class AuthService {
     return { user: this.mapUser(user), ...tokens };
   }
 
+  async platformLogin(dto: PlatformLoginDto): Promise<{ user: AuthUser; accessToken: string; refreshToken: string }> {
+    const user = await this.prisma.user.findFirst({
+      where: { organizationId: null, platformRole: 'SUPERADMIN', email: dto.email },
+    });
+    if (!user?.passwordHash || !(await argon2.verify(user.passwordHash, dto.password))) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    const tokens = await this.issueTokens(user.id);
+    return { user: this.mapUser(user), ...tokens };
+  }
+
   async refresh(refreshToken: string): Promise<{
     accessToken: string;
     refreshToken: string;
@@ -168,6 +172,7 @@ export class AuthService {
 
     const session = await this.prisma.session.findUnique({
       where: { refreshTokenHash: hash },
+      include: { user: { include: { organization: true } } },
     });
 
     if (!session) {
@@ -180,6 +185,10 @@ export class AuthService {
 
     if (session.expiresAt < new Date()) {
       throw new UnauthorizedException('Refresh token expired');
+    }
+    if (session.user.organization && session.user.organization.status !== 'ACTIVE') {
+      await this.prisma.session.deleteMany({ where: { userId: session.userId } });
+      throw new UnauthorizedException('Organization is suspended');
     }
 
     await this.prisma.session.delete({ where: { id: session.id } });
@@ -271,8 +280,6 @@ export class AuthService {
     name: string;
     avatarUrl: string | null;
   }): Promise<{ accessToken: string; refreshToken: string }> {
-    await this.ensureDefaultOrganization();
-
     const oauthAccount = await this.prisma.oAuthAccount.findUnique({
       where: {
         provider_providerUserId: {
@@ -287,42 +294,45 @@ export class AuthService {
     if (oauthAccount) {
       userId = oauthAccount.userId;
     } else {
-      const existingUser = await this.prisma.user.findFirst({
-        where: { organizationId: DEFAULT_ORG_ID, email: profile.email },
-      });
+      throw new ForbiddenException('Google OAuth must be started with an organization slug');
 
-      if (existingUser) {
-        await this.prisma.oAuthAccount.create({
-          data: {
-            provider: 'google',
-            providerUserId: profile.providerUserId,
-            userId: existingUser.id,
-          },
-        });
-        userId = existingUser.id;
-      } else {
-        const newUser = await this.prisma.user.create({
-          data: {
-            organizationId: DEFAULT_ORG_ID,
-            email: profile.email,
-            name: profile.name,
-            avatarUrl: profile.avatarUrl,
-            passwordHash: null,
-            role: 'STUDENT',
-            emailVerifiedAt: new Date(),
-          },
-        });
-        await this.prisma.oAuthAccount.create({
-          data: {
-            provider: 'google',
-            providerUserId: profile.providerUserId,
-            userId: newUser.id,
-          },
-        });
-        userId = newUser.id;
-      }
     }
 
     return this.issueTokens(userId);
+  }
+
+  async resolveOrganization(slug: string) {
+    const organization = await this.prisma.organization.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true, status: true } });
+    if (!organization) throw new UnauthorizedException('Organization not found');
+    return organization;
+  }
+
+  async invitation(token: string) {
+    const invitation = await this.prisma.organizationInvitation.findUnique({ where: { tokenHash: this.hashToken(token) }, include: { organization: true } });
+    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= new Date() || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid or expired invitation');
+    return { email: invitation.email, role: invitation.role, organization: { name: invitation.organization.name, slug: invitation.organization.slug, logoUrl: invitation.organization.logoUrl, primaryColor: invitation.organization.primaryColor } };
+  }
+
+  async acceptInvitation(token: string, dto: AcceptInvitationDto) {
+    const tokenHash = this.hashToken(token);
+    const now = new Date();
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const invitation = await tx.organizationInvitation.findUnique({ where: { tokenHash }, include: { organization: true } });
+        if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= now || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid or expired invitation');
+        const existing = await tx.user.findFirst({ where: { organizationId: invitation.organizationId, email: invitation.email } });
+        if (existing) throw new ConflictException('Email already registered in this organization');
+        const claimed = await tx.organizationInvitation.updateMany({ where: { id: invitation.id, status: 'PENDING' }, data: { status: 'ACCEPTED', acceptedAt: now } });
+        if (claimed.count !== 1) throw new UnauthorizedException('Invalid or expired invitation');
+        const user = await tx.user.create({ data: { organizationId: invitation.organizationId, email: invitation.email, name: dto.name, passwordHash: await argon2.hash(dto.password), role: invitation.role, emailVerifiedAt: now } });
+        await tx.auditLog.create({ data: { action: 'INVITATION_ACCEPTED', organizationId: invitation.organizationId, targetUserId: user.id, metadata: { role: invitation.role } } });
+        return user;
+      });
+    } catch (error) { if (error instanceof ConflictException || error instanceof UnauthorizedException) throw error; throw error; }
+  }
+
+  async acceptInvitationWithTokens(token: string, dto: AcceptInvitationDto) {
+    const user = await this.acceptInvitation(token, dto);
+    return { user: this.mapUser(user), ...(await this.issueTokens(user.id)) };
   }
 }

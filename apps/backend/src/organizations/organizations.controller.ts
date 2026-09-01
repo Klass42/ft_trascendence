@@ -8,10 +8,13 @@ import {
   Param,
   Patch,
   UseGuards,
+  Post,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
+import { tenantId } from '@/common/auth';
+import { CreateInvitationDto } from './dto/create-invitation.dto';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('organizations')
@@ -20,8 +23,14 @@ export class OrganizationsController {
 
   @Get('me')
   async findMine(@CurrentUser() user: AuthUser) {
-    return this.organizationsService.findMyOrganization(user.organizationId);
+    return this.organizationsService.findMyOrganization(tenantId(user));
   }
+
+  @Post('me/invitations') @UseGuards(RolesGuard) @Roles('ADMIN')
+  invite(@Body() dto: CreateInvitationDto, @CurrentUser() user: AuthUser) { return this.organizationsService.invite(tenantId(user), user.userId, dto); }
+
+  @Post('me/invitations/:id/revoke') @UseGuards(RolesGuard) @Roles('ADMIN')
+  revokeInvitation(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
 
   @Patch(':id')
   @UseGuards(RolesGuard)

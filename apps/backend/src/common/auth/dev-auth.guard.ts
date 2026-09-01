@@ -43,8 +43,9 @@ export class DevAuthGuard implements CanActivate {
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      organizationId: user.organizationId,
+      organizationId: user.organizationId ?? '',
       role: user.role,
+      platformRole: user.platformRole,
       emailNotificationsEnabled: user.emailNotificationsEnabled,
       preferredLanguage: user.preferredLanguage,
     };

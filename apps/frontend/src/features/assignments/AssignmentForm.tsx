@@ -283,7 +283,7 @@ export function AssignmentForm({
         </div>
       )}
 
-      {user && (
+      {user?.organizationId && (
         <FileUpload
           organizationId={user.organizationId}
           uploaderId={user.userId}

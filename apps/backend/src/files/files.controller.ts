@@ -30,13 +30,13 @@ export class FilesController {
   }
 
   @Get(':id/url')
-  async getUrl(@Param('id') id: string) {
-    return this.filesService.getSignedUrl(id);
+  async getUrl(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.filesService.getSignedUrl(id, user.organizationId);
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    await this.filesService.delete(id);
+  async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.filesService.delete(id, user.organizationId, user.userId);
     return { deleted: true };
   }
 }

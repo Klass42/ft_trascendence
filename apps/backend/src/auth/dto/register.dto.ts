@@ -1,6 +1,9 @@
 import { IsEmail, IsString, Matches, MinLength } from 'class-validator';
 
 export class RegisterDto {
+  @IsString()
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  organizationSlug?: string;
   @IsEmail({ require_tld: false })
   email: string;
 

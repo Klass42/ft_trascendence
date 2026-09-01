@@ -144,7 +144,7 @@ export class UsersService {
   async uploadAvatar(userId: string, organizationId: string, file: Express.Multer.File) {
     if (!this.files) throw new BadRequestException('File upload is not available');
     const fileRecord = await this.files.createUpload(file, organizationId, userId);
-    const { url } = await this.files.getSignedUrl(fileRecord.id);
+    const { url } = await this.files.getSignedUrl(fileRecord.id, organizationId);
     await this.prisma.user.update({ where: { id: userId }, data: { avatarUrl: url } });
     return this.prisma.user.findUnique({ where: { id: userId }, select: selectPublicProfile });
   }

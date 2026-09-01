@@ -44,6 +44,7 @@ const MOCK_USER: AuthUser = {
   avatarUrl: null,
   organizationId: 'org-klass-0001',
   role: 'STUDENT', // STUDENT to see the student dashboard
+  platformRole: 'NONE',
   emailNotificationsEnabled: true,
   preferredLanguage: 'es',
 };
@@ -62,7 +63,9 @@ interface AuthContextValue {
   /** True if user is authenticated */
   isAuthenticated: boolean;
   /** Login with email/password */
-  login: (email: string, password: string) => Promise<void>;
+  login: (organizationSlug: string, email: string, password: string) => Promise<void>;
+  /** Platform accounts have no organization and authenticate separately. */
+  loginPlatform: (email: string, password: string) => Promise<void>;
   /** Register with name/email/password */
   register: (name: string, email: string, password: string) => Promise<void>;
   /** Login with OAuth (Google) */
@@ -151,10 +154,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ---------------------------------------------------------------------------
   // Login with email/password
   // ---------------------------------------------------------------------------
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (organizationSlug: string, email: string, password: string) => {
     const response = await apiClient.post<LoginResponse>(
       '/auth/login',
-      { email, password },
+      { organizationSlug, email, password },
       { skipAuth: true }
     );
 
@@ -166,6 +169,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     tokenStorage.setTokens(tokens);
 
     // Set user
+    setUser(response.user);
+  }, []);
+
+  const loginPlatform = useCallback(async (email: string, password: string) => {
+    const response = await apiClient.post<LoginResponse>('/auth/platform-login', { email, password }, { skipAuth: true });
+    tokenStorage.setTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
     setUser(response.user);
   }, []);
 
@@ -206,12 +215,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isLoading,
       isAuthenticated: !!user,
       login,
+      loginPlatform,
       register,
       loginWithGoogle,
       logout,
       refreshUser,
     }),
-    [user, isLoading, login, register, loginWithGoogle, logout, refreshUser]
+    [user, isLoading, login, loginPlatform, register, loginWithGoogle, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

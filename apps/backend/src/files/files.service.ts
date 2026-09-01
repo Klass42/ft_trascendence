@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService, StoredFile } from './storage/storage.service';
 
@@ -34,7 +34,7 @@ export class FilesService {
     return fileRecord;
   }
 
-  async getSignedUrl(fileId: string) {
+  async getSignedUrl(fileId: string, organizationId: string) {
     const fileRecord = await this.prisma.file.findUnique({
       where: { id: fileId },
     });
@@ -42,19 +42,25 @@ export class FilesService {
     if (!fileRecord) {
       throw new NotFoundException(`File ${fileId} not found`);
     }
+    if (fileRecord.organizationId !== organizationId) {
+      throw new ForbiddenException('File belongs to another organization');
+    }
 
     const url = await this.storage.getSignedUrl(fileRecord.objectKey);
 
     return { url, originalName: fileRecord.originalName };
   }
 
-  async delete(fileId: string) {
+  async delete(fileId: string, organizationId: string, userId: string) {
     const fileRecord = await this.prisma.file.findUnique({
       where: { id: fileId },
     });
 
     if (!fileRecord) {
       return { deleted: false };
+    }
+    if (fileRecord.organizationId !== organizationId || fileRecord.uploaderId !== userId) {
+      throw new ForbiddenException('You cannot delete this file');
     }
 
     await this.storage.deleteObject(fileRecord.objectKey);

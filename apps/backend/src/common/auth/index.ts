@@ -7,3 +7,6 @@ export * from './jwt-auth.guard';
 export * from './dev-auth.guard';
 export * from './public.decorator';
 export * from './app-auth.guard';
+export * from './platform-roles.decorator';
+export * from './platform-roles.guard';
+export * from './tenant-context';
