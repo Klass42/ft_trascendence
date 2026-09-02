@@ -1,11 +1,12 @@
-.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status db-migrate db-generate db-push db-studio db-seed urls
+.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-reset urls
 
 .DEFAULT_GOAL := all
 LOCAL_ENV    := infra/docker/.env
 ENV_EXAMPLE   := infra/docker/.env.example
 NP_URL      := https://github.com/DavHau/nix-portable/releases/download/v012/nix-portable-$(shell uname -m)
 COMPOSE_FILE := infra/docker/docker-compose.yml
-COMPOSE      := docker compose --env-file $(LOCAL_ENV) -f $(COMPOSE_FILE)
+COMPOSE_ENV_FILES := --env-file $(ENV_EXAMPLE) $(if $(wildcard $(LOCAL_ENV)),--env-file $(LOCAL_ENV))
+COMPOSE      := docker compose $(COMPOSE_ENV_FILES) -f $(COMPOSE_FILE)
 
 NP_BIN      := $(pwd)/build
 NP_BIN      := ./nix-portable
@@ -16,10 +17,11 @@ help: ## Show this help (plain `make` deploys)
 	@printf "\n\033[1;36mft_trascendence\033[0m  —  \033[32mmake\033[0m\n"
 	@printf "\n\033[1;33mOne command\033[0m\n"
 	@printf "  \033[32mmake\033[0m     install nix-portable + docker compose up --build\n"
-	@printf "           (ports/URLs/images from \033[36minfra/docker/params.env\033[0m) + seed\n"
+	@printf "           (ports/URLs/images from \033[36minfra/docker/.env.example\033[0m) + seed\n"
 	@printf "  Then open the App URL, accept the self-signed cert, log in:\n"
 	@printf "    \033[1mstudent@demo\033[0m / \033[1mdemo1234\033[0m   (also teacher@demo, admin@demo)\n"
-	@printf "\n  Overlay:     make env          Stop: make down    Wipe: make fclean\n"
+	@printf "\n  Datos demo:  make db-seed-small | make db-seed-large | make db-reset\n"
+	@printf "  Overlay:     make env          Stop: make down    Wipe: make fclean\n"
 	@printf "  Logs:        make logs         Status: make status\n"
 	@printf "\n\033[1;33mAll targets\033[0m\n"
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F'##' '{printf "  \033[32m%-16s\033[0m %s\n", $$1, $$2}'
@@ -90,8 +92,17 @@ db-migrate: ## Crea una migración de Prisma (NAME=nombre)
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio
 
-db-seed: ## Carga datos demo deterministas (1 org, 3 users con demo1234, 1 curso)
-	$(PRISMA) db seed
+db-seed: ## Reemplaza los datos por la demo estándar (Klass Academy)
+	$(COMPOSE) exec -T -e SEED_SCENARIO=standard backend npx prisma db seed
+
+db-seed-small: ## Reemplaza los datos por 1 academia pequeña (8 alumnos, 3 profesores)
+	$(COMPOSE) exec -T -e SEED_SCENARIO=small backend npx prisma db seed
+
+db-seed-large: ## Reemplaza los datos por 3 academias (cada una: >=100 alumnos, >=20 profesores)
+	$(COMPOSE) exec -T -e SEED_SCENARIO=large backend npx prisma db seed
+
+db-reset: ## ELIMINA todos los datos de aplicación y deja solo un superadmin nuevo
+	$(COMPOSE) exec -T -e SEED_SCENARIO=platform backend npx prisma db seed
 
 all: env nix-portable ## Install tools + deploy stack
 	$(COMPOSE) up -d --build
@@ -105,8 +116,7 @@ all: env nix-portable ## Install tools + deploy stack
 	  printf "\033[1;31mbackend did not become healthy — make logs-backend\033[0m\n"; \
 	  $(COMPOSE) ps; exit 1; \
 	fi
-	@$(COMPOSE) exec -T backend npx prisma db seed || \
-	  printf "\033[1;33mseed skipped/failed (stack is still up)\033[0m\n"
+	@$(MAKE) --no-print-directory db-seed
 	@$(MAKE) --no-print-directory urls
 	@$(MAKE) --no-print-directory deploy-ok
 

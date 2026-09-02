@@ -23,9 +23,9 @@ export function AdminUsersPage() {
         <Button
           variant="primary"
           leftIcon={<UserPlus size={18} />}
-          onClick={() => navigate('/admin/users/new')}
+          onClick={() => navigate('/admin/users/invite')}
         >
-          Nuevo usuario
+          Invitar usuario
         </Button>
       </div>
 

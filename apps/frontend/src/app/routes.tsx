@@ -17,6 +17,9 @@ const LoginPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.RegisterPage }))
 );
+const AcceptInvitationPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.AcceptInvitationPage }))
+);
 const VerifyEmailPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.VerifyEmailPage }))
 );
@@ -64,6 +67,9 @@ const AdminUsersPage = lazy(() =>
 );
 const AdminUserCreatePage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserCreatePage }))
+);
+const AdminUserInvitePage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminUserInvitePage }))
 );
 const AdminUserEditPage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
@@ -121,6 +127,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<PageLoader />}>
         <RegisterPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/invite/:token',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <AcceptInvitationPage />
       </Suspense>
     ),
   },
@@ -251,6 +265,14 @@ const routes: RouteObject[] = [
           </ProtectedRoute>
         ),
         children: [
+          {
+            path: 'users/invite',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminUserInvitePage />
+              </Suspense>
+            ),
+          },
           {
             path: 'users/new',
             element: (

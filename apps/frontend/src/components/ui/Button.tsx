@@ -11,7 +11,7 @@
  *   <Button leftIcon={<PlusIcon />}>Add Item</Button>
  */
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ElementType, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import styles from './Button.module.css';
 
@@ -20,6 +20,10 @@ import styles from './Button.module.css';
 // =============================================================================
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** Optional component to render, e.g. React Router's Link. */
+  as?: ElementType;
+  /** Destination used by link-like components passed via `as`. */
+  to?: string;
   /** Visual style variant */
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   /** Size of the button */
@@ -48,6 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       rightIcon,
       fullWidth = false,
       disabled,
+      as,
       className,
       children,
       ...props
@@ -67,11 +72,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       .filter(Boolean)
       .join(' ');
 
+    const Component = as ?? 'button';
+
     return (
-      <button
+      <Component
         ref={ref}
         className={classNames}
-        disabled={isDisabled}
+        {...(Component === 'button' ? { disabled: isDisabled } : { 'aria-disabled': isDisabled || undefined })}
         {...props}
       >
         {loading ? (
@@ -89,7 +96,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             {rightIcon}
           </span>
         )}
-      </button>
+      </Component>
     );
   }
 );
