@@ -4,14 +4,13 @@ import {
   Badge,
   Button,
   Card,
-  FileUpload,
   Input,
   Select,
   Spinner,
   Toggle,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import styles from './ProfilePage.module.css';
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;

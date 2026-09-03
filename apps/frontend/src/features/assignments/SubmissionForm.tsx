@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, FileUpload, type FileValue } from '@/components/ui';
+import { Button } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useAuth, useSubmitAssignment } from '@/lib/api';
 import type { AssignmentDTO, SubmissionDTO } from '@/lib/api';
 import { STATUS_CHIP, formatDate, openFile } from './helpers';
