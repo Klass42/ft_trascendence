@@ -15,6 +15,7 @@ import type { ActivityDTO } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
 import { STATUS_BADGE } from './helpers';
 import { ActivityForm } from './ActivityForm';
+import { ActivityPlayer } from './ActivityPlayer';
 import { QuestionList } from './QuestionList';
 
 /**
@@ -70,15 +71,7 @@ export function ActivitiesPage() {
   }
 
   if (!isStaff) {
-    return (
-      <div style={{ padding: '30px 40px', maxWidth: 700 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800 }}>Actividades</h1>
-        <EmptyState
-          title="Aún no disponible"
-          description="Pronto podrás realizar actividades desde aquí."
-        />
-      </div>
-    );
+    return <StudentActivitiesPage />;
   }
 
   return (
@@ -212,6 +205,68 @@ export function ActivitiesPage() {
           onCancel={() => setCreating(false)}
         />
       </Modal>
+    </div>
+  );
+}
+
+/** Learner workspace. The activity and attempt endpoints determine membership
+ * and course role on the server; this UI never receives an answer key. */
+function StudentActivitiesPage() {
+  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (!courseId && courses?.length) setCourseId(courses[0].id);
+  }, [courseId, courses]);
+
+  const { data: activities, isLoading, error, refetch } = useActivities(courseId);
+
+  useEffect(() => {
+    if (!activities) return;
+    const fromUrl = searchParams.get('activityId');
+    if (fromUrl && activities.some((activity) => activity.id === fromUrl)) setSelectedId(fromUrl);
+    else if (!selectedId && activities.length) setSelectedId(activities[0].id);
+    else if (!activities.length) setSelectedId(null);
+  }, [activities, searchParams, selectedId]);
+
+  const selected = activities?.find((activity) => activity.id === selectedId) ?? null;
+  function selectActivity(id: string) {
+    setSelectedId(id);
+    const next = new URLSearchParams(searchParams);
+    next.set('activityId', id);
+    setSearchParams(next, { replace: true });
+  }
+
+  return (
+    <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Actividades</h1>
+        {courses?.length ? <div style={{ marginLeft: 'auto', minWidth: 220 }}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: course.title }))} /></div> : null}
+      </div>
+      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus actividades aparecerán aquí." />}
+      {courseId && <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 300px', minWidth: 260 }}>
+          {isLoading && <Spinner size="md" label="Cargando actividades…" />}
+          {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las actividades de este curso.</p>}
+          {activities?.length === 0 && !isLoading && <EmptyState title="Sin actividades todavía" description="Este curso aún no tiene actividades publicadas." />}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {activities?.map((activity) => {
+              const active = activity.id === selectedId;
+              const badge = WINDOW_BADGE[windowState(activity.openAt, activity.closeAt)];
+              return <button key={activity.id} type="button" onClick={() => selectActivity(activity.id)} style={{ textAlign: 'left', background: active ? 'var(--color-accent-muted)' : 'var(--color-bg-secondary)', border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-primary)'}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 700, fontSize: 14.5 }}>{activity.title}</span><Badge variant={badge.variant}>{badge.label}</Badge></div>
+                <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{activity.questions?.length ?? 0} preguntas · {activity.maxScore} pts</div>
+              </button>;
+            })}
+          </div>
+        </div>
+        <div style={{ flex: '2 1 420px', minWidth: 300, background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 14, padding: 22 }}>
+          {selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={refetch} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una actividad para ver sus detalles.</p>}
+        </div>
+      </div>}
     </div>
   );
 }
