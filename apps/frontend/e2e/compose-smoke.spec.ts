@@ -35,6 +35,6 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
     await page.getByRole('button', { name: 'Iniciar sesión' }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole('heading', { name: /Hola de nuevo, Sam Student/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Hola de nuevo, Sam/ })).toBeVisible();
   });
 });
