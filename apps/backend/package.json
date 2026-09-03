@@ -9,6 +9,8 @@
     "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
+    "test:integration": "jest --config jest.integration.config.ts --runInBand",
+    "test:all": "pnpm run test -- --runInBand && pnpm run test:integration",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "clean": "rm -rf dist",

@@ -3,7 +3,9 @@ import type { Config } from 'jest';
 export default {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: '.',
-  testRegex: 'src.*\\.spec\\.ts$',
+  // HTTP/WebSocket integration suites need a bindable local port, which is not
+  // available in every development sandbox. They run through test:integration.
+  testRegex: 'src/(?!.*(?:\\.e2e|realtime\\.gateway)\\.spec\\.ts$).*\\.spec\\.ts$',
   transform: {
     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
