@@ -101,6 +101,8 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
+      garage:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "${BACKEND_HEALTH_URL}"]
       interval: ${BACKEND_HEALTH_INTERVAL}
@@ -110,6 +112,32 @@ services:
       - app-network
     volumes:
       - uploads_data:/app/uploads
+
+  garage:
+    # Keep existing local .env overlays working when they predate Garage.
+    image: ${GARAGE_IMAGE:-dxflrs/garage:v2.3.0}
+    command:
+      - /garage
+      - server
+      - --single-node
+      - --default-bucket
+    environment:
+      # Separate these bootstrap defaults from S3_* so an existing local
+      # overlay that predates Garage cannot prevent the stack from starting.
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_DEFAULT_ACCESS_KEY:-GK00000000000000000000000000000001}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY:-ft-transcendence-development-garage-secret-key-0000000000000001}
+      GARAGE_DEFAULT_BUCKET: ${GARAGE_DEFAULT_BUCKET:-ft-uploads}
+    volumes:
+      - ../garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - app-network
 
   postgres:
     image: ${POSTGRES_IMAGE}
@@ -216,6 +244,8 @@ volumes:
   caddy_data:
   caddy_config:
   uploads_data:
+  garage_meta:
+  garage_data:
 
 networks:
   app-network:

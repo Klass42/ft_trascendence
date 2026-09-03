@@ -1,0 +1,17 @@
+# Single-node Garage setup for the Compose development/evaluation stack.
+# The data and metadata directories are Docker volumes, so S3 objects survive
+# container recreation. Multi-node production deployments should replace this
+# file with a topology-specific configuration.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "garage:3901"
+rpc_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+root_domain = ".s3.garage.localhost"

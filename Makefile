@@ -1,4 +1,4 @@
-.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-reset urls
+.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status garage-init garage-status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-reset urls
 
 .DEFAULT_GOAL := all
 LOCAL_ENV    := infra/docker/.env
@@ -95,6 +95,20 @@ logs-otel: ## Muestra logs del OTel Collector
 
 status: ## Muestra estado de los servicios
 	$(COMPOSE) ps
+
+garage-init: ## Espera a que Garage aprovisione su bucket y clave S3 por defecto
+	$(COMPOSE) up -d garage
+	@i=0; \
+	while [ $$i -lt 30 ]; do \
+	  if $(COMPOSE) exec -T garage /garage status >/dev/null 2>&1; then \
+	    printf "\033[1;32mGarage listo; bucket S3 por defecto aprovisionado.\033[0m\n"; exit 0; \
+	  fi; \
+	  i=$$((i+1)); sleep 2; \
+	done; \
+	printf "\033[1;31mGarage no llegó a estar listo — revisa docker compose logs garage.\033[0m\n"; exit 1
+
+garage-status: ## Muestra el estado del nodo Garage
+	$(COMPOSE) exec -T garage /garage status
 
 db-generate: ## Genera el cliente Prisma
 	$(PRISMA) generate
