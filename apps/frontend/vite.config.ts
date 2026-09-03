@@ -1,4 +1,5 @@
-import { defineConfig, loadEnv } from 'vite';
+import { readFileSync } from 'node:fs';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -7,10 +8,39 @@ function parsePort(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+function loadPrefixedEnv(envFile: string, prefixes: string[]): Record<string, string> {
+  try {
+    return Object.fromEntries(
+      readFileSync(envFile, 'utf8')
+        .split(/\r?\n/)
+        .flatMap((line) => {
+          const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+          if (!match || !prefixes.some((prefix) => match[1].startsWith(prefix))) {
+            return [];
+          }
+
+          return [[match[1], match[2]]];
+        }),
+    );
+  } catch {
+    return {};
+  }
+}
+
 export default defineConfig(({ mode }) => {
-  const dockerEnv = loadEnv(mode, path.resolve(__dirname, '../../infra/docker'), '');
-  const localEnv = loadEnv(mode, __dirname, '');
-  const env = { ...dockerEnv, ...localEnv, ...process.env };
+  // Do not use Vite's loadEnv for Compose's .env. Even with a prefix filter,
+  // Vite warns when it encounters Compose's production NODE_ENV setting.
+  const envPrefixes = ['FRONTEND_', 'BACKEND_', 'VITE_'];
+  const dockerEnv = loadPrefixedEnv(
+    path.resolve(__dirname, '../../infra/docker/.env'),
+    envPrefixes,
+  );
+  const dockerExampleEnv = loadPrefixedEnv(
+    path.resolve(__dirname, '../../infra/docker/.env.example'),
+    envPrefixes,
+  );
+  const localEnv = loadPrefixedEnv(path.resolve(__dirname, `.env.${mode}`), envPrefixes);
+  const env = { ...dockerExampleEnv, ...dockerEnv, ...localEnv, ...process.env };
 
   const port = parsePort(env.FRONTEND_PORT || env.FRONTEND_DEV_PORT, 5173);
   const backendHost =
@@ -39,6 +69,10 @@ export default defineConfig(({ mode }) => {
           target: backendTarget,
           changeOrigin: true,
           ws: true,
+        },
+        '/uploads': {
+          target: backendTarget,
+          changeOrigin: true,
         },
       },
     },

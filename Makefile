@@ -5,8 +5,23 @@ LOCAL_ENV    := infra/docker/.env
 ENV_EXAMPLE   := infra/docker/.env.example
 NP_URL      := https://github.com/DavHau/nix-portable/releases/download/v012/nix-portable-$(shell uname -m)
 COMPOSE_FILE := infra/docker/docker-compose.yml
-COMPOSE_ENV_FILES := --env-file $(ENV_EXAMPLE) $(if $(wildcard $(LOCAL_ENV)),--env-file $(LOCAL_ENV))
+# A local overlay is created as a full copy of .env.example. Passing both files
+# makes Docker Compose expand nested variables from the second file before the
+# first one is available, producing false "variable is not set" warnings.
+COMPOSE_ENV_FILES := --env-file $(if $(wildcard $(LOCAL_ENV)),$(LOCAL_ENV),$(ENV_EXAMPLE))
 COMPOSE      := docker compose $(COMPOSE_ENV_FILES) -f $(COMPOSE_FILE)
+RUNTIME_ENV   := $(if $(wildcard $(LOCAL_ENV)),$(LOCAL_ENV),$(ENV_EXAMPLE))
+
+# These are immutable Docker-network names and ports, not user-facing
+# configuration. Exporting them also lets Compose resolve the derived URLs in
+# a copied local .env regardless of the order of its entries.
+export PROMETHEUS_HOST := prometheus
+export PROMETHEUS_PORT := 9090
+export TEMPO_HOST := tempo
+export TEMPO_PORT := 3200
+export LOKI_HOST := loki
+export LOKI_PORT := 3100
+export OTEL_GRPC_PORT := 4317
 
 NP_BIN      := $(pwd)/build
 NP_BIN      := ./nix-portable
@@ -34,14 +49,15 @@ deploy-ok:
 	@printf "\033[1;33mChrome:\033[0m  accept the self-signed cert on the App URL.\n"
 	@printf "\033[1;36mNext:\033[0m    make logs   |   make status   |   make fclean   |   make help\n\n"
 
-urls: ## Imprime las URLs públicas desde LOCAL_ENV
-	@set -a; . "./$(LOCAL_ENV)"; set +a; \
-	  printf "\n\033[1;32mStack — URLs vía HTTPS (%s):\033[0m\n" "$(LOCAL_ENV)"; \
-	  printf "  App:          https://%s:%s\n" "$$CADDY_DOMAIN" "$$CADDY_HTTPS_PORT"; \
-	  printf "  Grafana:      https://%s:%s\n" "$$CADDY_DOMAIN" "$$GRAFANA_HOST_PORT"; \
-	  printf "  Prometheus:   https://%s:%s\n" "$$CADDY_DOMAIN" "$$PROMETHEUS_HOST_PORT"; \
-	  printf "  Tempo:        https://%s:%s\n" "$$CADDY_DOMAIN" "$$TEMPO_HOST_PORT"; \
-	  printf "  Loki:         https://%s:%s\n" "$$CADDY_DOMAIN" "$$LOKI_HOST_PORT"; \
+urls: ## Imprime las URLs públicas desde el env activo
+	@value() { awk -F= -v key="$$1" '$$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$(RUNTIME_ENV)"; }; \
+	  domain=$$(value CADDY_DOMAIN); \
+	  printf "\n\033[1;32mStack — URLs vía HTTPS (%s):\033[0m\n" "$(RUNTIME_ENV)"; \
+	  printf "  App:          https://%s:%s\n" "$$domain" "$$(value CADDY_HTTPS_PORT)"; \
+	  printf "  Grafana:      https://%s:%s\n" "$$domain" "$$(value GRAFANA_HOST_PORT)"; \
+	  printf "  Prometheus:   https://%s:%s\n" "$$domain" "$$(value PROMETHEUS_HOST_PORT)"; \
+	  printf "  Tempo:        https://%s:%s\n" "$$domain" "$$(value TEMPO_HOST_PORT)"; \
+	  printf "  Loki:         https://%s:%s\n" "$$domain" "$$(value LOKI_HOST_PORT)"; \
 	  printf "\n"
 
 nix-portable:

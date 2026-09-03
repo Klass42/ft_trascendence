@@ -27,6 +27,11 @@ http://:{$CADDY_HTTP_PORT} {
 		reverse_proxy {$BACKEND_HOST}:{$BACKEND_PORT}
 	}
 
+	# Local development uploads; production S3 returns a presigned external URL.
+	handle /uploads* {
+		reverse_proxy {$BACKEND_HOST}:{$BACKEND_PORT}
+	}
+
 	handle {
 		reverse_proxy {$FRONTEND_HOST}:{$FRONTEND_PORT}
 	}
