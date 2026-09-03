@@ -6,7 +6,13 @@ import { JwtAuthGuard } from '../jwt-auth.guard';
 import { DevAuthGuard } from '../dev-auth.guard';
 
 const mkCtx = (headers: Record<string, string | undefined> = {}) => {
-  const req = { headers, user: undefined as any };
+  const req = {
+    headers,
+    path: '/api/courses',
+    // Successful JWT/dev guards populate this field. Keeping it in the context
+    // lets this unit test exercise the composite guard's tenant assertion.
+    user: { organizationId: 'org-klass-0001' },
+  };
   return {
     switchToHttp: () => ({ getRequest: () => req }),
     getHandler: () => ({ name: 'testHandler' }),

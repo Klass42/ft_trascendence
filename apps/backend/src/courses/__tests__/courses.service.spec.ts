@@ -1,279 +1,152 @@
-import { NotFoundException } from '@nestjs/common';
 import { CoursesService } from '../courses.service';
+import { CourseAccessService } from '../course-access.service';
+import type { AuthUser } from '@/common/auth';
 import type { PrismaService } from '@/prisma/prisma.service';
 
 const ORG_ID = 'org-klass-0001';
-const OTHER_ORG = 'org-other-0001';
-const COURSE_ID = 'course-web-101';
-const COURSE_ID_2 = 'course-web-102';
+const TEACHER: AuthUser = {
+  userId: 'teacher-1', email: 'teacher@example.test', name: 'Teacher',
+  avatarUrl: null, organizationId: ORG_ID, role: 'TEACHER',
+  emailNotificationsEnabled: true, preferredLanguage: 'es',
+};
 
 function buildFake() {
-  const courses: Record<string, any> = {
-    [COURSE_ID]: {
-      id: COURSE_ID, organizationId: ORG_ID, ownerId: null,
-      title: 'Introducción al Desarrollo Web', description: 'Curso inicial',
-      category: 'web', imageUrl: null, accessCode: 'WEB101',
-      status: 'PUBLISHED', createdAt: new Date(), updatedAt: new Date(),
-    },
-    [COURSE_ID_2]: {
-      id: COURSE_ID_2, organizationId: ORG_ID, ownerId: null,
-      title: 'Diseño de Interfaces', description: null,
-      category: 'design', imageUrl: null, accessCode: null,
-      status: 'DRAFT', createdAt: new Date(), updatedAt: new Date(),
-    },
+  const courses: Record<string, any> = {};
+  const enrollments: any[] = [];
+  const course = {
+    create: jest.fn(async ({ data }: any) => {
+      const result = { id: `course-${Object.keys(courses).length + 1}`, ...data };
+      courses[result.id] = result;
+      return result;
+    }),
+    findMany: jest.fn(async () => Object.values(courses)),
+    findFirst: jest.fn(),
+    update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
+    delete: jest.fn(async ({ where }: any) => delete courses[where.id]),
   };
-
+  const enrollment = {
+    create: jest.fn(async ({ data }: any) => {
+      enrollments.push(data);
+      return data;
+    }),
+  };
+  const transaction = jest.fn(async (callback: any) => callback({ course, enrollment }));
   const prisma = {
-    course: {
-      create: async ({ data }: any) => {
-        const course = { ...data, id: `course-${Date.now()}`, createdAt: new Date(), updatedAt: new Date() };
-        courses[course.id] = course;
-        return course;
-      },
-      findMany: async ({ where }: any) => {
-        let result = Object.values(courses);
-        if (where?.organizationId) result = result.filter((c: any) => c.organizationId === where.organizationId);
-        if (where?.status) {
-          const statusVal = typeof where.status === 'object' ? where.status.equals : where.status;
-          result = result.filter((c: any) => c.status === statusVal);
-        }
-        if (where?.title?.contains) {
-          result = result.filter((c: any) =>
-            c.title.toLowerCase().includes(where.title.contains.toLowerCase()),
-          );
-        }
-        return result.sort((a: any, b: any) => b.createdAt - a.createdAt);
-      },
-      findUnique: async ({ where }: any) => courses[where.id] ?? null,
-      update: async ({ where, data }: any) => {
-        if (!courses[where.id]) throw new NotFoundException();
-        Object.assign(courses[where.id], data);
-        return courses[where.id];
-      },
-      delete: async ({ where }: any) => {
-        if (!courses[where.id]) throw new NotFoundException();
-        const c = courses[where.id];
-        delete courses[where.id];
-        return c;
-      },
-    },
+    course,
+    enrollment,
+    $transaction: transaction,
   } as unknown as PrismaService;
+  const access = {
+    assertReadable: jest.fn(),
+    assertStaff: jest.fn(),
+  } as unknown as CourseAccessService;
 
-  return { prisma, courses };
-}
-
-function buildService(prisma: PrismaService) {
-  return new CoursesService(prisma);
+  return { prisma, access, enrollments, course, transaction };
 }
 
 describe('CoursesService', () => {
-  describe('create', () => {
-    it('creates a course with minimal fields', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('creates a course atomically with its creator as owner and course teacher', async () => {
+    const { prisma, access, enrollments, transaction } = buildFake();
+    const service = new CoursesService(prisma, access);
 
-      const result = await service.create({ title: 'Nuevo curso' }, ORG_ID);
+    const result = await service.create({ title: 'New course' }, TEACHER);
 
-      expect(result.id).toBeTruthy();
-      expect(result.title).toBe('Nuevo curso');
-      expect(result.organizationId).toBe(ORG_ID);
-      expect(result.status).toBeUndefined();
-    });
+    expect(result).toMatchObject({ organizationId: ORG_ID, ownerId: TEACHER.userId });
+    expect(enrollments).toEqual([
+      { courseId: result.id, userId: TEACHER.userId, role: 'TEACHER' },
+    ]);
+    expect(transaction).toHaveBeenCalledTimes(1);
+  });
 
-    it('creates a course with all optional fields', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('limits non-admin course listings to published courses and courses where they are staff', async () => {
+    const { prisma, access, course } = buildFake();
+    const service = new CoursesService(prisma, access);
 
-      const result = await service.create({
-        title: 'Curso completo',
-        description: 'Descripción completa',
-        category: 'backend',
-        imageUrl: 'https://example.com/img.png',
-        accessCode: 'SECRET',
-        status: 'DRAFT',
-      }, ORG_ID);
+    await service.findAll(TEACHER, 'PUBLISHED', 'web');
 
-      expect(result.title).toBe('Curso completo');
-      expect(result.description).toBe('Descripción completa');
-      expect(result.category).toBe('backend');
-      expect(result.imageUrl).toBe('https://example.com/img.png');
-      expect(result.accessCode).toBe('SECRET');
-      expect(result.status).toBe('DRAFT');
-    });
+    expect(course.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId: ORG_ID,
+        OR: expect.arrayContaining([
+          { status: 'PUBLISHED' },
+          { ownerId: TEACHER.userId },
+        ]),
+      }),
+    }));
+    expect(access.assertReadable).not.toHaveBeenCalled();
+  });
 
-    it('stores the organizationId on the course', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('lets an admin list every course in their organization', async () => {
+    const { prisma, access, course } = buildFake();
+    const service = new CoursesService(prisma, access);
+    const admin = { ...TEACHER, role: 'ADMIN' as const };
 
-      const result = await service.create({ title: 'Org scoped' }, ORG_ID);
-      expect(result.organizationId).toBe(ORG_ID);
+    await service.findAll(admin);
+
+    expect(course.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.not.objectContaining({ OR: expect.anything() }),
+    }));
+  });
+
+  it('uses course membership authorization before returning course details', async () => {
+    const { prisma, access } = buildFake();
+    const service = new CoursesService(prisma, access);
+
+    await service.findOne('course-1', TEACHER);
+
+    expect(access.assertReadable).toHaveBeenCalledWith('course-1', TEACHER);
+  });
+
+  it('exposes only published same-organization metadata in a course preview', async () => {
+    const { prisma, access, course } = buildFake();
+    const preview = {
+      id: 'course-1',
+      title: 'Spanish B1',
+      description: 'Conversational Spanish',
+      category: 'Languages',
+      imageUrl: 'https://example.test/b1.png',
+      status: 'PUBLISHED',
+    };
+    course.findFirst.mockResolvedValue(preview);
+    const service = new CoursesService(prisma, access);
+
+    await expect(service.preview('course-1', TEACHER)).resolves.toEqual(preview);
+
+    expect(course.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'course-1',
+        organizationId: ORG_ID,
+        status: 'PUBLISHED',
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        imageUrl: true,
+        status: true,
+      },
     });
   });
 
-  describe('findAll', () => {
-    it('returns all courses for an org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('does not preview missing, draft, or foreign-organization courses', async () => {
+    const { prisma, access, course } = buildFake();
+    course.findFirst.mockResolvedValue(null);
+    const service = new CoursesService(prisma, access);
 
-      const result = await service.findAll(ORG_ID);
-
-      expect(result).toHaveLength(2);
-      expect(result.map((c: any) => c.id)).toContain(COURSE_ID);
-      expect(result.map((c: any) => c.id)).toContain(COURSE_ID_2);
-    });
-
-    it('filters by status', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const published = await service.findAll(ORG_ID, 'PUBLISHED');
-      expect(published).toHaveLength(1);
-      expect(published[0].id).toBe(COURSE_ID);
-
-      const drafts = await service.findAll(ORG_ID, 'DRAFT');
-      expect(drafts).toHaveLength(1);
-      expect(drafts[0].id).toBe(COURSE_ID_2);
-    });
-
-    it('filters by search (case-insensitive)', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(ORG_ID, undefined, 'Desarrollo');
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(COURSE_ID);
-    });
-
-    it('returns empty array for different org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(OTHER_ORG);
-      expect(result).toHaveLength(0);
-    });
-
-    it('returns empty array when status matches nothing', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(ORG_ID, 'ARCHIVED');
-      expect(result).toHaveLength(0);
-    });
+    await expect(service.preview('course-1', TEACHER)).rejects.toThrow('Course course-1 not found');
   });
 
-  describe('findOne', () => {
-    it('returns a course by id within the org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it.each(['update', 'delete'] as const)('requires course staff access to %s a course', async (operation) => {
+    const { prisma, access } = buildFake();
+    const service = new CoursesService(prisma, access);
 
-      const result = await service.findOne(COURSE_ID, ORG_ID);
-      expect(result.id).toBe(COURSE_ID);
-      expect(result.title).toBe('Introducción al Desarrollo Web');
-    });
+    if (operation === 'update') {
+      await service.update('course-1', TEACHER, { title: 'Renamed' });
+    } else {
+      await service.delete('course-1', TEACHER);
+    }
 
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.findOne('ghost', ORG_ID)).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.findOne(COURSE_ID, OTHER_ORG)).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('update', () => {
-    it('updates the course title', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { title: 'Título nuevo' });
-      expect(result.title).toBe('Título nuevo');
-    });
-
-    it('updates description', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { description: 'Nueva descripción' });
-      expect(result.description).toBe('Nueva descripción');
-    });
-
-    it('updates status', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { status: 'ARCHIVED' });
-      expect(result.status).toBe('ARCHIVED');
-    });
-
-    it('updates accessCode', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { accessCode: 'NEWCODE' });
-      expect(result.accessCode).toBe('NEWCODE');
-    });
-
-    it('persists update across findOne', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await service.update(COURSE_ID, ORG_ID, { title: 'Persistido' });
-      const result = await service.findOne(COURSE_ID, ORG_ID);
-      expect(result.title).toBe('Persistido');
-    });
-
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.update('ghost', ORG_ID, { title: 'x' })).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.update(COURSE_ID, OTHER_ORG, { title: 'x' })).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('delete', () => {
-    it('deletes an existing course', async () => {
-      const { prisma, courses } = buildFake();
-      const service = buildService(prisma);
-
-      await service.delete(COURSE_ID, ORG_ID);
-      expect(courses[COURSE_ID]).toBeUndefined();
-    });
-
-    it('removes course from findAll after delete', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await service.delete(COURSE_ID, ORG_ID);
-      const result = await service.findAll(ORG_ID);
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(COURSE_ID_2);
-    });
-
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.delete('ghost', ORG_ID)).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.delete(COURSE_ID, OTHER_ORG)).rejects.toThrow(NotFoundException);
-    });
+    expect(access.assertStaff).toHaveBeenCalledWith('course-1', TEACHER);
   });
 });

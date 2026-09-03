@@ -4,6 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { CourseRole } from '@prisma/client';
+import { AuthUser } from '@/common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EnrollCourseDto } from './dto/enroll-course.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -126,6 +128,41 @@ export class EnrollmentsService {
     });
   }
 
+  /** Resolves the course that owns an enrollment with tenant isolation. */
+  async findEnrollmentCourseId(enrollmentId: string, organizationId: string) {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      include: { course: true },
+    });
+
+    if (!enrollment || enrollment.course.organizationId !== organizationId) {
+      throw new NotFoundException(`Enrollment ${enrollmentId} not found`);
+    }
+
+    return enrollment.courseId;
+  }
+
+  /** Resolves a lesson's course with tenant isolation for controller guards. */
+  async findLessonCourseId(lessonId: string, organizationId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: {
+        section: {
+          select: {
+            courseId: true,
+            course: { select: { organizationId: true } },
+          },
+        },
+      },
+    });
+
+    if (!lesson || lesson.section.course.organizationId !== organizationId) {
+      throw new NotFoundException(`Lesson ${lessonId} not found`);
+    }
+
+    return { courseId: lesson.section.courseId };
+  }
+
   async completeLesson(
     lessonId: string,
     organizationId: string,
@@ -224,12 +261,34 @@ export class EnrollmentsService {
     return completions.map(c => c.lessonId);
   }
 
-  async getMyProgress(organizationId: string, userId: string) {
+  async getMyProgress(user: AuthUser) {
+    const { organizationId, userId } = user;
     if (!userId) throw new BadRequestException('userId is required');
     if (!organizationId) throw new BadRequestException('organizationId is required');
 
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { userId, course: { organizationId } },
+      where: {
+        userId,
+        course: {
+          organizationId,
+          ...(user.role === 'ADMIN'
+            ? {}
+            : {
+                OR: [
+                  { status: 'PUBLISHED' },
+                  { ownerId: userId },
+                  {
+                    enrollments: {
+                      some: {
+                        userId,
+                        role: { in: [CourseRole.TEACHER, CourseRole.ASSISTANT] },
+                      },
+                    },
+                  },
+                ],
+              }),
+        },
+      },
       select: { courseId: true, progress: true },
     });
 

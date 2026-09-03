@@ -23,6 +23,25 @@ export class LessonsService {
     return section;
   }
 
+  /** Resolves a section's course with tenant isolation for controller guards. */
+  async findSectionCourseId(sectionId: string, organizationId: string) {
+    return this.findSectionOrThrow(sectionId, organizationId);
+  }
+
+  /** Resolves a lesson's course with tenant isolation for controller guards. */
+  async findCourseId(lessonId: string, organizationId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { section: { include: { course: true } } },
+    });
+
+    if (!lesson || lesson.section.course.organizationId !== organizationId) {
+      throw new NotFoundException(`Lesson ${lessonId} not found`);
+    }
+
+    return lesson;
+  }
+
   private async findLessonOrThrow(
     sectionId: string,
     lessonId: string,

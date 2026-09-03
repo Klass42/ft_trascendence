@@ -7,6 +7,7 @@ import { LessonsController } from './lessons/lessons.controller';
 import { LessonsService } from './lessons/lessons.service';
 import { EnrollmentsController } from './enrollments/enrollments.controller';
 import { EnrollmentsService } from './enrollments/enrollments.service';
+import { CourseAccessService } from './course-access.service';
 
 @Module({
   controllers: [
@@ -20,6 +21,7 @@ import { EnrollmentsService } from './enrollments/enrollments.service';
     SectionsService,
     LessonsService,
     EnrollmentsService,
+    CourseAccessService,
   ],
 })
 export class CoursesModule {}

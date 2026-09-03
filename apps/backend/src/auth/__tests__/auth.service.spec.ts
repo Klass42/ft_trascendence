@@ -15,6 +15,7 @@ const mockUser = {
   name: 'Sam Student',
   avatarUrl: null,
   role: 'STUDENT' as const,
+  platformRole: 'NONE' as const,
   onlineAt: null,
   emailVerifiedAt: new Date(),
   emailNotificationsEnabled: true,
@@ -40,7 +41,7 @@ const mkJwtService = () => ({
   decode: jest.fn(),
 }) as unknown as JwtService;
 
-let mockOrganizationUpsert: jest.Mock;
+let mockOrganizationFindUnique: jest.Mock;
 let mockUserFindFirst: jest.Mock;
 let mockUserCreate: jest.Mock;
 let mockSessionCreate: jest.Mock;
@@ -55,7 +56,7 @@ let mockOAuthAccountCreate: jest.Mock;
 
 const mkPrisma = () => ({
   organization: {
-    upsert: (...a: unknown[]) => mockOrganizationUpsert(...a),
+    findUnique: (...a: unknown[]) => mockOrganizationFindUnique(...a),
   },
   user: {
     findFirst: (...a: unknown[]) => mockUserFindFirst(...a),
@@ -81,7 +82,11 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
-    mockOrganizationUpsert = jest.fn().mockResolvedValue({ id: SEED_ORG_ID });
+    mockOrganizationFindUnique = jest.fn().mockResolvedValue({
+      id: SEED_ORG_ID,
+      slug: 'klass',
+      status: 'ACTIVE',
+    });
     mockUserFindFirst = jest.fn();
     mockUserCreate = jest.fn();
     mockSessionCreate = jest.fn();
@@ -108,6 +113,7 @@ describe('AuthService', () => {
         email: 'new@demo',
         password: 'Password1',
         name: 'New User',
+        organizationSlug: 'klass',
       });
 
       expect(result.user.email).toBe('student@demo');
@@ -118,23 +124,20 @@ describe('AuthService', () => {
         avatarUrl: null,
         organizationId: SEED_ORG_ID,
         role: 'STUDENT',
+        platformRole: 'NONE',
         emailNotificationsEnabled: true,
         preferredLanguage: 'es',
       });
       expect(result.accessToken).toBe('access-token-mock');
       expect(result.refreshToken).toBe('refresh-token-mock');
-      expect(mockOrganizationUpsert).toHaveBeenCalledWith({
-        where: { id: SEED_ORG_ID },
-        update: {},
-        create: { id: SEED_ORG_ID, name: 'Klass Academy', slug: 'klass' },
-      });
+      expect(mockOrganizationFindUnique).toHaveBeenCalledWith({ where: { slug: 'klass' } });
     });
 
     it('throws 409 on duplicate email within org', async () => {
       mockUserFindFirst.mockResolvedValue(mockUser);
 
       await expect(
-        service.register({ email: 'student@demo', password: 'Password1', name: 'Dup' }),
+        service.register({ email: 'student@demo', password: 'Password1', name: 'Dup', organizationSlug: 'klass' }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -143,7 +146,7 @@ describe('AuthService', () => {
       mockSessionCreate.mockResolvedValue({ id: 'session-1', refreshTokenHash: 'hash' });
       mockUserCreate.mockResolvedValue({ ...mockUser, emailVerifiedAt: new Date() });
 
-      await service.register({ email: 'new@demo', password: 'Password1', name: 'New' });
+      await service.register({ email: 'new@demo', password: 'Password1', name: 'New', organizationSlug: 'klass' });
       expect(mockUserCreate).toHaveBeenCalled();
       const createData = (mockUserCreate.mock.calls[0][0] as { data: { emailVerifiedAt?: Date } }).data;
       expect(createData.emailVerifiedAt).toBeInstanceOf(Date);
@@ -155,7 +158,7 @@ describe('AuthService', () => {
       mockSessionCreate.mockResolvedValue({ id: 'session-1', refreshTokenHash: 'hash' });
       mockUserCreate.mockResolvedValue({ ...mockUser, emailVerifiedAt: null });
 
-      await service.register({ email: 'new@demo', password: 'Password1', name: 'New' });
+      await service.register({ email: 'new@demo', password: 'Password1', name: 'New', organizationSlug: 'klass' });
       const createData = (mockUserCreate.mock.calls[0][0] as { data: { emailVerifiedAt?: Date | null } }).data;
       expect(createData.emailVerifiedAt).toBeNull();
       process.env.NODE_ENV = 'development';
@@ -168,7 +171,7 @@ describe('AuthService', () => {
       mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash });
       mockSessionCreate.mockResolvedValue({ id: 'session-1', refreshTokenHash: 'hash' });
 
-      const result = await service.login({ email: 'student@demo', password: 'demo1234' });
+      const result = await service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' });
 
       expect(result.user.userId).toBe('user-student-0001');
       expect(result.accessToken).toBe('access-token-mock');
@@ -180,7 +183,7 @@ describe('AuthService', () => {
       mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash });
 
       await expect(
-        service.login({ email: 'student@demo', password: 'wrong' }),
+        service.login({ email: 'student@demo', password: 'wrong', organizationSlug: 'klass' }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
@@ -188,7 +191,7 @@ describe('AuthService', () => {
       mockUserFindFirst.mockResolvedValue(null);
 
       await expect(
-        service.login({ email: 'ghost@demo', password: 'demo1234' }),
+        service.login({ email: 'ghost@demo', password: 'demo1234', organizationSlug: 'klass' }),
       ).rejects.toThrow(UnauthorizedException);
     });
 
@@ -197,7 +200,7 @@ describe('AuthService', () => {
       mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash, emailVerifiedAt: null });
 
       await expect(
-        service.login({ email: 'student@demo', password: 'demo1234' }),
+        service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' }),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -225,6 +228,7 @@ describe('AuthService', () => {
         userId: mockUser.id,
         refreshTokenHash: crypto.createHash('sha256').update(oldToken).digest('hex'),
         expiresAt: new Date(Date.now() + 100000),
+        user: { organization: { status: 'ACTIVE' } },
       });
       mockSessionDelete.mockResolvedValue({});
       mockSessionCreate.mockResolvedValue({ id: 'new-session' });
@@ -248,6 +252,7 @@ describe('AuthService', () => {
         userId: mockUser.id,
         refreshTokenHash: crypto.createHash('sha256').update('expired').digest('hex'),
         expiresAt: new Date(Date.now() - 100000),
+        user: { organization: { status: 'ACTIVE' } },
       });
 
       await expect(service.refresh('expired')).rejects.toThrow(UnauthorizedException);
@@ -405,32 +410,20 @@ describe('AuthService', () => {
       expect(result.refreshToken).toBe('refresh-token-mock');
     });
 
-    it('links existing user by email match and returns tokens', async () => {
+    it('rejects an unlinked Google account because OAuth must start in an organization', async () => {
       mockOAuthAccountFindUnique.mockResolvedValue(null);
       mockUserFindFirst.mockResolvedValue(mockUser);
-      mockOAuthAccountCreate.mockResolvedValue({});
-      mockSessionCreate.mockResolvedValue({ id: 'session-g2' });
-
-      const result = await service.googleLogin(googleProfile);
-      expect(result.accessToken).toBe('access-token-mock');
-      expect(mockOAuthAccountCreate).toHaveBeenCalled();
+      await expect(service.googleLogin(googleProfile)).rejects.toThrow(ForbiddenException);
+      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
       expect(mockUserCreate).not.toHaveBeenCalled();
     });
 
-    it('creates a new user + OAuthAccount when no match', async () => {
+    it('does not create a user for an unlinked Google account', async () => {
       mockOAuthAccountFindUnique.mockResolvedValue(null);
       mockUserFindFirst.mockResolvedValue(null);
-      mockUserCreate.mockResolvedValue({ ...mockUser, id: 'user-google-0001', passwordHash: null });
-      mockOAuthAccountCreate.mockResolvedValue({});
-      mockSessionCreate.mockResolvedValue({ id: 'session-g3' });
-
-      const result = await service.googleLogin(googleProfile);
-      expect(result.accessToken).toBe('access-token-mock');
-      const createData = (mockUserCreate.mock.calls[0][0] as { data: any }).data;
-      expect(createData.passwordHash).toBeNull();
-      expect(createData.emailVerifiedAt).toBeInstanceOf(Date);
-      expect(createData.role).toBe('STUDENT');
-      expect(mockOAuthAccountCreate).toHaveBeenCalled();
+      await expect(service.googleLogin(googleProfile)).rejects.toThrow(ForbiddenException);
+      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
     });
   });
 });
