@@ -77,6 +77,19 @@
   color: var(--color-text-secondary);
 }
 
+.legalLinks {
+  margin-top: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.legalLinks a {
+  color: var(--color-accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .link {
   color: var(--color-accent-primary);
   font-weight: var(--font-medium);

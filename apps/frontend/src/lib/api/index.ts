@@ -20,6 +20,7 @@ export {
   DevTokenStorage,
   type TokenStorage,
 } from './token-storage';
+export { socketAuth } from './socket-auth';
 
 // Hooks
 export {
@@ -27,6 +28,7 @@ export {
   useUser,
   useCourses,
   useCourseDetail,
+  useCoursePreview,
   useSections,
   useLesson,
   useLessonById,
@@ -46,6 +48,7 @@ export {
   useActivities,
   useActivity,
   useActivityMutations,
+  useActivityAttempts,
   useGradebook,
   useGradeSubmission,
   useMyGrades,
@@ -77,6 +80,9 @@ export {
   useChangePassword,
   useEnrollments,
   useUsersByIds,
+  useResources,
+  useCourseResources,
+  useResourceMutations,
 } from './hooks';
 
 // Types
@@ -134,6 +140,7 @@ export {
   type GradeBucketDTO,
   type GradeDistributionDTO,
   type CourseDTO,
+  type CoursePreviewDTO,
   type SectionDTO,
   type LessonDTO,
   type CourseStatus,
@@ -143,4 +150,11 @@ export {
   type UpdateSectionInput,
   type CreateLessonInput,
   type UpdateLessonInput,
+  type LearningResourceType,
+  type LearningResourceStatus,
+  type LearningResourceDTO,
+  type CourseResourceDTO,
+  type CreateLearningResourceInput,
+  type UpdateLearningResourceInput,
+  type PublishResourceInput,
 } from './types';

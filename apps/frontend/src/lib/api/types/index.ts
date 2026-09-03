@@ -1,5 +1,6 @@
 export type {
   CourseDTO,
+  CoursePreviewDTO,
   SectionDTO,
   LessonDTO,
   FileDTO,
@@ -10,3 +11,14 @@ export type {
   CourseStatus,
   CourseRole,
 } from './course';
+export type {
+  LearningResourceType,
+  LearningResourceStatus,
+  ResourceFileDTO,
+  ResourceCourseDTO,
+  LearningResourceDTO,
+  CourseResourceDTO,
+  CreateLearningResourceInput,
+  UpdateLearningResourceInput,
+  PublishResourceInput,
+} from './resource';

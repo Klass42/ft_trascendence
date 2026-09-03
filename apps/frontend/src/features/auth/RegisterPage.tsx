@@ -166,6 +166,11 @@ export function RegisterPage() {
             Inicia sesión
           </Link>
         </p>
+        <p className={styles.legalLinks}>
+          <Link to="/privacy">Política de privacidad</Link>
+          <span aria-hidden="true"> · </span>
+          <Link to="/terms">Términos de servicio</Link>
+        </p>
       </div>
     </div>
   );

@@ -110,6 +110,7 @@ export interface PaginationParams {
 // DTOs (api response shapes)
 export type {
   CourseDTO,
+  CoursePreviewDTO,
   SectionDTO,
   LessonDTO,
   FileDTO,
@@ -189,3 +190,15 @@ export type {
   GradeBucketDTO,
   GradeDistributionDTO,
 } from './types/analytics';
+
+export type {
+  LearningResourceType,
+  LearningResourceStatus,
+  ResourceFileDTO,
+  ResourceCourseDTO,
+  LearningResourceDTO,
+  CourseResourceDTO,
+  CreateLearningResourceInput,
+  UpdateLearningResourceInput,
+  PublishResourceInput,
+} from './types/resource';

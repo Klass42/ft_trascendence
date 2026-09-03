@@ -45,6 +45,7 @@ model Organization {
   users   User[]
   courses Course[]
   files   File[]
+  learningResources LearningResource[]
   invitations OrganizationInvitation[]
   auditLogs AuditLog[]
 }
@@ -83,6 +84,7 @@ model User {
   forumPosts        ForumPost[]
   notifications     Notification[]
   uploadedFiles     File[]             @relation("FileUploader")
+  createdLearningResources LearningResource[] @relation("LearningResourceCreator")
   lessonCompletions LessonCompletion[]
   friendsInitiated  Friendship[]       @relation("FriendRequester")
   friendsReceived   Friendship[]       @relation("FriendAddressee")
@@ -186,6 +188,7 @@ model File {
   lessonAttachments LessonAttachment[]
   submissionFiles   SubmissionFile[]
   assignmentFiles   AssignmentFile[]
+  learningResources LearningResource[] @relation("LearningResourceFile")
 
   @@unique([bucket, objectKey])
   @@index([organizationId])
@@ -215,6 +218,7 @@ model Course {
   assignments  Assignment[]
   activities   Activity[]
   forumThreads ForumThread[]
+  resources    CourseResource[]
 
   @@index([organizationId])
 }
@@ -281,6 +285,58 @@ model LessonCompletion {
 
   @@id([lessonId, userId])
   @@index([userId])
+}
+
+// ============================================================================
+//  Learning-resource library
+// ============================================================================
+
+/// Reusable academic material owned by an organization. The object bytes stay
+/// in File/object storage; this model supplies catalog metadata and publication
+/// to one or more courses. `fileId` XOR `externalUrl` is enforced by ResourcesService.
+model LearningResource {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User                   @relation("LearningResourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  title          String
+  description    String?
+  type           LearningResourceType
+  authors        String[]               @default([])
+  publisher      String?
+  isbn           String?
+  language       String?
+  license        String?
+  tags           String[]               @default([])
+  fileId         String?
+  file           File?                  @relation("LearningResourceFile", fields: [fileId], references: [id], onDelete: Restrict)
+  externalUrl    String?
+  status         LearningResourceStatus @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  courses CourseResource[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+  @@index([createdById])
+  @@index([fileId])
+}
+
+/// A resource can be published once and reused by multiple courses. It stays
+/// course-level; use LessonAttachment for material tied to a specific lesson.
+model CourseResource {
+  resourceId String
+  resource   LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order      Int              @default(0)
+  required   Boolean          @default(false)
+
+  @@id([resourceId, courseId])
+  @@index([courseId, order])
 }
 
 // ============================================================================
@@ -438,6 +494,20 @@ enum CourseRole {
 }
 
 enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LearningResourceType {
+  BOOK
+  DOCUMENT
+  LINK
+  VIDEO
+  AUDIO
+}
+
+enum LearningResourceStatus {
   DRAFT
   PUBLISHED
   ARCHIVED

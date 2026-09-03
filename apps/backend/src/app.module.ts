@@ -16,6 +16,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 // ── Content & UX — illia ──
 import { CoursesModule } from './courses/courses.module';
 import { FilesModule } from './files/files.module';
+import { ResourcesModule } from './resources/resources.module';
 // ── Ops & Interaction — dacs-dev ──
 import { AssignmentsModule } from './assignments/assignments.module';
 import { ActivitiesModule } from './activities/activities.module';
@@ -41,6 +42,7 @@ import { PlatformModule } from './platform/platform.module';
     OrganizationsModule,
     CoursesModule,
     FilesModule,
+    ResourcesModule,
     AssignmentsModule,
     ActivitiesModule,
     ForumsModule,

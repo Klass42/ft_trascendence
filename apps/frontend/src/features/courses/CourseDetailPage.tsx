@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useCourseDetail,
+  useCoursePreview,
   useSections,
   useProgress,
   useCompletedLessons,
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui';
 import { ContentEditor } from './ContentEditor';
 import { RosterPage } from './RosterPage';
+import { CourseResourcesTab } from '@/features/resources';
 
 const COURSE_COLORS = [
   '#2563eb', '#0f766e', '#d97706', '#7c3aed',
@@ -44,10 +46,16 @@ export function CourseDetailPage() {
   const { update, isLoading: updating } = useUpdateCourse();
   const { remove, isLoading: deleting } = useDeleteCourse();
 
-  const { data: course, isLoading: courseLoading, error: courseErr } = useCourseDetail(courseId);
-  const { data: sections, isLoading: sectionsLoading } = useSections(courseId);
-  const { data: progress, isLoading: progressLoading, error: progressError } = useProgress(courseId);
-  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(courseId);
+  const { data: fullCourse, isLoading: courseLoading } = useCourseDetail(courseId);
+  const {
+    data: previewCourse,
+    isLoading: previewLoading,
+  } = useCoursePreview(courseId, !courseLoading && !fullCourse);
+  // Do not request course content/progress until CourseAccess has confirmed
+  // membership through the private detail endpoint.
+  const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? courseId : undefined);
+  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? courseId : undefined);
+  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? courseId : undefined);
   const { enroll, isLoading: enrolling } = useEnroll();
 
   const [accessCode, setAccessCode] = useState('');
@@ -62,7 +70,10 @@ export function CourseDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  if (courseLoading || sectionsLoading || progressLoading || completedLoading) {
+  if (
+    courseLoading || previewLoading ||
+    (fullCourse && (sectionsLoading || progressLoading || completedLoading))
+  ) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
         Cargando curso...
@@ -70,7 +81,10 @@ export function CourseDetailPage() {
     );
   }
 
-  if (courseErr || !course) {
+  const course = fullCourse ?? previewCourse;
+  const isPreview = !fullCourse && !!previewCourse;
+
+  if (!course) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
         Curso no encontrado
@@ -79,13 +93,16 @@ export function CourseDetailPage() {
   }
 
   const color = hashToColor(course.title);
-  const isNotEnrolled = progressError instanceof ApiError && progressError.isNotFound;
+  const isNotEnrolled = isPreview;
   const pct = progress?.progress ?? 0;
 
   const handleEnroll = async () => {
     setEnrollError(null);
     try {
-      await enroll(course.id, course.accessCode ? accessCode : undefined);
+      // Whether a code is required is intentionally not exposed by preview.
+      // Submitting it (or an empty value for open courses) lets the backend
+      // make that authorization decision.
+      await enroll(course.id, accessCode || undefined);
       setJustEnrolled(true);
       setTimeout(() => window.location.reload(), 1200);
     } catch (err) {
@@ -97,17 +114,19 @@ export function CourseDetailPage() {
   };
 
   const openEdit = () => {
-    setEditTitle(course.title);
-    setEditDescription(course.description ?? '');
-    setEditCategory(course.category ?? '');
-    setEditAccessCode(course.accessCode ?? '');
+    if (!fullCourse) return;
+    setEditTitle(fullCourse.title);
+    setEditDescription(fullCourse.description ?? '');
+    setEditCategory(fullCourse.category ?? '');
+    setEditAccessCode(fullCourse.accessCode ?? '');
     setEditOpen(true);
   };
 
   const handleUpdate = async () => {
     if (!editTitle.trim()) return;
     try {
-      await update(course.id, {
+      if (!fullCourse) return;
+      await update(fullCourse.id, {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         category: editCategory.trim() || undefined,
@@ -122,7 +141,8 @@ export function CourseDetailPage() {
 
   const handleStatusChange = async (status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') => {
     try {
-      await update(course.id, { status });
+      if (!fullCourse) return;
+      await update(fullCourse.id, { status });
       toast({ message: `Curso ${status === 'PUBLISHED' ? 'publicado' : status === 'ARCHIVED' ? 'archivado' : 'guardado como borrador'}`, variant: 'success' });
     } catch {
       toast({ message: 'Error al cambiar el estado', variant: 'error' });
@@ -131,7 +151,8 @@ export function CourseDetailPage() {
 
   const handleDelete = async () => {
     try {
-      await remove(course.id);
+      if (!fullCourse) return;
+      await remove(fullCourse.id);
       toast({ message: 'Curso eliminado', variant: 'success' });
       navigate('/courses');
     } catch {
@@ -166,7 +187,7 @@ export function CourseDetailPage() {
             </h1>
           </div>
 
-          {isTeacher && (
+          {isTeacher && fullCourse && (
             <div style={{ display: 'flex', gap: 8 }}>
               <Button variant="secondary" size="sm" onClick={openEdit}>
                 Editar
@@ -192,7 +213,7 @@ export function CourseDetailPage() {
           )}
         </div>
 
-        {course.status !== 'PUBLISHED' && isTeacher && (
+        {course.status !== 'PUBLISHED' && isTeacher && fullCourse && (
           <div style={{ marginTop: 8 }}>
             <span style={{
               fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
@@ -219,23 +240,21 @@ export function CourseDetailPage() {
               </div>
             ) : (
               <div>
-                {course.accessCode && (
-                  <input
-                    value={accessCode}
-                    onChange={(e) => setAccessCode(e.target.value)}
-                    placeholder="Código de acceso"
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: 9,
-                      border: 'none',
-                      fontSize: 14,
-                      fontFamily: 'inherit',
-                      width: 200,
-                      marginRight: 10,
-                      marginBottom: 8,
-                    }}
-                  />
-                )}
+                <input
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  placeholder="Código de acceso (si lo requiere)"
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 9,
+                    border: 'none',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    width: 200,
+                    marginRight: 10,
+                    marginBottom: 8,
+                  }}
+                />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button
                     onClick={handleEnroll}
@@ -376,7 +395,11 @@ export function CourseDetailPage() {
           </div>
         );
 
-        if (isTeacher && courseId) {
+        if (isNotEnrolled || !courseId) {
+          return lessonListContent;
+        }
+
+        if (isTeacher && fullCourse) {
           return (
             <Tabs
               tabs={[
@@ -392,12 +415,28 @@ export function CourseDetailPage() {
                   label: 'Alumnos',
                   content: <RosterPage courseId={courseId} />,
                 },
+                {
+                  id: 'resources',
+                  label: 'Recursos',
+                  content: <CourseResourcesTab courseId={courseId} showStaffStatus />,
+                },
               ] satisfies TabItem[]}
             />
           );
         }
 
-        return lessonListContent;
+        return (
+          <Tabs
+            tabs={[
+              { id: 'content', label: 'Contenido', content: lessonListContent },
+              {
+                id: 'resources',
+                label: 'Recursos',
+                content: <CourseResourcesTab courseId={courseId} />,
+              },
+            ] satisfies TabItem[]}
+          />
+        );
       })()}
 
       {/* Edit modal */}

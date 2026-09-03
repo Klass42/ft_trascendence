@@ -19,6 +19,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
+import { MAX_AVATAR_UPLOAD_BYTES } from '@/files/file-validation';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('users')
@@ -33,9 +34,9 @@ export class UsersController {
   }
 
   @Patch('me/avatar')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_AVATAR_UPLOAD_BYTES } }))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthUser) {
-    return this.usersService.uploadAvatar(user.userId, user.organizationId, file);
+    return this.usersService.uploadAvatar(user, file);
   }
 
   @Get('me/friends')

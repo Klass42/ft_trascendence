@@ -26,6 +26,9 @@ const VerifyEmailPage = lazy(() =>
 const OAuthCallbackPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.OAuthCallbackPage }))
 );
+const LegalPage = lazy(() =>
+  import('@/features/legal').then((m) => ({ default: m.LegalPage }))
+);
 const DashboardPage = lazy(() =>
   import('@/features/dashboard').then((m) => ({ default: m.DashboardPage }))
 );
@@ -58,6 +61,9 @@ const NotificationsPage = lazy(() =>
 );
 const AnalyticsPage = lazy(() =>
   import('@/features/analytics').then((m) => ({ default: m.AnalyticsPage }))
+);
+const ResourcesPage = lazy(() =>
+  import('@/features/resources').then((m) => ({ default: m.ResourcesPage }))
 );
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
@@ -155,6 +161,22 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/privacy',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <LegalPage document="privacy" />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/terms',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <LegalPage document="terms" />
+      </Suspense>
+    ),
+  },
+  {
     element: (
       <ProtectedRoute>
         <AppLayout />
@@ -239,6 +261,16 @@ const routes: RouteObject[] = [
           <Suspense fallback={<PageLoader />}>
             <AnalyticsPage />
           </Suspense>
+        ),
+      },
+      {
+        path: '/resources',
+        element: (
+          <ProtectedRoute roles={['ADMIN', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <ResourcesPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {

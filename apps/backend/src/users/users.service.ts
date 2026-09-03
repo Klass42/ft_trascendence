@@ -11,6 +11,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { AuthUser } from '@/common/auth';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
@@ -141,12 +142,17 @@ export class UsersService {
     return this.prisma.user.findMany({ where: { id: { in: friendIds } }, select: selectPublicProfile, orderBy: { name: 'asc' } });
   }
 
-  async uploadAvatar(userId: string, organizationId: string, file: Express.Multer.File) {
+  async uploadAvatar(user: AuthUser, file: Express.Multer.File) {
     if (!this.files) throw new BadRequestException('File upload is not available');
-    const fileRecord = await this.files.createUpload(file, organizationId, userId);
-    const { url } = await this.files.getSignedUrl(fileRecord.id, organizationId);
-    await this.prisma.user.update({ where: { id: userId }, data: { avatarUrl: url } });
-    return this.prisma.user.findUnique({ where: { id: userId }, select: selectPublicProfile });
+    const fileRecord = await this.files.createUpload(
+      file,
+      user.organizationId,
+      user.userId,
+      'AVATAR',
+    );
+    const { url } = await this.files.getSignedUrl(fileRecord.id, user);
+    await this.prisma.user.update({ where: { id: user.userId }, data: { avatarUrl: url } });
+    return this.prisma.user.findUnique({ where: { id: user.userId }, select: selectPublicProfile });
   }
 
   // ── Batch fetch for roster (A3) ──

@@ -5,6 +5,7 @@ import {
   BookOpen,
   ClipboardCheck,
   ListChecks,
+  Library,
   MessageSquare,
   BarChart3,
   LineChart,
@@ -43,6 +44,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
   { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
   { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },
+  { to: '/resources', icon: <Library size={20} />, label: 'Biblioteca', staffOnly: true },
   { to: '/org', icon: <Building2 size={20} />, label: 'Organización' },
   { to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios', adminOnly: true },
 ];

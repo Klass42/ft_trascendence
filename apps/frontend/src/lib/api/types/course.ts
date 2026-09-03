@@ -29,6 +29,16 @@ export interface CourseDTO {
   updatedAt: string;
 }
 
+/** Safe metadata exposed before a learner joins a published course. */
+export interface CoursePreviewDTO {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  imageUrl: string | null;
+  status: CourseStatus;
+}
+
 // =============================================================================
 // Section
 // =============================================================================

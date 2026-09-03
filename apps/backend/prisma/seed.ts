@@ -61,6 +61,8 @@ async function clearApplicationData(): Promise<void> {
     await tx.attempt.deleteMany();
     await tx.question.deleteMany();
     await tx.activity.deleteMany();
+    await tx.courseResource.deleteMany();
+    await tx.learningResource.deleteMany();
     await tx.submissionFile.deleteMany();
     await tx.submission.deleteMany();
     await tx.assignmentFile.deleteMany();
@@ -191,12 +193,12 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
       {
         id: activity.id + '-question-01', activityId: activity.id, kind: QuestionKind.MULTIPLE_CHOICE,
         prompt: '¿Cuál es la opción correcta?', points: 5, order: 0,
-        content: { options: [{ id: 'a', text: 'Opción correcta', correct: true }, { id: 'b', text: 'Distractor', correct: false }] },
+        content: { options: ['Opción correcta', 'Distractor'], correct: [0] },
       },
       {
         id: activity.id + '-question-02', activityId: activity.id, kind: QuestionKind.TRUE_FALSE,
         prompt: 'El contenido está disponible para el alumnado matriculado.', points: 5, order: 1,
-        content: { correct: true },
+        content: { answer: true },
       },
     ]),
   });
