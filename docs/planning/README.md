@@ -11,6 +11,8 @@ task-level brief:
 Product context: [`../../AGENTS.md`](../../AGENTS.md) (conventions) · [`../../MVP_DESIGN.md`](../../MVP_DESIGN.md).
 Target: **14 module points** (planned ~16). Subject: `en.subject.pdf` (v21.1, free-choice).
 
+Current cross-team delivery status: [`session-status-2026-09-03.md`](./session-status-2026-09-03.md).
+
 ---
 
 ## 1. Team & split
