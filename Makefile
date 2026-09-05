@@ -81,13 +81,13 @@ status: ## Muestra estado de los servicios
 	$(COMPOSE) ps
 
 db-generate: ## Genera el cliente Prisma
-	$(PRISMA) generate
+	$(COMPOSE) run --rm -v $(CURDIR)/apps/backend/prisma:/app/prisma backend sh -c "npx prisma generate"
 
 db-push: ## Sincroniza el schema con la BD (dev rápido, sin migraciones)
-	$(PRISMA) db push
+	$(COMPOSE) run --rm -v $(CURDIR)/apps/backend/prisma:/app/prisma backend sh -c "npx prisma db push"
 
 db-migrate: ## Crea una migración de Prisma (NAME=nombre)
-	$(COMPOSE) run --rm -v ../../apps/backend/prisma:/app/prisma backend sh -c "npx prisma migrate dev --name $(or $(NAME),init)"
+	$(COMPOSE) run --rm -v $(CURDIR)/apps/backend/prisma:/app/prisma backend sh -c "npx prisma migrate dev --name $(or $(NAME),init)"
 
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio
