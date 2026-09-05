@@ -16,6 +16,7 @@
           pkgs.nodejs_22
           pkgs.pnpm
           pkgs.typescript
+          pkgs.prisma
         ];
         containerPackages = [
           pkgs.docker

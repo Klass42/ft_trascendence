@@ -24,8 +24,6 @@ Thumbs.db
 .idea/
 *.swp
 
-# direnv
-.direnv
 
 # Docker volumes
 docker-data/
@@ -33,6 +31,7 @@ docker-data/
 # Nix
 result
 result-*
+nix-portable
 
 # TypeScript
 *.tsbuildinfo
