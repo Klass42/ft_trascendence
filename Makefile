@@ -1,4 +1,4 @@
-.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status garage-init garage-status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-reset urls
+.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status garage-init garage-status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-seed-e2e db-reset urls
 
 .DEFAULT_GOAL := all
 LOCAL_ENV    := infra/docker/.env
@@ -35,7 +35,7 @@ help: ## Show this help (plain `make` deploys)
 	@printf "           (ports/URLs/images from \033[36minfra/docker/.env.example\033[0m) + seed\n"
 	@printf "  Then open the App URL, accept the self-signed cert, log in:\n"
 	@printf "    \033[1mstudent@demo\033[0m / \033[1mdemo1234\033[0m   (also teacher@demo, admin@demo)\n"
-	@printf "\n  Datos demo:  make db-seed-small | make db-seed-large | make db-reset\n"
+	@printf "\n  Datos demo:  make db-seed-small | make db-seed-large | make db-seed-e2e | make db-reset\n"
 	@printf "  Overlay:     make env          Stop: make down    Wipe: make fclean\n"
 	@printf "  Logs:        make logs         Status: make status\n"
 	@printf "\n\033[1;33mAll targets\033[0m\n"
@@ -130,6 +130,9 @@ db-seed-small: ## Reemplaza los datos por 1 academia pequeña (8 alumnos, 3 prof
 
 db-seed-large: ## Reemplaza los datos por 3 academias (cada una: >=100 alumnos, >=20 profesores)
 	$(COMPOSE) exec -T -e SEED_SCENARIO=large backend npx prisma db seed
+
+db-seed-e2e: ## Reemplaza los datos por 2 tenants mínimos para Playwright API/E2E
+	$(COMPOSE) exec -T -e SEED_SCENARIO=e2e backend npx prisma db seed
 
 db-reset: ## ELIMINA todos los datos de aplicación y deja solo un superadmin nuevo
 	$(COMPOSE) exec -T -e SEED_SCENARIO=platform backend npx prisma db seed

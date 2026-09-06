@@ -178,6 +178,26 @@ describe('AuthService', () => {
       expect(result.refreshToken).toBe('refresh-token-mock');
     });
 
+    it('uses a distinct session bootstrap hash for concurrent logins', async () => {
+      const hash = await argon2.hash('demo1234');
+      mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash });
+      mockSessionCreate
+        .mockResolvedValueOnce({ id: 'session-1' })
+        .mockResolvedValueOnce({ id: 'session-2' });
+
+      await Promise.all([
+        service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' }),
+        service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' }),
+      ]);
+
+      const hashes = mockSessionCreate.mock.calls.map(
+        ([input]: [{ data: { refreshTokenHash: string } }]) => input.data.refreshTokenHash,
+      );
+      expect(hashes).toHaveLength(2);
+      expect(new Set(hashes).size).toBe(2);
+      expect(hashes).not.toContain('placeholder');
+    });
+
     it('throws 401 on wrong password', async () => {
       const hash = await argon2.hash('demo1234');
       mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash });

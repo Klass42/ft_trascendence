@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:e2e:compose": "playwright test --config playwright.compose.config.ts",
+    "test:e2e:tenant": "playwright test --config playwright.tenant.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "clean": "rm -rf dist"
   },

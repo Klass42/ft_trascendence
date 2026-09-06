@@ -1,7 +1,7 @@
 /**
  * Reproducible data sets for local demos and manual QA.
  *
- * Set SEED_SCENARIO to standard, small, large, or platform. Every scenario
+ * Set SEED_SCENARIO to standard, small, large, e2e, or platform. Every scenario
  * replaces application data, then creates the configured platform superadmin.
  */
 import {
@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 const DEMO_PASSWORD = 'demo1234';
 const DAY = 24 * 60 * 60 * 1000;
 
-type Scenario = 'standard' | 'small' | 'large' | 'platform';
+type Scenario = 'standard' | 'small' | 'large' | 'e2e' | 'platform';
 
 interface InstitutionOptions {
   id: string;
@@ -42,7 +42,7 @@ function scenarioFromEnvironment(): Scenario {
   const argument = process.argv.find((value) => value.startsWith('--scenario='))?.slice('--scenario='.length)
     ?? (positionalIndex >= 0 ? process.argv[positionalIndex + 1] : undefined);
   const scenario = (process.env.SEED_SCENARIO ?? argument ?? 'standard').toLowerCase();
-  if (scenario === 'standard' || scenario === 'small' || scenario === 'large' || scenario === 'platform') {
+  if (scenario === 'standard' || scenario === 'small' || scenario === 'large' || scenario === 'e2e' || scenario === 'platform') {
     return scenario;
   }
   throw new Error('Unknown seed scenario: ' + scenario);
@@ -203,7 +203,7 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
     ]),
   });
 
-  const enrollments = [
+  const enrollmentCandidates = [
     ...teacherIds.map((userId, index) => ({
       courseId: courseIds[index % courseIds.length], userId, role: CourseRole.TEACHER, progress: 100,
     })),
@@ -217,6 +217,16 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
       return [primary, ...additional];
     }),
   ];
+  // A one-course fixture makes an optional extra enrollment point at the same
+  // course as the primary one. Keep the generic generator valid for compact
+  // scenarios as well as the richer demo seeds.
+  const enrollmentKeys = new Set<string>();
+  const enrollments = enrollmentCandidates.filter((enrollment) => {
+    const key = enrollment.courseId + ':' + enrollment.userId;
+    if (enrollmentKeys.has(key)) return false;
+    enrollmentKeys.add(key);
+    return true;
+  });
   await prisma.enrollment.createMany({ data: enrollments });
 
   const submissions = assignments.flatMap((assignment, assignmentIndex) => {
@@ -344,6 +354,28 @@ async function seedStandard(passwordHash: string): Promise<void> {
   });
 }
 
+/**
+ * Small, deterministic fixture for acceptance tests which need to prove that
+ * IDs from one tenant are rejected by another tenant. Keep the explicit IDs:
+ * they make a failing HTTP trace immediately understandable. Generic demo
+ * seeds intentionally contain richer data and are not a substitute for this.
+ */
+async function seedE2e(passwordHash: string): Promise<void> {
+  await createInstitution({
+    id: 'org-e2e-a', slug: 'e2e-a', name: 'E2E Academy A', students: 2, teachers: 1, courses: 1,
+  }, passwordHash);
+  await createInstitution({
+    id: 'org-e2e-b', slug: 'e2e-b', name: 'E2E Academy B', students: 2, teachers: 1, courses: 1,
+  }, passwordHash);
+
+  // The acceptance suite creates submissions itself, including simultaneous
+  // writes by the two students. Removing the illustrative demo submissions is
+  // deliberate and remains a Prisma operation, never hand-written SQL.
+  await prisma.submission.deleteMany({
+    where: { assignment: { course: { organizationId: { in: ['org-e2e-a', 'org-e2e-b'] } } } },
+  });
+}
+
 async function main(): Promise<void> {
   const scenario = scenarioFromEnvironment();
   await clearApplicationData();
@@ -354,6 +386,8 @@ async function main(): Promise<void> {
       await seedStandard(passwordHash);
     } else if (scenario === 'small') {
       await createInstitution({ id: 'org-demo-small', slug: 'demo-small', name: 'Academia Demo', students: 8, teachers: 3, courses: 3 }, passwordHash);
+    } else if (scenario === 'e2e') {
+      await seedE2e(passwordHash);
     } else {
       await createInstitution({ id: 'org-demo-large', slug: 'demo-large', name: 'Academia Horizonte', students: 160, teachers: 30, courses: 6 }, passwordHash);
       await createInstitution({ id: 'org-demo-medium', slug: 'demo-medium', name: 'Instituto Atlas', students: 120, teachers: 24, courses: 5 }, passwordHash);
@@ -365,6 +399,7 @@ async function main(): Promise<void> {
   if (scenario === 'standard') console.log('   organization          klass\n   demo users            student@demo / teacher@demo / admin@demo  ·  password: demo1234');
   if (scenario === 'small') console.log('   organization          demo-small\n   users                 8 students, 3 teachers, 1 admin  ·  password: demo1234');
   if (scenario === 'large') console.log('   organizations         demo-large, demo-medium, demo-compact\n   users per organization 100+ students, 20+ teachers  ·  password: demo1234');
+  if (scenario === 'e2e') console.log('   organizations         e2e-a, e2e-b\n   users per organization 2 students, 1 teacher, 1 admin  ·  password: demo1234');
   if (scenario === 'platform') console.log('   application data      removed (only the platform superadmin remains)');
 }
 
