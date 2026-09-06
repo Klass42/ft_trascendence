@@ -1,4 +1,13 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+function captureConsoleErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  return errors;
+}
 
 test.describe('E2E deployment smoke — Compose over HTTPS', () => {
   test('E2E-DEPLOY-02/03: health is healthy through TLS and HTTP redirects', async ({ request }) => {
@@ -12,6 +21,7 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
   });
 
   test('E2E-PUBLIC-02: legal pages are linked from login and contain real content', async ({ page }) => {
+    const errors = captureConsoleErrors(page);
     await page.goto('/login');
     const privacy = page.getByRole('link', { name: 'Política de privacidad' });
     await expect(privacy).toBeVisible();
@@ -25,9 +35,11 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
     await page.goto('/terms');
     await expect(page.getByRole('heading', { name: 'Términos de servicio' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Contenido y conducta' })).toBeVisible();
+    expect(errors).toEqual([]);
   });
 
   test('E2E-AUTH-05: the standard seeded user logs in through Caddy', async ({ page }) => {
+    const errors = captureConsoleErrors(page);
     await page.goto('/login');
     await page.getByLabel('Organization code').fill('klass');
     await page.getByLabel('Email').fill('student@demo');
@@ -36,5 +48,6 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
 
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole('heading', { name: /Hola de nuevo, Sam/ })).toBeVisible();
+    expect(errors).toEqual([]);
   });
 });
