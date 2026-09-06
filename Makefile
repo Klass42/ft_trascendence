@@ -1,4 +1,4 @@
-.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status garage-init garage-status db-migrate db-generate db-push db-studio db-seed db-seed-small db-seed-large db-seed-e2e db-reset urls
+.PHONY: help quickstart nix-portable nix-portable-bin nix-portable-env nix-portable-reset dev ci env all up up-direct clean down fclean re logs logs-backend logs-otel status garage-init garage-status db-migrate db-deploy db-generate db-push db-studio db-seed db-seed-small db-seed-large db-seed-e2e db-reset urls
 
 .DEFAULT_GOAL := all
 LOCAL_ENV    := infra/docker/.env
@@ -118,6 +118,9 @@ db-push: ## Sincroniza el schema con la BD (dev rápido, sin migraciones)
 
 db-migrate: ## Crea una migración de Prisma (NAME=nombre)
 	$(COMPOSE) run --rm -v ../../apps/backend/prisma:/app/prisma backend sh -c "npx prisma migrate dev --name $(or $(NAME),init)"
+
+db-deploy: ## Aplica las migraciones Prisma ya versionadas, sin crear otras
+	$(COMPOSE) exec -T backend npx prisma migrate deploy
 
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio

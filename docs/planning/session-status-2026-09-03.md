@@ -15,6 +15,7 @@ Este documento consolida el trabajo realizado durante la revisión funcional del
 - **Ficheros huérfanos.** `FilesService` compensa una subida si falla el alta de metadatos y no permite borrar un fichero aún vinculado. La política de retención y el procedimiento de barrido seguro están en [`file-orphan-policy.md`](./file-orphan-policy.md); no se ha activado un cron de borrado.
 - **Despliegue y objetos.** Compose incluye Garage 2.3 persistente en modo nodo único, con bucket y clave S3 aprovisionados al arrancar. `make garage-init`/`make garage-status` son idempotentes. El stack conserva almacenamiento local como predeterminado; `STORAGE_DRIVER=s3` activa el driver real.
 - **Makefile.** `make urls` ya no ejecuta el archivo `.env` como shell (fallaba con valores que contienen espacios), y se corrige la resolución de variables internas de observabilidad para las invocaciones hechas por `make`.
+- **Bootstrap Prisma reproducible.** El backend ejecuta `prisma migrate deploy` antes de arrancar y el comando configurado para `prisma db seed` vuelve a aplicar las migraciones versionadas antes del seed. `make db-deploy` expone esa operación sin crear migraciones nuevas.
 
 ## Validado
 
@@ -27,6 +28,7 @@ Este documento consolida el trabajo realizado durante la revisión funcional del
 - Playwright multi-tenant contra Compose/Caddy/HTTPS: **3/3 correctos** con el seed `e2e`. Cubre lectura cruzada de cursos (404), RBAC de creación de curso (403), URL de fichero ajeno (403), dos entregas simultáneas con adjunto y rechazo de tareas/entregas cruzadas (404).
 - Regresión de autenticación y ciclo de fichero: **30 tests correctos** en las suites de `AuthService` y `FilesService`, incluida la creación concurrente de sesiones y la compensación/retención de objetos. `make ci` volvió a pasar tras estos cambios; al cierre, la suite completa suma 29/279 y la integración 2/12.
 - Revisión TLS local: `https://localhost:4443/health` mantiene TLS 1.3 y `http://localhost:4180/health` redirige 302 a HTTPS. Chromium 151 está disponible en el entorno. La CA local de Caddy no está aún instalada en el almacén de confianza del sistema (`openssl` devuelve `verify code 20`), por lo que no se puede declarar aprobado el certificado confiado en Chrome.
+- Bootstrap desde cero de Prisma: en un proyecto Compose y volúmenes temporales, PostgreSQL vacío recibió las **4 migraciones** con solo `prisma db seed`; el seed estándar terminó correctamente y `prisma migrate status` informó esquema al día. Los recursos temporales se eliminaron al terminar la comprobación.
 - Garage/S3 real: se validó con backend en `STORAGE_DRIVER=s3` una subida autorizada, generación de URL firmada, descarga byte a byte y borrado; el backend se restauró después a `STORAGE_DRIVER=local`.
 
 ## Pendiente prioritario para la siguiente sesión
