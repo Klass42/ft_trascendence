@@ -44,7 +44,8 @@ Este documento consolida el trabajo realizado durante la revisión funcional del
 - `3e65a645` y `5e000747` — autenticación de sockets y estabilización de Compose/Vite.
 - `079d1d5f` y `6ce95084` — suites de integración y smoke E2E contra Compose.
 - `e1350038` — Garage persistente y prueba S3 real.
-- Pendiente de registrar al cerrar esta sesión: seed/suite E2E tenant, corrección de sesiones concurrentes y política segura de huérfanos.
+- `3932d657` — seed y suite E2E de tenants, y corrección de sesiones concurrentes.
+- `c2506d0a` — seguridad de metadatos de fichero y política de huérfanos.
 
 ## Riesgos o decisiones a conservar
 
