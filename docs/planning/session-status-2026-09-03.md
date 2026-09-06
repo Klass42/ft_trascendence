@@ -19,13 +19,13 @@ Este documento consolida el trabajo realizado durante la revisión funcional del
 ## Validado
 
 - `make` completo tras los ajustes de Makefile/Vite: Compose reconstruido, migraciones aplicadas y seed estándar ejecutado. `https://localhost:4443/health` respondió `{"status":"ok","database":"up"}`; `http://localhost:4180/health` redirige con `302` a HTTPS.
-- Suite unitaria de backend: **28 suites, 275 tests correctos**.
+- Suite unitaria de backend: **29 suites, 279 tests correctos**.
 - Integración backend (`test:integration`): **2 suites, 12 tests correctos** (HTTP auth y gateway realtime).
 - Build de frontend y backend correcto; Vite ya no emite el aviso por `NODE_ENV` de Compose.
 - `make ci` correcto: linters de infraestructura, instalación congelada, `prisma validate + generate` y build pasan. Semgrep/Trivy mantienen hallazgos **informativos** que no bloquean el pipeline.
 - Playwright contra Compose/Caddy/HTTPS: **6/6 correctos** en Chromium de escritorio y viewport móvil. Cubre health/redirect, enlaces y contenido legal, y login del seed estándar a través de Caddy. La configuración conserva trace, captura y vídeo al fallar.
 - Playwright multi-tenant contra Compose/Caddy/HTTPS: **3/3 correctos** con el seed `e2e`. Cubre lectura cruzada de cursos (404), RBAC de creación de curso (403), URL de fichero ajeno (403), dos entregas simultáneas con adjunto y rechazo de tareas/entregas cruzadas (404).
-- Regresión de autenticación y ciclo de fichero: **30 tests correctos** en las suites de `AuthService` y `FilesService`, incluida la creación concurrente de sesiones y la compensación/retención de objetos. `make ci` volvió a pasar tras estos cambios.
+- Regresión de autenticación y ciclo de fichero: **30 tests correctos** en las suites de `AuthService` y `FilesService`, incluida la creación concurrente de sesiones y la compensación/retención de objetos. `make ci` volvió a pasar tras estos cambios; al cierre, la suite completa suma 29/279 y la integración 2/12.
 - Revisión TLS local: `https://localhost:4443/health` mantiene TLS 1.3 y `http://localhost:4180/health` redirige 302 a HTTPS. Chromium 151 está disponible en el entorno. La CA local de Caddy no está aún instalada en el almacén de confianza del sistema (`openssl` devuelve `verify code 20`), por lo que no se puede declarar aprobado el certificado confiado en Chrome.
 - Garage/S3 real: se validó con backend en `STORAGE_DRIVER=s3` una subida autorizada, generación de URL firmada, descarga byte a byte y borrado; el backend se restauró después a `STORAGE_DRIVER=local`.
 
