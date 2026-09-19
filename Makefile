@@ -125,20 +125,26 @@ db-deploy: ## Aplica las migraciones Prisma ya versionadas, sin crear otras
 db-studio: ## Abre Prisma Studio
 	$(PRISMA) studio
 
+# Prisma 6 splits `prisma.seed` on spaces and does not run a shell, so
+# `migrate deploy && tsx …` never reached seed.ts. Call tsx ourselves.
+define db-seed-run
+	$(COMPOSE) exec -T -e SEED_SCENARIO=$(1) backend sh -c "npx prisma migrate deploy && npx tsx prisma/seed.ts"
+endef
+
 db-seed: ## Reemplaza los datos por la demo estándar (Klass Academy)
-	$(COMPOSE) exec -T -e SEED_SCENARIO=standard backend npx prisma db seed
+	$(call db-seed-run,standard)
 
 db-seed-small: ## Reemplaza los datos por 1 academia pequeña (8 alumnos, 3 profesores)
-	$(COMPOSE) exec -T -e SEED_SCENARIO=small backend npx prisma db seed
+	$(call db-seed-run,small)
 
 db-seed-large: ## Reemplaza los datos por 3 academias (cada una: >=100 alumnos, >=20 profesores)
-	$(COMPOSE) exec -T -e SEED_SCENARIO=large backend npx prisma db seed
+	$(call db-seed-run,large)
 
 db-seed-e2e: ## Reemplaza los datos por 2 tenants mínimos para Playwright API/E2E
-	$(COMPOSE) exec -T -e SEED_SCENARIO=e2e backend npx prisma db seed
+	$(call db-seed-run,e2e)
 
 db-reset: ## ELIMINA todos los datos de aplicación y deja solo un superadmin nuevo
-	$(COMPOSE) exec -T -e SEED_SCENARIO=platform backend npx prisma db seed
+	$(call db-seed-run,platform)
 
 all: env nix-portable ## Install tools + deploy stack
 	$(COMPOSE) up -d --build
