@@ -1,5 +1,7 @@
 import { ActivityType, CourseStatus } from '@prisma/client';
 import {
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -44,10 +46,28 @@ export class CreateActivityDto {
   @IsOptional()
   closeAt?: string;
 
+  // Ignored: maxScore is always sum(question.points). Kept so old clients don't 400.
   @IsNumber()
-  @Min(1)
+  @Min(0)
   @IsOptional()
   maxScore?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  countsTowardFinal?: boolean;
+
+  @IsString()
+  @IsOptional()
+  templateId?: string;
+
+  @IsString()
+  @IsOptional()
+  sourceActivityId?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  fileIds?: string[];
 
   // 0 = unlimited attempts.
   @IsInt()

@@ -6,7 +6,7 @@ import {
   useMyProgress,
   useUpcomingAssignments,
 } from '@/lib/api';
-import type { MyProgressItem, AssignmentDTO } from '@/lib/api';
+import type { MyProgressItem, ActivityDTO } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
 
 const COURSE_COLORS = [
@@ -22,9 +22,9 @@ function hashToColor(title: string): string {
   return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
 }
 
-function nextUpcoming(assignments: AssignmentDTO[]): AssignmentDTO | null {
+function nextUpcoming(activities: ActivityDTO[]): ActivityDTO | null {
   const now = Date.now();
-  const upcoming = assignments
+  const upcoming = activities
     .filter((a) => a.dueAt && new Date(a.dueAt).getTime() > now)
     .sort((a, b) => new Date(a.dueAt!).getTime() - new Date(b.dueAt!).getTime());
   return upcoming[0] ?? null;
@@ -230,7 +230,7 @@ export function StudentDashboard() {
 
         {/* Next assignment */}
         <div
-          onClick={() => navigate('/assignments')}
+          onClick={() => navigate('/activities')}
           style={{
             gridColumn: '3/4',
             gridRow: '2/3',

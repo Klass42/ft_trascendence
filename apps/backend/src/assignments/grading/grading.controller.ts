@@ -1,8 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Res } from '@nestjs/common';
+import { Controller, Get, GoneException, Param, Patch, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { GradingService } from './grading.service';
-import { GradeSubmissionDto } from './dto/grade-submission.dto';
 
 /**
  * Grading + gradebook endpoints. Routes are prefixed with the parent resource
@@ -15,12 +14,10 @@ export class GradingController {
   constructor(private readonly grading: GradingService) {}
 
   @Patch('submissions/:id/grade')
-  async grade(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthUser,
-    @Body() dto: GradeSubmissionDto,
-  ) {
-    return this.grading.gradeSubmission(id, user.userId, dto);
+  grade() {
+    throw new GoneException(
+      'La calificación se hace sobre intentos (PATCH /attempts/:id/grade).',
+    );
   }
 
   /** Aggregated teacher-dashboard summary across every course the user teaches. */

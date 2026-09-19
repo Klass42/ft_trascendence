@@ -3,6 +3,10 @@
 > Segundo bloque (Fase A del rediseño, ver [`LMS-redesign.md`](./LMS-redesign.md)). Rama **`david`** →
 > `staging`. Tu núcleo (A–E + analytics) ya está integrado; esto pule la autoría de tareas, quita el
 > mock de tu dashboard de profesor, y cierra la presence a amigos que quedó diferida.
+>
+> **Estado 2026-09-19:** Fase A de este brief sigue siendo historia (A7 autoría sobre `Assignment`).
+> El producto unificado (bloques + plantillas + gradebook de intentos) landed; writes de assignment
+> → 410. Guía: [`task-templates.md`](./task-templates.md).
 
 **Estándares (obligatorios, ver LMS-redesign §6):** componer `components/ui` (los nuevos de la Épica 0
 de Aloiki) · responsive · estados vacío/carga/error · **sin mock** · validación front+back · a11y ·

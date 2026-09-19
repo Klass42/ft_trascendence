@@ -1,42 +1,47 @@
 /**
- * Gradebook & grading API DTOs (Epic C).
+ * Gradebook & grading API DTOs.
  *
- * Exact shapes of the backend responses under apps/backend/src/assignments/grading.
+ * Shapes of GET /courses/:id/gradebook and GET /courses/:id/grades/me
+ * (activities, not assignments). See spec §7.4.
  */
 
-import type { SubmissionStatus } from './assignment';
+import type { AttemptStatus } from './activity';
 import type { SubmissionAuthorDTO } from './assignment';
 
 // =============================================================================
 // Gradebook (staff)
 // =============================================================================
 
-/** An assignment column in the gradebook matrix. */
-export interface GradebookAssignmentDTO {
+/** An activity column in the gradebook matrix. */
+export interface GradebookItemDTO {
   id: string;
   title: string;
   maxScore: number;
   dueAt: string | null;
+  closeAt: string | null;
+  countsTowardFinal: boolean;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 }
 
-/** One student's score for one assignment (a matrix cell). */
+/** One student's score for one activity (a matrix cell). */
 export interface GradebookCellDTO {
-  assignmentId: string;
-  /** Present only when the student has a submission — needed to grade it. */
-  submissionId: string | null;
+  activityId: string;
+  /** Best GRADED attempt, or a SUBMITTED one if none is graded yet. */
+  attemptId: string | null;
   score: number | null;
-  status: SubmissionStatus | null;
+  status: AttemptStatus | null;
 }
 
-/** One student row: the student plus a cell per assignment (same order). */
+/** One student row: the student plus a cell per item (same order) and final. */
 export interface GradebookRowDTO {
   user: SubmissionAuthorDTO;
   cells: GradebookCellDTO[];
+  final: number | null;
 }
 
 export interface GradebookDTO {
   course: { id: string; title: string };
-  assignments: GradebookAssignmentDTO[];
+  items: GradebookItemDTO[];
   students: GradebookRowDTO[];
 }
 
@@ -45,21 +50,25 @@ export interface GradebookDTO {
 // =============================================================================
 
 export interface MyGradeDTO {
-  assignmentId: string;
+  activityId: string;
   title: string;
   maxScore: number;
   dueAt: string | null;
+  countsTowardFinal: boolean;
   score: number | null;
-  status: SubmissionStatus | null;
+  status: AttemptStatus | null;
   feedback: string | null;
   gradedAt: string | null;
 }
 
-// =============================================================================
-// Request payloads
-// =============================================================================
+export interface MyGradesDTO {
+  course: { id: string; title: string };
+  items: MyGradeDTO[];
+  final: number | null;
+}
 
-export interface GradeSubmissionInput {
-  score: number;
-  feedback?: string;
+/** Format the 0–1 final ratio as a percentage with one decimal (e.g. 75.0%). */
+export function formatFinalPercent(final: number | null): string {
+  if (final == null) return '—';
+  return `${(Math.round(final * 1000) / 10).toFixed(1)}%`;
 }

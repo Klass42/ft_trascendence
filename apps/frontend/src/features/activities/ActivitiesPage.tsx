@@ -10,20 +10,27 @@ import {
   Spinner,
   useToast,
 } from '@/components/ui';
-import { useAuth, useActivities, useActivityMutations, useCourses } from '@/lib/api';
+import {
+  useAuth,
+  useActivities,
+  useActivityMutations,
+  useCourses,
+  useSaveAsTemplate,
+  useStaffAttempts,
+} from '@/lib/api';
 import type { ActivityDTO } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
-import { STATUS_BADGE } from './helpers';
+import { ATTEMPT_STATUS_BADGE, STATUS_BADGE } from './helpers';
 import { ActivityForm } from './ActivityForm';
 import { ActivityPlayer } from './ActivityPlayer';
 import { QuestionList } from './QuestionList';
+import { TaskLibrary } from './TaskLibrary';
+import { GradePanel, type GradeTarget } from '../gradebook/GradePanel';
 
 /**
- * Activity authoring workspace (staff). A course selector scopes the list;
- * picking an activity opens its detail with the question editor. Mirrors the
- * AssignmentsPage layout so the two feel like one product. The tenant is derived
- * server-side; students don't reach this page (nav is staff-only until B2b adds
- * the player).
+ * Unified Tareas workspace. Staff author, publish, and grade; students take
+ * published tasks in the player. A course selector scopes the list. Tenant is
+ * derived server-side from identity.
  */
 export function ActivitiesPage() {
   const { user } = useAuth();
@@ -33,6 +40,7 @@ export function ActivitiesPage() {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -78,7 +86,7 @@ export function ActivitiesPage() {
     <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-          Actividades
+          Tareas
         </h1>
         {courses && courses.length > 0 && (
           <div style={{ marginLeft: 'auto', minWidth: 220 }}>
@@ -101,7 +109,7 @@ export function ActivitiesPage() {
       {!coursesLoading && (!courses || courses.length === 0) && (
         <EmptyState
           title="No hay cursos disponibles"
-          description="Cuando impartas un curso, sus actividades aparecerán aquí."
+          description="Cuando impartas un curso, sus tareas aparecerán aquí."
         />
       )}
 
@@ -109,24 +117,27 @@ export function ActivitiesPage() {
         <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* List column */}
           <div style={{ flex: '1 1 300px', minWidth: 260 }}>
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button variant="primary" onClick={() => setCreating(true)}>
-                + Nueva actividad
+                + Nueva tarea
+              </Button>
+              <Button variant="outline" onClick={() => setLibraryOpen(true)}>
+                Biblioteca
               </Button>
             </div>
 
-            {activitiesLoading && <Spinner size="md" label="Cargando actividades…" />}
+            {activitiesLoading && <Spinner size="md" label="Cargando tareas…" />}
 
             {activitiesError && (
               <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
-                No se pudieron cargar las actividades (¿impartes este curso?).
+                No se pudieron cargar las tareas (¿impartes este curso?).
               </p>
             )}
 
             {activities && activities.length === 0 && !activitiesLoading && (
               <EmptyState
-                title="Sin actividades todavía"
-                description="Crea la primera actividad con el botón de arriba."
+                title="Sin tareas todavía"
+                description="Crea la primera tarea con el botón de arriba o usa la biblioteca."
               />
             )}
 
@@ -154,7 +165,8 @@ export function ActivitiesPage() {
                       <Badge variant={status.variant} dot>{status.label}</Badge>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>
-                      {a.questions?.length ?? 0} preguntas · {a.maxScore} pts
+                      {a.questions?.length ?? 0} bloques · {a.maxScore} pts
+                      {a.countsTowardFinal === false ? ' · práctica' : ''}
                     </div>
                   </button>
                 );
@@ -175,7 +187,7 @@ export function ActivitiesPage() {
           >
             {!selected ? (
               <p style={{ color: 'var(--color-text-muted)' }}>
-                Selecciona una actividad para editarla.
+                Selecciona una tarea para editarla.
               </p>
             ) : (
               <ActivityDetail
@@ -193,7 +205,7 @@ export function ActivitiesPage() {
       )}
 
       {/* Create modal */}
-      <Modal open={creating} onClose={() => setCreating(false)} title="Nueva actividad" size="lg">
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nueva tarea" size="lg">
         <ActivityForm
           courseId={courseId ?? ''}
           inModal
@@ -205,6 +217,19 @@ export function ActivitiesPage() {
           onCancel={() => setCreating(false)}
         />
       </Modal>
+
+      {courseId && (
+        <TaskLibrary
+          courseId={courseId}
+          open={libraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          onInstantiated={(a) => {
+            setLibraryOpen(false);
+            refetch();
+            selectActivity(a.id);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -242,29 +267,29 @@ function StudentActivitiesPage() {
   return (
     <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Actividades</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Tareas</h1>
         {courses?.length ? <div style={{ marginLeft: 'auto', minWidth: 220 }}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: course.title }))} /></div> : null}
       </div>
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
-      {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus actividades aparecerán aquí." />}
+      {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus tareas aparecerán aquí." />}
       {courseId && <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 300px', minWidth: 260 }}>
-          {isLoading && <Spinner size="md" label="Cargando actividades…" />}
-          {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las actividades de este curso.</p>}
-          {activities?.length === 0 && !isLoading && <EmptyState title="Sin actividades todavía" description="Este curso aún no tiene actividades publicadas." />}
+          {isLoading && <Spinner size="md" label="Cargando tareas…" />}
+          {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las tareas de este curso.</p>}
+          {activities?.length === 0 && !isLoading && <EmptyState title="Sin tareas todavía" description="Este curso aún no tiene tareas publicadas." />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {activities?.map((activity) => {
               const active = activity.id === selectedId;
               const badge = WINDOW_BADGE[windowState(activity.openAt, activity.closeAt)];
               return <button key={activity.id} type="button" onClick={() => selectActivity(activity.id)} style={{ textAlign: 'left', background: active ? 'var(--color-accent-muted)' : 'var(--color-bg-secondary)', border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-primary)'}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 700, fontSize: 14.5 }}>{activity.title}</span><Badge variant={badge.variant}>{badge.label}</Badge></div>
-                <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{activity.questions?.length ?? 0} preguntas · {activity.maxScore} pts</div>
+                <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{activity.questions?.length ?? 0} bloques · {activity.maxScore} pts{activity.countsTowardFinal === false ? ' · práctica' : ''}</div>
               </button>;
             })}
           </div>
         </div>
         <div style={{ flex: '2 1 420px', minWidth: 300, background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 14, padding: 22 }}>
-          {selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={refetch} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una actividad para ver sus detalles.</p>}
+          {selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={refetch} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una tarea para ver sus detalles.</p>}
         </div>
       </div>}
     </div>
@@ -284,8 +309,16 @@ function ActivityDetail({
 }) {
   const { toast } = useToast();
   const { updateActivity, deleteActivity, isLoading } = useActivityMutations();
+  const { save: saveAsTemplate, isLoading: savingTemplate } = useSaveAsTemplate();
+  const {
+    attempts,
+    isLoading: attemptsLoading,
+    error: attemptsError,
+    refetch: refetchAttempts,
+  } = useStaffAttempts(activity.id);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [gradeTarget, setGradeTarget] = useState<GradeTarget | null>(null);
 
   const status = STATUS_BADGE[activity.status];
   const winState = windowState(activity.openAt, activity.closeAt);
@@ -296,11 +329,11 @@ function ActivityDetail({
   async function togglePublish() {
     try {
       if (!published && !canPublish) {
-        toast({ variant: 'error', message: 'Añade al menos una pregunta antes de publicar.' });
+        toast({ variant: 'error', message: 'Añade al menos un bloque antes de publicar.' });
         return;
       }
       await updateActivity(activity.id, { status: published ? 'DRAFT' : 'PUBLISHED' });
-      toast({ variant: 'success', message: published ? 'Actividad despublicada.' : 'Actividad publicada.' });
+      toast({ variant: 'success', message: published ? 'Tarea despublicada.' : 'Tarea publicada.' });
       onChanged();
     } catch (err) {
       toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo cambiar el estado.' });
@@ -310,7 +343,7 @@ function ActivityDetail({
   async function handleDelete() {
     try {
       await deleteActivity(activity.id);
-      toast({ variant: 'success', message: 'Actividad eliminada.' });
+      toast({ variant: 'success', message: 'Tarea eliminada.' });
       setConfirmDelete(false);
       onDeleted();
     } catch (err) {
@@ -330,8 +363,26 @@ function ActivityDetail({
           <Button variant={published ? 'outline' : 'primary'} size="sm" onClick={togglePublish} disabled={isLoading}>
             {published ? 'Despublicar' : 'Publicar'}
           </Button>
-          <Button variant="outline" size="sm" aria-label="Editar actividad" onClick={() => setEditing(true)}>Editar</Button>
-          <Button variant="danger" size="sm" aria-label="Borrar actividad" onClick={() => setConfirmDelete(true)}>Borrar</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                await saveAsTemplate(activity.id);
+                toast({ variant: 'success', message: 'Guardada como plantilla.' });
+              } catch (err) {
+                toast({
+                  variant: 'error',
+                  message: err instanceof Error ? err.message : 'No se pudo guardar la plantilla.',
+                });
+              }
+            }}
+            loading={savingTemplate}
+          >
+            Guardar plantilla
+          </Button>
+          <Button variant="outline" size="sm" aria-label="Editar tarea" onClick={() => setEditing(true)}>Editar</Button>
+          <Button variant="danger" size="sm" aria-label="Borrar tarea" onClick={() => setConfirmDelete(true)}>Borrar</Button>
         </div>
       </div>
 
@@ -343,6 +394,9 @@ function ActivityDetail({
         </span>
         <span>· {activity.maxScore} pts</span>
         <span>· {activity.attemptsAllowed === 0 ? 'Intentos ilimitados' : `${activity.attemptsAllowed} intento(s)`}</span>
+        {activity.countsTowardFinal === false && (
+          <Badge variant="neutral">Práctica</Badge>
+        )}
       </div>
 
       {activity.description && (
@@ -355,7 +409,15 @@ function ActivityDetail({
         <QuestionList activity={activity} onChanged={onChanged} />
       </div>
 
-      <Modal open={editing} onClose={() => setEditing(false)} title="Editar actividad" size="lg">
+      <StaffAttempts
+        activity={activity}
+        attempts={attempts}
+        isLoading={attemptsLoading}
+        error={attemptsError}
+        onGrade={(target) => setGradeTarget(target)}
+      />
+
+      <Modal open={editing} onClose={() => setEditing(false)} title="Editar tarea" size="lg">
         <ActivityForm
           courseId={activity.courseId}
           initial={activity}
@@ -370,14 +432,105 @@ function ActivityDetail({
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Borrar actividad"
-        message={`¿Seguro que quieres borrar «${activity.title}»? Se eliminarán también sus preguntas e intentos. Esta acción no se puede deshacer.`}
+        title="Borrar tarea"
+        message={`¿Seguro que quieres borrar «${activity.title}»? Si hay intentos, el servidor pedirá archivarla.`}
         confirmLabel="Borrar"
         variant="danger"
         loading={isLoading}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {gradeTarget && (
+        <GradePanel
+          target={gradeTarget}
+          onClose={() => setGradeTarget(null)}
+          onGraded={() => {
+            setGradeTarget(null);
+            refetchAttempts();
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StaffAttempts({
+  activity,
+  attempts,
+  isLoading,
+  error,
+  onGrade,
+}: {
+  activity: ActivityDTO;
+  attempts: ReturnType<typeof useStaffAttempts>['attempts'];
+  isLoading: boolean;
+  error: Error | null;
+  onGrade: (target: GradeTarget) => void;
+}) {
+  const submitted = (attempts ?? []).filter((a) => a.status !== 'IN_PROGRESS');
+  return (
+    <div style={{ borderTop: '1px solid var(--color-border-primary)', paddingTop: 18, marginTop: 18 }}>
+      <h3 style={{ fontSize: 15, margin: '0 0 10px' }}>Entregas</h3>
+      {isLoading && <Spinner size="sm" label="Cargando entregas…" />}
+      {error && (
+        <p style={{ color: 'var(--color-error)', fontSize: 13 }}>
+          No se pudieron cargar las entregas.
+        </p>
+      )}
+      {!isLoading && !error && submitted.length === 0 && (
+        <EmptyState
+          title="Sin entregas todavía"
+          description="Cuando los alumnos envíen, aparecerán aquí para calificar."
+        />
+      )}
+      {submitted.map((attempt) => {
+        const badge = ATTEMPT_STATUS_BADGE[attempt.status];
+        return (
+          <div
+            key={attempt.id}
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 0',
+              borderBottom: '1px solid var(--color-border-primary)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>
+                {attempt.user?.name ?? attempt.userId}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                Intento {attempt.attemptNo}
+                {attempt.score != null ? ` · ${attempt.score}/${activity.maxScore}` : ''}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Badge variant={badge.variant}>{badge.label}</Badge>
+              {(attempt.status === 'SUBMITTED' || attempt.status === 'GRADED') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onGrade({
+                      attemptId: attempt.id,
+                      activityId: activity.id,
+                      studentName: attempt.user?.name ?? attempt.userId,
+                      title: activity.title,
+                    })
+                  }
+                >
+                  Calificar
+                </Button>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

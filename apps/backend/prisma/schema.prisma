@@ -48,6 +48,7 @@ model Organization {
   learningResources LearningResource[]
   invitations OrganizationInvitation[]
   auditLogs AuditLog[]
+  taskTemplates TaskTemplate[]
 }
 
 // ============================================================================
@@ -90,6 +91,7 @@ model User {
   friendsReceived   Friendship[]       @relation("FriendAddressee")
   invitationsSent  OrganizationInvitation[] @relation("InvitationInviter")
   auditLogs        AuditLog[] @relation("AuditActor")
+  taskTemplates    TaskTemplate[] @relation("TaskTemplateAuthor")
 
   // Email is unique WITHIN an organization (tenant-scoped), not globally.
   @@unique([organizationId, email])
@@ -188,6 +190,7 @@ model File {
   lessonAttachments LessonAttachment[]
   submissionFiles   SubmissionFile[]
   assignmentFiles   AssignmentFile[]
+  activityFiles     ActivityFile[]
   learningResources LearningResource[] @relation("LearningResourceFile")
 
   @@unique([bucket, objectKey])
@@ -553,13 +556,16 @@ model Activity {
   maxScore        Float        @default(100)
   attemptsAllowed Int          @default(1) // 0 = unlimited
   timeLimitSec    Int? // null = untimed
-  config          Json         @default("{}") // { shuffleQuestions, shuffleOptions, showSolutions } (DTO-validated)
-  status          CourseStatus @default(DRAFT) // DRAFT / PUBLISHED / ARCHIVED
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  config            Json         @default("{}") // { shuffleQuestions, shuffleOptions, showSolutions } (DTO-validated)
+  status            CourseStatus @default(DRAFT) // DRAFT / PUBLISHED / ARCHIVED
+  countsTowardFinal Boolean      @default(true)
+  templateId        String? // TaskTemplate.id of origin; no live FK (the recipe can be deleted)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   questions Question[]
   attempts  Attempt[]
+  files     ActivityFile[]
 
   @@index([courseId])
 }
@@ -595,6 +601,7 @@ model Attempt {
   gradedById  String?
   gradedBy    User?         @relation("AttemptGrader", fields: [gradedById], references: [id], onDelete: SetNull)
   gradedAt    DateTime?
+  feedback    String?
 
   answers Answer[]
 
@@ -630,6 +637,38 @@ enum QuestionKind {
   MATCHING
   ORDERING
   SHORT_ANSWER
+  ESSAY
+  FILE_UPLOAD
+}
+
+/// Reusable recipe (JSON snapshot of Question blocks). Instantiating copies
+/// blocks onto a new Activity; deleting the template does not touch instances.
+model TaskTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  blocks         Json // TaskTemplateBlock[]
+  createdFromId  String? // Activity.id of origin; no live FK (the activity may be archived)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+/// Teacher prompt attachments on an Activity (not student FILE_UPLOAD answers).
+model ActivityFile {
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, fileId])
+  @@index([fileId])
 }
 
 enum AttemptStatus {

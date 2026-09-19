@@ -64,3 +64,42 @@ export function useActivityAttempts(activityId: string | null): UseActivityAttem
 
   return { attempts, isLoading, error, start, save, submit, refetch };
 }
+
+interface UseStaffAttemptsResult {
+  attempts: AttemptDTO[] | null;
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
+}
+
+/** Every attempt for an activity (course staff). */
+export function useStaffAttempts(activityId: string | null): UseStaffAttemptsResult {
+  const { user } = useAuth();
+  const [attempts, setAttempts] = useState<AttemptDTO[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [nonce, setNonce] = useState(0);
+
+  const refetch = useCallback(() => setNonce((value) => value + 1), []);
+
+  useEffect(() => {
+    if (!activityId || !user) {
+      setAttempts(null);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    apiClient
+      .get<AttemptDTO[]>(`/activities/${activityId}/attempts`)
+      .then((data) => !cancelled && setAttempts(data))
+      .catch((err) => !cancelled && setError(err as Error))
+      .finally(() => !cancelled && setIsLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [activityId, user, nonce]);
+
+  return { attempts, isLoading, error, refetch };
+}

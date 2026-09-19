@@ -1,6 +1,12 @@
+import {
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { CourseRole, CourseStatus, QuestionKind } from '@prisma/client';
 import { ActivitiesService } from './activities.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { UpdateActivityDto } from './dto/update-activity.dto';
+import type { CreateQuestionDto } from './dto/create-question.dto';
 
 describe('ActivitiesService.validateQuestionContent', () => {
   const svc = new ActivitiesService({} as unknown as PrismaService);
@@ -117,5 +123,245 @@ describe('ActivitiesService tenancy', () => {
     await expect(svc.findOne(ACTIVITY, 'stranger-999')).rejects.toThrow(
       /not found/i,
     );
+  });
+});
+
+describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
+  const COURSE = 'course-web-101';
+  const ORG = 'org-klass-0001';
+  const TEACHER = 'user-diego-001';
+  const STUDENT = 'user-lucia-001';
+  const ESSAY = 'ESSAY' as unknown as QuestionKind;
+
+  const MCQ_DTO: CreateQuestionDto = {
+    kind: QuestionKind.MULTIPLE_CHOICE,
+    prompt: '2+2',
+    points: 3,
+    content: { options: ['3', '4'], correct: [1] },
+  };
+
+  function build() {
+    const activities: any[] = [];
+    const questions: any[] = [];
+    const attempts: any[] = [];
+    let seq = 0;
+
+    const withIncludes = (row: any, include: any) => {
+      if (!row) return null;
+      const out: any = { ...row };
+      if (include?.course) {
+        out.course = { id: COURSE, organizationId: ORG, title: 'Web 101' };
+      }
+      if (include?.questions) {
+        out.questions = questions
+          .filter((q) => q.activityId === row.id)
+          .sort((a, b) => a.order - b.order);
+      }
+      return out;
+    };
+
+    const prisma: any = {
+      course: {
+        findUnique: async ({ where }: any) =>
+          where.id === COURSE
+            ? { id: COURSE, organizationId: ORG, title: 'Web 101' }
+            : null,
+      },
+      enrollment: {
+        findUnique: async ({ where }: any) => {
+          const { courseId, userId } = where.courseId_userId;
+          if (courseId !== COURSE) return null;
+          if (userId === TEACHER) return { role: CourseRole.TEACHER };
+          if (userId === STUDENT) return { role: CourseRole.STUDENT };
+          return null;
+        },
+      },
+      activity: {
+        findUnique: async ({ where, include }: any) =>
+          withIncludes(
+            activities.find((a) => a.id === where.id),
+            include,
+          ),
+        create: async ({ data, include }: any) => {
+          seq += 1;
+          const row = {
+            id: `act-${seq}`,
+            maxScore: 0,
+            countsTowardFinal: true,
+            status: CourseStatus.DRAFT,
+            type: 'QUIZ',
+            description: null,
+            openAt: null,
+            dueAt: null,
+            closeAt: null,
+            attemptsAllowed: 1,
+            timeLimitSec: null,
+            config: {},
+            templateId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...data,
+          };
+          activities.push(row);
+          return withIncludes(row, include ?? { questions: true });
+        },
+        update: async ({ where, data, include }: any) => {
+          const row = activities.find((a) => a.id === where.id);
+          Object.assign(row, data);
+          return withIncludes(row, include ?? { questions: true });
+        },
+        delete: async ({ where }: any) => {
+          const idx = activities.findIndex((a) => a.id === where.id);
+          const [row] = activities.splice(idx, 1);
+          return row;
+        },
+      },
+      question: {
+        count: async ({ where }: any) =>
+          questions.filter((q) => q.activityId === where.activityId).length,
+        findMany: async ({ where, orderBy }: any) => {
+          const rows = questions.filter(
+            (q) => !where?.activityId || q.activityId === where.activityId,
+          );
+          if (orderBy?.order === 'asc') rows.sort((a, b) => a.order - b.order);
+          return rows;
+        },
+        findUnique: async ({ where }: any) =>
+          questions.find((q) => q.id === where.id) ?? null,
+        create: async ({ data }: any) => {
+          seq += 1;
+          const row = { id: `q-${seq}`, points: 1, order: 0, ...data };
+          questions.push(row);
+          return row;
+        },
+        update: async ({ where, data }: any) => {
+          const row = questions.find((q) => q.id === where.id);
+          Object.assign(row, data);
+          return row;
+        },
+        delete: async ({ where }: any) => {
+          const idx = questions.findIndex((q) => q.id === where.id);
+          const [row] = questions.splice(idx, 1);
+          return row;
+        },
+      },
+      attempt: {
+        count: async ({ where }: any) =>
+          attempts.filter((a) => {
+            if (where?.activityId && a.activityId !== where.activityId) {
+              return false;
+            }
+            if (where?.userId && a.userId !== where.userId) return false;
+            return true;
+          }).length,
+        findFirst: async ({ where }: any) =>
+          attempts.find((a) => {
+            if (where?.activityId && a.activityId !== where.activityId) {
+              return false;
+            }
+            return true;
+          }) ?? null,
+      },
+    };
+    prisma.$transaction = async (arg: any) => {
+      if (typeof arg === 'function') return arg(prisma);
+      return Promise.all(arg);
+    };
+
+    return {
+      service: new ActivitiesService(prisma as PrismaService),
+      activities,
+      questions,
+      attempts,
+    };
+  }
+
+  it('ignores client maxScore and sets 0 when there are no questions', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, {
+      title: 'Tarea vacía',
+      maxScore: 99,
+    });
+    expect(created.maxScore).toBe(0);
+    expect(created.questions).toEqual([]);
+  });
+
+  it('recomputes maxScore as sum of question points after addQuestion', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, {
+      title: 'Examen',
+    });
+
+    await service.addQuestion(created.id, TEACHER, {
+      kind: ESSAY,
+      prompt: 'Desarrolla',
+      points: 7,
+      content: {},
+    } as CreateQuestionDto);
+    await service.addQuestion(created.id, TEACHER, MCQ_DTO);
+
+    const found = await service.findOne(created.id, TEACHER);
+    expect(found.maxScore).toBe(10);
+  });
+
+  it('stores countsTowardFinal default true and can patch false', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, {
+      title: 'Tarea',
+    });
+    expect((created as any).countsTowardFinal).toBe(true);
+
+    const patched = await service.update(created.id, TEACHER, {
+      countsTowardFinal: false,
+    } as UpdateActivityDto);
+    expect((patched as any).countsTowardFinal).toBe(false);
+  });
+
+  it('addQuestion throws ConflictException when an attempt exists', async () => {
+    const { service, attempts } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Quiz' });
+    attempts.push({
+      id: 'att-1',
+      activityId: created.id,
+      userId: STUDENT,
+      status: 'SUBMITTED',
+    });
+
+    await expect(service.addQuestion(created.id, TEACHER, MCQ_DTO)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.addQuestion(created.id, TEACHER, MCQ_DTO)).rejects.toThrow(
+      /la estructura está bloqueada/,
+    );
+  });
+
+  it('remove throws ConflictException when attempts exist', async () => {
+    const { service, attempts } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Quiz' });
+    attempts.push({
+      id: 'att-1',
+      activityId: created.id,
+      userId: STUDENT,
+      status: 'GRADED',
+    });
+
+    await expect(service.remove(created.id, TEACHER)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove(created.id, TEACHER)).rejects.toThrow(
+      /archivar en su lugar/,
+    );
+  });
+
+  it('publishing with no questions throws BadRequestException', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Vacía' });
+
+    await expect(
+      service.update(created.id, TEACHER, { status: CourseStatus.PUBLISHED }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.update(created.id, TEACHER, { status: CourseStatus.PUBLISHED }),
+    ).rejects.toThrow(/no se puede publicar vacía/);
   });
 });

@@ -42,6 +42,11 @@ export class ActivitiesController {
     return this.activities.findAllForCourse(courseId, user.userId);
   }
 
+  @Get('me/teaching/activities')
+  listTeaching(@CurrentUser() user: AuthUser) {
+    return this.activities.listTeachingActivities(user.userId);
+  }
+
   @Get('activities/:id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.activities.findOne(id, user.userId);

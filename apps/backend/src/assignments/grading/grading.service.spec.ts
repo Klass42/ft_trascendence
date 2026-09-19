@@ -158,20 +158,82 @@ describe('GradingService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('the gradebook reflects the graded score', async () => {
-    const { prisma } = buildPrismaFake();
+  it('the gradebook reflects graded activity attempts and a final', async () => {
+    const ACTIVITY_ID = 'act-1';
+    const ATTEMPT_ID = 'att-1';
+    const prisma = {
+      course: {
+        findUnique: async ({ where }: any) =>
+          where.id === COURSE_ID
+            ? { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID }
+            : null,
+      },
+      enrollment: {
+        findUnique: async ({ where }: any) => {
+          const { courseId, userId } = where.courseId_userId;
+          if (courseId !== COURSE_ID) return null;
+          if (userId === STUDENT)
+            return { courseId, userId, role: CourseRole.STUDENT };
+          if (userId === TEACHER)
+            return { courseId, userId, role: CourseRole.TEACHER };
+          return null;
+        },
+        findMany: async ({ where }: any) =>
+          where.role === CourseRole.STUDENT
+            ? [
+                {
+                  userId: STUDENT,
+                  user: {
+                    id: STUDENT,
+                    name: 'Lucía Molina',
+                    email: 'dev@example.com',
+                    avatarUrl: null,
+                  },
+                },
+              ]
+            : [],
+      },
+      activity: {
+        findMany: async ({ where }: any) =>
+          where.courseId === COURSE_ID
+            ? [
+                {
+                  id: ACTIVITY_ID,
+                  title: 'Examen mixto',
+                  maxScore: 10,
+                  dueAt: null,
+                  closeAt: null,
+                  countsTowardFinal: true,
+                  status: 'PUBLISHED',
+                },
+              ]
+            : [],
+      },
+      attempt: {
+        findMany: async () => [
+          {
+            id: ATTEMPT_ID,
+            activityId: ACTIVITY_ID,
+            userId: STUDENT,
+            score: 8,
+            status: 'GRADED',
+            attemptNo: 1,
+          },
+        ],
+      },
+    } as unknown as PrismaService;
     const service = buildService(prisma, []);
 
-    await service.gradeSubmission(SUBMISSION_ID, TEACHER, { score: 85 });
     const gradebook = await service.getGradebook(COURSE_ID, TEACHER);
 
-    expect(gradebook.assignments).toHaveLength(1);
+    expect(gradebook.items).toHaveLength(1);
     expect(gradebook.students).toHaveLength(1);
     const cell = gradebook.students[0].cells[0];
-    expect(cell.assignmentId).toBe(ASSIGNMENT_ID);
-    expect(cell.score).toBe(85);
-    expect(cell.status).toBe(SubmissionStatus.GRADED);
-    expect(cell.submissionId).toBe(SUBMISSION_ID);
+    expect(cell.activityId).toBe(ACTIVITY_ID);
+    expect(cell.score).toBe(8);
+    expect(cell.status).toBe('GRADED');
+    expect(cell.attemptId).toBe(ATTEMPT_ID);
+    expect(gradebook.students[0].final).toBe(0.8);
   });
 
   // ── A4-teacher: aggregated teacher-dashboard summary ─────────────────────
@@ -191,22 +253,22 @@ describe('GradingService', () => {
             return [];
           },
         },
-        submission: {
+        attempt: {
           count: async () => 1,
           findMany: async () => [
             {
-              id: SUBMISSION_ID,
-              status: SubmissionStatus.SUBMITTED,
-              updatedAt: new Date('2026-07-19T10:00:00Z'),
+              id: 'att-pending',
+              status: 'SUBMITTED',
+              submittedAt: new Date('2026-07-19T10:00:00Z'),
               user: {
                 id: STUDENT,
                 name: 'Lucía Molina',
                 email: 'dev@example.com',
                 avatarUrl: null,
               },
-              assignment: {
-                id: ASSIGNMENT_ID,
-                title: 'Práctica 1',
+              activity: {
+                id: 'act-1',
+                title: 'Examen mixto',
                 course: { id: COURSE_ID, title: 'Web 101' },
               },
             },
@@ -216,7 +278,7 @@ describe('GradingService', () => {
       return prisma;
     }
 
-    it('aggregates active courses, distinct students and pending submissions', async () => {
+    it('aggregates active courses, distinct students and pending attempts', async () => {
       const prisma = buildSummaryFake();
       const service = buildService(prisma, []);
 
@@ -227,10 +289,10 @@ describe('GradingService', () => {
       expect(summary.pendingCount).toBe(1);
       expect(summary.pending).toHaveLength(1);
       expect(summary.pending[0]).toMatchObject({
-        submissionId: SUBMISSION_ID,
-        assignmentTitle: 'Práctica 1',
+        attemptId: 'att-pending',
+        activityTitle: 'Examen mixto',
         courseTitle: 'Web 101',
-        status: SubmissionStatus.SUBMITTED,
+        status: 'SUBMITTED',
       });
       expect(summary.pending[0].student.id).toBe(STUDENT);
     });
@@ -238,7 +300,7 @@ describe('GradingService', () => {
     it('returns zeros for a user who teaches nothing', async () => {
       const prisma = {
         enrollment: { findMany: async () => [] },
-        submission: { count: async () => 0, findMany: async () => [] },
+        attempt: { count: async () => 0, findMany: async () => [] },
       } as unknown as PrismaService;
       const service = buildService(prisma, []);
 

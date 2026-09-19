@@ -33,10 +33,14 @@ export { useDeleteAssignment } from './useDeleteAssignment';
 export { useTeachingSummary } from './useTeachingSummary';
 export { useActivities, useActivity } from './useActivities';
 export { useActivityMutations } from './useActivityMutations';
-export { useActivityAttempts } from './useActivityAttempts';
-export { useGradebook } from './useGradebook';
+export { useActivityAttempts, useStaffAttempts } from './useActivityAttempts';
+export { useTaskTemplates } from './useTaskTemplates';
+export { useSaveAsTemplate } from './useSaveAsTemplate';
+export { useTeachingActivities } from './useTeachingActivities';
+export { useGradebook, downloadGradebookCsv } from './useGradebook';
 export { useMyGrades } from './useMyGrades';
-export { useGradeSubmission, downloadGradebookCsv } from './useGradeSubmission';
+export { useGradeAttempt } from './useGradeAttempt';
+export { useGradeSubmission } from './useGradeSubmission';
 export { useForumThreads } from './useForumThreads';
 export { useForumThread } from './useForumThread';
 export {

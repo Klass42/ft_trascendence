@@ -79,14 +79,14 @@ export interface SubmissionDTO {
 // Teacher dashboard summary (A4-teacher)
 // =============================================================================
 
-/** One ungraded submission awaiting the teacher's attention. */
-export interface PendingSubmissionDTO {
-  submissionId: string;
-  status: 'SUBMITTED' | 'LATE';
-  submittedAt: string;
+/** One ungraded attempt awaiting the teacher's attention. */
+export interface PendingAttemptDTO {
+  attemptId: string;
+  status: 'SUBMITTED' | 'GRADED' | 'IN_PROGRESS';
+  submittedAt: string | null;
   student: SubmissionAuthorDTO;
-  assignmentId: string;
-  assignmentTitle: string;
+  activityId: string;
+  activityTitle: string;
   courseId: string;
   courseTitle: string;
 }
@@ -96,8 +96,11 @@ export interface TeachingSummaryDTO {
   activeCourses: number;
   totalStudents: number;
   pendingCount: number;
-  pending: PendingSubmissionDTO[];
+  pending: PendingAttemptDTO[];
 }
+
+/** @deprecated Use PendingAttemptDTO — summary now lists SUBMITTED attempts. */
+export type PendingSubmissionDTO = PendingAttemptDTO;
 
 // =============================================================================
 // Request payloads
@@ -128,4 +131,10 @@ export interface CreateSubmissionInput {
   text?: string;
   status?: 'DRAFT' | 'SUBMITTED';
   fileIds?: string[];
+}
+
+/** Legacy PATCH /submissions/:id/grade body (410 after cutover). */
+export interface GradeSubmissionInput {
+  score: number;
+  feedback?: string;
 }

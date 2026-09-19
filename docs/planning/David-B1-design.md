@@ -2,6 +2,11 @@
 
 > Fase B (LMS-redesign §3/§4). **Design-first**: este doc es el plan; nada de `prisma/` se toca hasta
 > que el owner apruebe el esquema. Rama `david` → `staging`. Contexto: [`LMS-redesign.md`](./LMS-redesign.md).
+>
+> **Estado 2026-09-19:** B1 (motor aditivo, `Assignment` intacto como MANUAL) quedó **supersedido**
+> para el producto unificado. No hubo rename de modelos: instancia = `Activity`; ensayo/fichero =
+> `ESSAY`/`FILE_UPLOAD`; writes de assignment → 410. Guía: [`task-templates.md`](./task-templates.md).
+> Spec: [`../superpowers/specs/2026-09-19-task-templates-design.md`](../superpowers/specs/2026-09-19-task-templates-design.md).
 
 ## 0. Decisión de arquitectura: **additive, NO rename**
 

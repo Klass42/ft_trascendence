@@ -1,19 +1,16 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, GoneException, Param, Post } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { SubmissionsService } from './submissions.service';
-import { CreateSubmissionDto } from './dto/create-submission.dto';
 
 @Controller()
 export class SubmissionsController {
   constructor(private readonly submissions: SubmissionsService) {}
 
   @Post('assignments/:assignmentId/submissions')
-  async submit(
-    @Param('assignmentId') assignmentId: string,
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateSubmissionDto,
-  ) {
-    return this.submissions.submit(assignmentId, user.userId, dto);
+  submit() {
+    throw new GoneException(
+      'Las entregas se gestionan como intentos de actividad; este endpoint ya no acepta escrituras.',
+    );
   }
 
   @Get('assignments/:assignmentId/submissions')

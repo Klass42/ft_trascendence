@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Spinner } from '@/components/ui';
-import { useAuth, useCourses, useMyGrades } from '@/lib/api';
+import { Badge, EmptyState, Select, Spinner } from '@/components/ui';
+import { formatFinalPercent, useAuth, useCourses, useMyGrades } from '@/lib/api';
 import type { MyGradeDTO } from '@/lib/api';
-import { STATUS_CHIP, formatDate } from '@/features/assignments/helpers';
+import { formatDate } from '@/features/assignments/helpers';
+import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
 import { GradebookPage } from '@/features/gradebook';
 
 /**
- * Grades route. Staff (teacher/admin) get the full gradebook; a student sees
- * their own grades per course, backed by the real API (Epic C).
+ * Grades route. Staff get the full gradebook; a student sees their own
+ * published/archived tasks plus the course final.
  */
 export function GradesPage() {
   const { user } = useAuth();
@@ -19,8 +20,6 @@ export function GradesPage() {
   return <StudentGrades />;
 }
 
-// ---------------------------------------------------------------------------
-
 function StudentGrades() {
   const { data: courses, isLoading: coursesLoading } = useCourses();
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -31,7 +30,8 @@ function StudentGrades() {
     }
   }, [courses, courseId]);
 
-  const { data: grades, isLoading, error } = useMyGrades(courseId);
+  const { data, isLoading, error } = useMyGrades(courseId);
+  const grades = data?.items ?? null;
 
   return (
     <div style={{ padding: '30px 40px', maxWidth: 820 }}>
@@ -46,45 +46,33 @@ function StudentGrades() {
       >
         <h1
           style={{
-            fontSize: 26,
-            fontWeight: 800,
+            fontSize: 'var(--text-2xl)',
+            fontWeight: 'var(--font-bold)',
             margin: 0,
-            letterSpacing: '-0.02em',
           }}
         >
           Mis notas
         </h1>
 
         {courses && courses.length > 0 && (
-          <select
-            value={courseId ?? ''}
-            onChange={(e) => setCourseId(e.target.value)}
-            style={{
-              marginLeft: 'auto',
-              padding: '8px 12px',
-              borderRadius: 9,
-              border: '1px solid var(--color-border-primary)',
-              background: 'var(--color-bg-primary)',
-              color: 'var(--color-text-primary)',
-              fontSize: 14,
-              fontFamily: 'inherit',
-            }}
-          >
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
+          <div style={{ marginLeft: 'auto', minWidth: 220 }}>
+            <Select
+              aria-label="Curso"
+              value={courseId ?? ''}
+              onChange={(e) => setCourseId(e.target.value)}
+              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+            />
+          </div>
         )}
       </div>
 
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
-        <p style={{ color: 'var(--color-text-muted)' }}>
-          No estás inscrito en ningún curso.
-        </p>
+        <EmptyState
+          title="No estás inscrito en ningún curso"
+          description="Cuando te matricules, verás aquí tus notas."
+        />
       )}
 
       {isLoading && <Spinner size="md" label="Cargando notas…" />}
@@ -118,26 +106,34 @@ function StudentGrades() {
               letterSpacing: '.04em',
             }}
           >
-            <span>Evaluación</span>
+            <span>Tarea</span>
             <span>Estado</span>
             <span style={{ textAlign: 'right' }}>Nota</span>
           </div>
 
           {grades.length === 0 && (
-            <div
-              style={{
-                padding: '16px 18px',
-                fontSize: 14,
-                color: 'var(--color-text-muted)',
-              }}
-            >
-              Este curso no tiene tareas todavía.
-            </div>
+            <EmptyState
+              title="Aún no hay notas"
+              description="Este curso no tiene tareas publicadas."
+            />
           )}
 
           {grades.map((g) => (
-            <GradeRow key={g.assignmentId} grade={g} />
+            <GradeRow key={g.activityId} grade={g} />
           ))}
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '14px 18px',
+              borderTop: '1px solid var(--color-border-primary)',
+              fontWeight: 700,
+            }}
+          >
+            <span>Nota final</span>
+            <span>{formatFinalPercent(data?.final ?? null)}</span>
+          </div>
         </div>
       )}
     </div>
@@ -145,7 +141,7 @@ function StudentGrades() {
 }
 
 function GradeRow({ grade }: { grade: MyGradeDTO }) {
-  const chip = grade.status ? STATUS_CHIP[grade.status] : STATUS_CHIP.NONE;
+  const badge = grade.status ? ATTEMPT_STATUS_BADGE[grade.status] : null;
   const isGraded = grade.status === 'GRADED' && grade.score != null;
 
   return (
@@ -164,33 +160,29 @@ function GradeRow({ grade }: { grade: MyGradeDTO }) {
         }}
       >
         <div>
-          <div style={{ fontSize: 14.5, fontWeight: 600 }}>{grade.title}</div>
+          <div style={{ fontSize: 14.5, fontWeight: 600 }}>
+            {grade.title}{' '}
+            {grade.countsTowardFinal === false && (
+              <Badge variant="neutral">Práctica</Badge>
+            )}
+          </div>
           {grade.dueAt && (
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
               Vence {formatDate(grade.dueAt)}
             </div>
           )}
         </div>
-        <span
-          style={{
-            justifySelf: 'start',
-            fontSize: 11.5,
-            fontWeight: 700,
-            color: chip.fg,
-            background: chip.bg,
-            padding: '4px 10px',
-            borderRadius: 20,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {chip.label}
-        </span>
+        {badge ? (
+          <Badge variant={badge.variant}>{badge.label}</Badge>
+        ) : (
+          <Badge variant="neutral">Sin entregar</Badge>
+        )}
         <span
           style={{
             textAlign: 'right',
             fontSize: 16,
             fontWeight: 800,
-            color: isGraded ? '#0f766e' : 'var(--color-text-muted)',
+            color: isGraded ? 'var(--color-success)' : 'var(--color-text-muted)',
           }}
         >
           {isGraded ? `${grade.score}/${grade.maxScore}` : '—'}

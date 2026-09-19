@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -15,6 +16,7 @@ import {
   QuestionKind,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getAdapter } from './blocks/registry';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
@@ -92,10 +94,26 @@ export class ActivitiesService {
   // ─── Authoring: activities ────────────────────────────────────────────────
 
   async create(courseId: string, actingUserId: string, dto: CreateActivityDto) {
-    await this.requireCourse(courseId, actingUserId, STAFF_ROLES);
+    const { course } = await this.requireCourse(
+      courseId,
+      actingUserId,
+      STAFF_ROLES,
+    );
     this.assertWindow(dto.openAt, dto.dueAt, dto.closeAt);
 
-    return this.prisma.activity.create({
+    if (dto.templateId && dto.sourceActivityId) {
+      throw new BadRequestException(
+        'templateId and sourceActivityId are mutually exclusive',
+      );
+    }
+
+    const blocks = await this.resolveCreateBlocks(course.organizationId, dto);
+
+    if (dto.status === CourseStatus.PUBLISHED && blocks.length === 0) {
+      throw new BadRequestException('no se puede publicar vacía');
+    }
+
+    const created = await this.prisma.activity.create({
       data: {
         courseId,
         ...(dto.type !== undefined && { type: dto.type }),
@@ -104,7 +122,9 @@ export class ActivitiesService {
         openAt: dto.openAt ? new Date(dto.openAt) : null,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
         closeAt: dto.closeAt ? new Date(dto.closeAt) : null,
-        ...(dto.maxScore !== undefined && { maxScore: dto.maxScore }),
+        maxScore: 0,
+        countsTowardFinal: dto.countsTowardFinal ?? true,
+        templateId: dto.templateId ?? null,
         ...(dto.attemptsAllowed !== undefined && {
           attemptsAllowed: dto.attemptsAllowed,
         }),
@@ -113,9 +133,38 @@ export class ActivitiesService {
           config: dto.config as Prisma.InputJsonValue,
         }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(blocks.length > 0 && {
+          questions: {
+            create: blocks.map((b, i) => ({
+              kind: b.kind,
+              prompt: b.prompt,
+              points: b.points,
+              order: b.order ?? i,
+              content: b.content as Prisma.InputJsonValue,
+            })),
+          },
+        }),
       },
       include: { questions: { orderBy: { order: 'asc' } } },
     });
+
+    if (dto.fileIds?.length) {
+      await this.replaceActivityFiles(
+        created.id,
+        course.organizationId,
+        dto.fileIds,
+      );
+    }
+
+    if (blocks.length > 0) {
+      await this.recomputeMaxScore(created.id);
+      const refreshed = await this.prisma.activity.findUnique({
+        where: { id: created.id },
+        include: { questions: { orderBy: { order: 'asc' } } },
+      });
+      return refreshed ?? created;
+    }
+    return created;
   }
 
   /** List a course's activities. Students see only PUBLISHED ones and never the
@@ -151,7 +200,7 @@ export class ActivitiesService {
   }
 
   async update(activityId: string, actingUserId: string, dto: UpdateActivityDto) {
-    const { activity } = await this.requireActivity(
+    const { activity, course } = await this.requireActivity(
       activityId,
       actingUserId,
       STAFF_ROLES,
@@ -164,7 +213,11 @@ export class ActivitiesService {
     };
     this.assertWindow(merged.openAt, merged.dueAt, merged.closeAt);
 
-    return this.prisma.activity.update({
+    if (dto.status === CourseStatus.PUBLISHED) {
+      await this.assertPublishable(activityId);
+    }
+
+    const updated = await this.prisma.activity.update({
       where: { id: activityId },
       data: {
         ...(dto.type !== undefined && { type: dto.type }),
@@ -173,7 +226,9 @@ export class ActivitiesService {
         ...(dto.openAt !== undefined && { openAt: merged.openAt }),
         ...(dto.dueAt !== undefined && { dueAt: merged.dueAt }),
         ...(dto.closeAt !== undefined && { closeAt: merged.closeAt }),
-        ...(dto.maxScore !== undefined && { maxScore: dto.maxScore }),
+        ...(dto.countsTowardFinal !== undefined && {
+          countsTowardFinal: dto.countsTowardFinal,
+        }),
         ...(dto.attemptsAllowed !== undefined && {
           attemptsAllowed: dto.attemptsAllowed,
         }),
@@ -187,11 +242,56 @@ export class ActivitiesService {
       },
       include: { questions: { orderBy: { order: 'asc' } } },
     });
+
+    if (dto.fileIds) {
+      await this.replaceActivityFiles(
+        activityId,
+        course.organizationId,
+        dto.fileIds,
+      );
+    }
+    return updated;
   }
 
   async remove(activityId: string, actingUserId: string) {
     await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    const attempts = await this.prisma.attempt.count({
+      where: { activityId },
+    });
+    if (attempts > 0) {
+      throw new ConflictException('archivar en su lugar');
+    }
     await this.prisma.activity.delete({ where: { id: activityId } });
+  }
+
+  /** Activities of courses the actor staffs, newest first (template library). */
+  async listTeachingActivities(actingUserId: string) {
+    const staff = await this.prisma.enrollment.findMany({
+      where: { userId: actingUserId, role: { in: STAFF_ROLES } },
+      select: { courseId: true },
+    });
+    const courseIds = staff.map((e) => e.courseId);
+    if (courseIds.length === 0) return [];
+
+    const activities = await this.prisma.activity.findMany({
+      where: { courseId: { in: courseIds } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        course: { select: { id: true, title: true } },
+        _count: { select: { attempts: true } },
+      },
+    });
+    return activities.map((a) => ({
+      id: a.id,
+      courseId: a.courseId,
+      courseTitle: a.course.title,
+      title: a.title,
+      status: a.status,
+      countsTowardFinal: a.countsTowardFinal,
+      attemptCount: a._count.attempts,
+      createdAt: a.createdAt.toISOString(),
+      dueAt: a.dueAt ? a.dueAt.toISOString() : null,
+    }));
   }
 
   // ─── Authoring: questions ─────────────────────────────────────────────────
@@ -202,6 +302,7 @@ export class ActivitiesService {
     dto: CreateQuestionDto,
   ) {
     await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.assertNoAttempts(activityId);
     this.validateQuestionContent(dto.kind, dto.content);
 
     // Append at the end unless an explicit order is given.
@@ -209,7 +310,7 @@ export class ActivitiesService {
       dto.order ??
       (await this.prisma.question.count({ where: { activityId } }));
 
-    return this.prisma.question.create({
+    const question = await this.prisma.question.create({
       data: {
         activityId,
         kind: dto.kind,
@@ -219,6 +320,8 @@ export class ActivitiesService {
         content: dto.content as Prisma.InputJsonValue,
       },
     });
+    await this.recomputeMaxScore(activityId);
+    return question;
   }
 
   async updateQuestion(
@@ -227,6 +330,7 @@ export class ActivitiesService {
     dto: UpdateQuestionDto,
   ) {
     const question = await this.loadQuestionAsStaff(questionId, actingUserId);
+    await this.assertNoAttempts(question.activityId);
 
     // Validate the resulting (kind, content) pair. Changing kind requires new
     // content; changing content revalidates against the (possibly new) kind.
@@ -239,7 +343,7 @@ export class ActivitiesService {
       );
     }
 
-    return this.prisma.question.update({
+    const updated = await this.prisma.question.update({
       where: { id: questionId },
       data: {
         ...(dto.kind !== undefined && { kind: dto.kind }),
@@ -251,11 +355,15 @@ export class ActivitiesService {
         }),
       },
     });
+    await this.recomputeMaxScore(question.activityId);
+    return updated;
   }
 
   async removeQuestion(questionId: string, actingUserId: string) {
-    await this.loadQuestionAsStaff(questionId, actingUserId);
+    const question = await this.loadQuestionAsStaff(questionId, actingUserId);
+    await this.assertNoAttempts(question.activityId);
     await this.prisma.question.delete({ where: { id: questionId } });
+    await this.recomputeMaxScore(question.activityId);
   }
 
   /** Reorder every question of an activity. The provided id set must match the
@@ -266,6 +374,7 @@ export class ActivitiesService {
     questionIds: string[],
   ) {
     await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.assertNoAttempts(activityId);
     const existing = await this.prisma.question.findMany({
       where: { activityId },
       select: { id: true },
@@ -288,10 +397,25 @@ export class ActivitiesService {
         }),
       ),
     );
+    await this.recomputeMaxScore(activityId);
     return this.prisma.question.findMany({
       where: { activityId },
       orderBy: { order: 'asc' },
     });
+  }
+
+  /** Persist Activity.maxScore = sum(question.points), or 0 if none. */
+  async recomputeMaxScore(activityId: string): Promise<number> {
+    const questions = await this.prisma.question.findMany({
+      where: { activityId },
+      select: { points: true },
+    });
+    const maxScore = questions.reduce((sum, q) => sum + q.points, 0);
+    await this.prisma.activity.update({
+      where: { id: activityId },
+      data: { maxScore },
+    });
+    return maxScore;
   }
 
   private async loadQuestionAsStaff(
@@ -347,111 +471,134 @@ export class ActivitiesService {
       }
       case QuestionKind.TRUE_FALSE:
       case QuestionKind.SHORT_ANSWER:
+        return {};
+      case QuestionKind.ESSAY:
+      case QuestionKind.FILE_UPLOAD:
+        return c;
       default:
         return {};
     }
   }
 
-  // ─── Per-kind content validation (backend half of front+back validation) ──
-
-  /** Validate a question's authoring `content` against its kind. Throws
-   * BadRequestException with a clear message so bad authoring can't produce an
-   * ungradeable question. */
+  /** Validate a question's authoring `content` against its kind. */
   validateQuestionContent(kind: QuestionKind, content: unknown): void {
-    const c = (content && typeof content === 'object' ? content : {}) as Record<
-      string,
-      unknown
-    >;
-    const isStrArr = (v: unknown) =>
-      Array.isArray(v) && v.every((x) => typeof x === 'string');
-    const isIdxArr = (v: unknown, max: number) =>
-      Array.isArray(v) &&
-      v.every((x) => Number.isInteger(x) && x >= 0 && x < max);
-    const bad = (msg: string) => {
-      throw new BadRequestException(msg);
-    };
+    getAdapter(kind).validateContent(content);
+  }
 
-    switch (kind) {
-      case QuestionKind.MULTIPLE_CHOICE: {
-        if (!isStrArr(c.options) || (c.options as string[]).length < 2) {
-          bad('MULTIPLE_CHOICE requires options: string[] (≥2)');
-        }
-        if (
-          !isIdxArr(c.correct, (c.options as string[]).length) ||
-          (c.correct as number[]).length < 1
-        ) {
-          bad('MULTIPLE_CHOICE requires correct: valid option indices (≥1)');
-        }
-        break;
-      }
-      case QuestionKind.TRUE_FALSE:
-        if (typeof c.answer !== 'boolean') bad('TRUE_FALSE requires answer: boolean');
-        break;
-      case QuestionKind.FILL_BLANK: {
-        const blanks = c.blanks;
-        if (!Array.isArray(blanks) || blanks.length < 1) {
-          bad('FILL_BLANK requires blanks: { accepted: string[] }[] (≥1)');
-        }
-        (blanks as unknown[]).forEach((b, i) => {
-          const accepted = (b as Record<string, unknown>)?.accepted;
-          if (!isStrArr(accepted) || (accepted as string[]).length < 1) {
-            bad(`FILL_BLANK blank #${i + 1} needs accepted: string[] (≥1)`);
-          }
-        });
-        break;
-      }
-      case QuestionKind.MATCHING: {
-        const { left, right, pairs } = c;
-        if (!isStrArr(left) || (left as string[]).length < 1) {
-          bad('MATCHING requires left: string[] (≥1)');
-        }
-        if (!isStrArr(right) || (right as string[]).length < 1) {
-          bad('MATCHING requires right: string[] (≥1)');
-        }
-        if (
-          !Array.isArray(pairs) ||
-          pairs.length < 1 ||
-          !pairs.every(
-            (p) =>
-              Array.isArray(p) &&
-              p.length === 2 &&
-              Number.isInteger(p[0]) &&
-              p[0] >= 0 &&
-              p[0] < (left as string[]).length &&
-              Number.isInteger(p[1]) &&
-              p[1] >= 0 &&
-              p[1] < (right as string[]).length,
-          )
-        ) {
-          bad('MATCHING requires pairs: [leftIdx, rightIdx][] within bounds');
-        }
-        break;
-      }
-      case QuestionKind.ORDERING: {
-        const { items, correctOrder } = c;
-        if (!isStrArr(items) || (items as string[]).length < 2) {
-          bad('ORDERING requires items: string[] (≥2)');
-        }
-        const n = (items as string[]).length;
-        if (
-          !Array.isArray(correctOrder) ||
-          correctOrder.length !== n ||
-          new Set(correctOrder).size !== n ||
-          !isIdxArr(correctOrder, n)
-        ) {
-          bad('ORDERING requires correctOrder: a permutation of item indices');
-        }
-        break;
-      }
-      case QuestionKind.SHORT_ANSWER:
-        // `accepted` optional: empty/absent → the question is graded manually.
-        if (c.accepted !== undefined && !isStrArr(c.accepted)) {
-          bad('SHORT_ANSWER accepted must be string[] when provided');
-        }
-        break;
-      default:
-        bad(`Unsupported question kind: ${kind}`);
+  private async assertNoAttempts(activityId: string): Promise<void> {
+    const count = await this.prisma.attempt.count({ where: { activityId } });
+    if (count > 0) {
+      throw new ConflictException('la estructura está bloqueada');
     }
+  }
+
+  private async assertPublishable(activityId: string): Promise<void> {
+    const questions = await this.prisma.question.findMany({
+      where: { activityId },
+      select: { points: true },
+    });
+    const total = questions.reduce((sum, q) => sum + q.points, 0);
+    if (questions.length === 0 || total === 0) {
+      throw new BadRequestException('no se puede publicar vacía');
+    }
+  }
+
+  private async resolveCreateBlocks(
+    organizationId: string,
+    dto: CreateActivityDto,
+  ): Promise<
+    Array<{
+      kind: QuestionKind;
+      prompt: string;
+      points: number;
+      order: number;
+      content: Record<string, unknown>;
+    }>
+  > {
+    if (dto.templateId) {
+      const template = await this.prisma.taskTemplate.findUnique({
+        where: { id: dto.templateId },
+      });
+      if (!template || template.organizationId !== organizationId) {
+        throw new NotFoundException(`Task template ${dto.templateId} not found`);
+      }
+      return this.normalizeBlocks(template.blocks);
+    }
+
+    if (dto.sourceActivityId) {
+      const source = await this.prisma.activity.findUnique({
+        where: { id: dto.sourceActivityId },
+        include: {
+          course: true,
+          questions: { orderBy: { order: 'asc' } },
+        },
+      });
+      if (!source || source.course.organizationId !== organizationId) {
+        throw new NotFoundException(
+          `Activity ${dto.sourceActivityId} not found`,
+        );
+      }
+      return source.questions.map((q) => ({
+        kind: q.kind,
+        prompt: q.prompt,
+        points: q.points,
+        order: q.order,
+        content: (q.content ?? {}) as Record<string, unknown>,
+      }));
+    }
+
+    return [];
+  }
+
+  private normalizeBlocks(raw: unknown): Array<{
+    kind: QuestionKind;
+    prompt: string;
+    points: number;
+    order: number;
+    content: Record<string, unknown>;
+  }> {
+    if (!Array.isArray(raw)) return [];
+    const blocks = raw.map((b, i) => {
+      const row = (b && typeof b === 'object' ? b : {}) as Record<
+        string,
+        unknown
+      >;
+      return {
+        kind: row.kind as QuestionKind,
+        prompt: String(row.prompt ?? ''),
+        points: typeof row.points === 'number' ? row.points : 1,
+        order: typeof row.order === 'number' ? row.order : i,
+        content:
+          row.content && typeof row.content === 'object'
+            ? (row.content as Record<string, unknown>)
+            : {},
+      };
+    });
+    for (const block of blocks) {
+      this.validateQuestionContent(block.kind, block.content);
+    }
+    return blocks;
+  }
+
+  private async replaceActivityFiles(
+    activityId: string,
+    organizationId: string,
+    fileIds: string[],
+  ): Promise<void> {
+    if (fileIds.length > 0) {
+      const files = await this.prisma.file.findMany({
+        where: { id: { in: fileIds }, organizationId },
+        select: { id: true },
+      });
+      if (files.length !== fileIds.length) {
+        throw new BadRequestException('One or more files are not in this organization');
+      }
+    }
+    await this.prisma.activityFile.deleteMany({ where: { activityId } });
+    if (fileIds.length === 0) return;
+    await this.prisma.activityFile.createMany({
+      data: fileIds.map((fileId) => ({ activityId, fileId })),
+    });
   }
 
   // ─── Small helpers (shared with the assignments window rules) ─────────────

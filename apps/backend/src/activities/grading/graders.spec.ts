@@ -125,6 +125,13 @@ describe('isAutoGradable', () => {
       expect(isAutoGradable(kind, {})).toBe(true);
     }
   });
+
+  it('ESSAY and FILE_UPLOAD are not auto-gradable', () => {
+    expect(isAutoGradable('ESSAY' as unknown as QuestionKind, {})).toBe(false);
+    expect(
+      isAutoGradable('FILE_UPLOAD' as unknown as QuestionKind, { maxFiles: 1 }),
+    ).toBe(false);
+  });
 });
 
 describe('gradeQuestion clamping', () => {

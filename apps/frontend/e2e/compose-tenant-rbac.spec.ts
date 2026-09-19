@@ -4,8 +4,9 @@ import type { APIRequestContext } from '@playwright/test';
 const password = 'demo1234';
 const courseA = 'e2e-a-course-01';
 const courseB = 'e2e-b-course-01';
-const assignmentA = 'e2e-a-course-01-assignment-01';
-const assignmentB = 'e2e-b-course-01-assignment-01';
+const activityA = 'e2e-a-course-01-activity-02';
+const activityB = 'e2e-b-course-01-activity-02';
+const essayA = 'e2e-a-course-01-activity-02-question-01';
 
 type Login = { accessToken: string };
 
@@ -80,38 +81,47 @@ test.describe('E2E tenant, RBAC, files and submissions — Compose over HTTPS', 
       accessToken(request, 'e2e-a', 'teacher001@e2e-a.demo'),
       accessToken(request, 'e2e-b', 'student001@e2e-b.demo'),
     ]);
-    const upload = await request.post('/api/files', {
-      headers: bearer(studentA1),
-      multipart: {
-        file: { name: 'e2e-submission.txt', mimeType: 'text/plain', buffer: Buffer.from('submission from student A1') },
-      },
-    });
-    expect(upload.ok()).toBeTruthy();
-    const { id: fileId } = await upload.json() as { id: string };
 
     const [first, second] = await Promise.all([
-      request.post(`/api/assignments/${assignmentA}/submissions`, {
-        headers: bearer(studentA1), data: { text: 'E2E concurrent submission A1', status: 'SUBMITTED', fileIds: [fileId] },
-      }),
-      request.post(`/api/assignments/${assignmentA}/submissions`, {
-        headers: bearer(studentA2), data: { text: 'E2E concurrent submission A2', status: 'SUBMITTED' },
-      }),
+      request.post(`/api/activities/${activityA}/attempts`, { headers: bearer(studentA1) }),
+      request.post(`/api/activities/${activityA}/attempts`, { headers: bearer(studentA2) }),
     ]);
     expect(first.ok()).toBeTruthy();
     expect(second.ok()).toBeTruthy();
+    const attemptA1 = await first.json() as { id: string };
+    const attemptA2 = await second.json() as { id: string };
 
-    const mine = await request.get(`/api/assignments/${assignmentA}/submissions/me`, { headers: bearer(studentA1) });
+    await Promise.all([
+      request.patch(`/api/attempts/${attemptA1.id}`, {
+        headers: bearer(studentA1),
+        data: { answers: [{ questionId: essayA, response: { text: 'E2E concurrent submission A1' } }] },
+      }),
+      request.patch(`/api/attempts/${attemptA2.id}`, {
+        headers: bearer(studentA2),
+        data: { answers: [{ questionId: essayA, response: { text: 'E2E concurrent submission A2' } }] },
+      }),
+    ]);
+    expect((await request.post(`/api/attempts/${attemptA1.id}/submit`, { headers: bearer(studentA1) })).ok()).toBeTruthy();
+    expect((await request.post(`/api/attempts/${attemptA2.id}/submit`, { headers: bearer(studentA2) })).ok()).toBeTruthy();
+
+    const mine = await request.get(`/api/activities/${activityA}/attempts/me`, { headers: bearer(studentA1) });
     expect(mine.ok()).toBeTruthy();
-    expect((await mine.json()).files).toHaveLength(1);
+    const mineAttempts = await mine.json() as Array<{ answers?: Array<{ response?: { text?: string } }> }>;
+    expect(
+      mineAttempts.some((a) => a.answers?.some((ans) => ans.response?.text === 'E2E concurrent submission A1')),
+    ).toBeTruthy();
 
-    const listed = await request.get(`/api/assignments/${assignmentA}/submissions`, { headers: bearer(teacherA) });
+    const listed = await request.get(`/api/activities/${activityA}/attempts`, { headers: bearer(teacherA) });
     expect(listed.ok()).toBeTruthy();
-    expect((await listed.json()).map((submission: { text: string }) => submission.text)).toEqual(
+    const texts = (await listed.json() as Array<{ answers?: Array<{ response?: { text?: string } }> }>)
+      .flatMap((a) => a.answers ?? [])
+      .map((ans) => ans.response?.text);
+    expect(texts).toEqual(
       expect.arrayContaining(['E2E concurrent submission A1', 'E2E concurrent submission A2']),
     );
-    expect((await request.post(`/api/assignments/${assignmentA}/submissions`, {
-      headers: bearer(studentB), data: { text: 'foreign tenant attempt', status: 'SUBMITTED' },
+    expect((await request.post(`/api/activities/${activityA}/attempts`, {
+      headers: bearer(studentB),
     })).status()).toBe(404);
-    expect((await request.get(`/api/assignments/${assignmentB}/submissions/me`, { headers: bearer(studentA1) })).status()).toBe(404);
+    expect((await request.get(`/api/activities/${activityB}/attempts/me`, { headers: bearer(studentA1) })).status()).toBe(404);
   });
 });

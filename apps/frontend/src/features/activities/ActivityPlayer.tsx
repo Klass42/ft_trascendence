@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Spinner, useToast } from '@/components/ui';
-import { useActivity, useActivityAttempts } from '@/lib/api';
+import {
+  Badge,
+  Button,
+  FileUpload,
+  Spinner,
+  Textarea,
+  useToast,
+  type FileValue,
+} from '@/components/ui';
+import { useActivity, useActivityAttempts, useAuth } from '@/lib/api';
 import type { AttemptDTO, QuestionDTO, SaveAnswersInput } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
 import { KIND_LABELS } from './helpers';
@@ -92,7 +100,7 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
       refetch();
       onAttemptChanged?.();
     } catch (err) {
-      toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo iniciar la actividad.' });
+      toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo iniciar la tarea.' });
     } finally {
       setIsStarting(false);
     }
@@ -118,11 +126,11 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
       toast({
         variant: 'success',
         message: completed.status === 'GRADED'
-          ? `Actividad corregida: ${completed.score ?? 0}/${completed.activity?.maxScore ?? activity?.maxScore ?? 0}`
-          : 'Actividad enviada. Está pendiente de corrección.',
+          ? `Tarea corregida: ${completed.score ?? 0}/${completed.activity?.maxScore ?? activity?.maxScore ?? 0}`
+          : 'Tarea enviada. Está pendiente de corrección.',
       });
     } catch (err) {
-      toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo enviar la actividad.' });
+      toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo enviar la tarea.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -130,14 +138,14 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
 
   if (activityLoading || attemptsLoading) return <Spinner size="md" label="Cargando actividad…" />;
   if (!activity || activityError || attemptsError) {
-    return <p style={{ color: 'var(--color-error)' }}>No se pudo cargar esta actividad. Puede que ya no esté disponible.</p>;
+    return <p style={{ color: 'var(--color-error)' }}>No se pudo cargar esta tarea. Puede que ya no esté disponible.</p>;
   }
 
   const winBadge = WINDOW_BADGE[state];
   const resumable = attempts?.find((attempt) => attempt.status === 'IN_PROGRESS');
 
   return (
-    <section aria-label={`Actividad: ${activity.title}`}>
+    <section aria-label={`Tarea: ${activity.title}`}>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{activity.title}</h2>
@@ -177,10 +185,10 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
           <AttemptHistory attempts={attempts ?? []} maxScore={activity.maxScore} />
           <div style={{ marginTop: 18 }}>
             {state !== 'open' ? (
-              <p style={{ color: 'var(--color-text-muted)' }}>{state === 'not-open' ? 'Esta actividad todavía no está abierta.' : 'El plazo de esta actividad ha terminado.'}</p>
+              <p style={{ color: 'var(--color-text-muted)' }}>{state === 'not-open' ? 'Esta tarea todavía no está abierta.' : 'El plazo de esta tarea ha terminado.'}</p>
             ) : resumable || attemptsRemaining === null || attemptsRemaining > 0 ? (
               <Button variant="primary" onClick={() => void beginOrResume()} loading={isStarting}>
-                {resumable ? 'Reanudar intento' : latestAttempt ? 'Nuevo intento' : 'Empezar actividad'}
+                {resumable ? 'Reanudar intento' : latestAttempt ? 'Nuevo intento' : 'Empezar tarea'}
               </Button>
             ) : (
               <p style={{ color: 'var(--color-text-muted)' }}>Has utilizado todos los intentos disponibles.</p>
@@ -222,18 +230,19 @@ function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, 
   const questions = activity.questions ?? [];
   return (
     <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }} style={{ marginTop: 20, borderTop: '1px solid var(--color-border-primary)', paddingTop: 18 }}>
-      {questions.length === 0 ? <p>No hay preguntas publicadas para esta actividad.</p> : questions.map((question, index) => (
+      {questions.length === 0 ? <p>No hay preguntas publicadas para esta tarea.</p> : questions.map((question, index) => (
         <QuestionInput key={question.id} question={question} number={index + 1} response={responses[question.id] ?? {}} onChange={(response) => onChange(question.id, response)} />
       ))}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
         <Button type="button" variant="outline" onClick={onSave} loading={saving}>Guardar borrador</Button>
-        <Button type="submit" variant="primary" loading={submitting}>Enviar actividad</Button>
+        <Button type="submit" variant="primary" loading={submitting}>Enviar tarea</Button>
       </div>
     </form>
   );
 }
 
 function QuestionInput({ question, number, response, onChange }: { question: QuestionDTO; number: number; response: Record<string, unknown>; onChange: (response: Record<string, unknown>) => void }) {
+  const { user } = useAuth();
   const content = question.content;
   const fieldsetStyle = { border: '1px solid var(--color-border-primary)', borderRadius: 10, margin: '0 0 14px', padding: '14px 16px' };
   const labelStyle = { display: 'block', margin: '8px 0', cursor: 'pointer', lineHeight: 1.45 };
@@ -281,6 +290,72 @@ function QuestionInput({ question, number, response, onChange }: { question: Que
         return <ol style={{ paddingLeft: 24 }}>{order.map((itemIndex, index) => <li key={itemIndex} style={{ margin: '8px 0' }}>{optionText(items[itemIndex])} <Button type="button" variant="ghost" size="sm" aria-label={`Subir elemento ${index + 1}`} disabled={index === 0} onClick={() => move(index, -1)}>↑</Button><Button type="button" variant="ghost" size="sm" aria-label={`Bajar elemento ${index + 1}`} disabled={index === order.length - 1} onClick={() => move(index, 1)}>↓</Button></li>)}</ol>;
       })()}
       {question.kind === 'SHORT_ANSWER' && <textarea aria-label={`Respuesta para pregunta ${number}`} style={{ ...inputStyle, minHeight: 88 }} value={typeof response.text === 'string' ? response.text : ''} onChange={(event) => onChange({ text: event.target.value })} />}
+      {question.kind === 'ESSAY' && (
+        <Textarea
+          aria-label={`Respuesta para pregunta ${number}`}
+          rows={6}
+          value={typeof response.text === 'string' ? response.text : ''}
+          onChange={(event) => onChange({ text: event.target.value })}
+          hint={
+            typeof content.minChars === 'number' || typeof content.maxChars === 'number'
+              ? [
+                  typeof content.minChars === 'number' ? `mín. ${content.minChars}` : null,
+                  typeof content.maxChars === 'number' ? `máx. ${content.maxChars}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : undefined
+          }
+        />
+      )}
+      {question.kind === 'FILE_UPLOAD' && user?.organizationId && (
+        <FileUploadQuestion
+          organizationId={user.organizationId}
+          uploaderId={user.userId}
+          maxFiles={typeof content.maxFiles === 'number' ? content.maxFiles : 1}
+          accept={Array.isArray(content.accept) ? (content.accept as string[]).join(',') : undefined}
+          existingCount={Array.isArray(response.fileIds) ? (response.fileIds as string[]).length : 0}
+          onFileIds={(fileIds) => onChange({ fileIds })}
+        />
+      )}
     </fieldset>
+  );
+}
+
+function FileUploadQuestion({
+  organizationId,
+  uploaderId,
+  maxFiles,
+  accept,
+  existingCount,
+  onFileIds,
+}: {
+  organizationId: string;
+  uploaderId: string;
+  maxFiles: number;
+  accept?: string;
+  existingCount: number;
+  onFileIds: (fileIds: string[]) => void;
+}) {
+  return (
+    <div>
+      {existingCount > 0 && (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '8px 0' }}>
+          {existingCount} fichero(s) ya guardado(s). Sube de nuevo para reemplazarlos.
+        </p>
+      )}
+      <FileUpload
+        organizationId={organizationId}
+        uploaderId={uploaderId}
+        multiple={maxFiles > 1}
+        maxFiles={maxFiles}
+        accept={accept}
+        onChange={(files: FileValue[]) => {
+          const done = files.filter((f) => f.status === 'done').map((f) => f.id);
+          if (done.length > 0) onFileIds(done);
+        }}
+        hint={`Máximo ${maxFiles} fichero(s).`}
+      />
+    </div>
   );
 }

@@ -14,7 +14,6 @@ import {
   PlatformRole,
   PrismaClient,
   QuestionKind,
-  SubmissionStatus,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -48,6 +47,64 @@ function scenarioFromEnvironment(): Scenario {
   throw new Error('Unknown seed scenario: ' + scenario);
 }
 
+function quizQuestions(activityId: string) {
+  return [
+    {
+      id: activityId + '-question-01', activityId, kind: QuestionKind.MULTIPLE_CHOICE,
+      prompt: '¿Cuál es la opción correcta?', points: 5, order: 0,
+      content: { options: ['Opción correcta', 'Distractor'], correct: [0] },
+    },
+    {
+      id: activityId + '-question-02', activityId, kind: QuestionKind.TRUE_FALSE,
+      prompt: 'El contenido está disponible para el alumnado matriculado.', points: 5, order: 1,
+      content: { answer: true },
+    },
+  ];
+}
+
+function essayFileQuestions(activityId: string) {
+  return [
+    {
+      id: activityId + '-question-01', activityId, kind: QuestionKind.ESSAY,
+      prompt: 'Desarrolla el tema con tus palabras.', points: 10, order: 0,
+      content: {},
+    },
+    {
+      id: activityId + '-question-02', activityId, kind: QuestionKind.FILE_UPLOAD,
+      prompt: 'Adjunta un fichero de evidencia.', points: 0, order: 1,
+      content: { maxFiles: 3 },
+    },
+  ];
+}
+
+function mixedExamBlocks() {
+  return [
+    {
+      kind: QuestionKind.MULTIPLE_CHOICE, prompt: '¿Qué protocolo sirve la web?',
+      points: 1, order: 0,
+      content: { options: ['HTTP', 'SMTP', 'FTP'], correct: [0] },
+    },
+    {
+      kind: QuestionKind.MULTIPLE_CHOICE, prompt: '¿Cuál es un lenguaje de estilos?',
+      points: 1, order: 1,
+      content: { options: ['CSS', 'SQL', 'Bash'], correct: [0] },
+    },
+    {
+      kind: QuestionKind.MATCHING, prompt: 'Empareja cada término con su definición.',
+      points: 1, order: 2,
+      content: {
+        left: ['HTML', 'CSS'],
+        right: ['Estructura', 'Presentación'],
+        pairs: [[0, 0], [1, 1]],
+      },
+    },
+    {
+      kind: QuestionKind.ESSAY, prompt: 'Explica brevemente cómo se relaciona HTML y CSS.',
+      points: 2, order: 3, content: {},
+    },
+  ];
+}
+
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(name + ' must be set before running the seed.');
@@ -60,6 +117,8 @@ async function clearApplicationData(): Promise<void> {
     await tx.answer.deleteMany();
     await tx.attempt.deleteMany();
     await tx.question.deleteMany();
+    await tx.activityFile.deleteMany();
+    await tx.taskTemplate.deleteMany();
     await tx.activity.deleteMany();
     await tx.courseResource.deleteMany();
     await tx.learningResource.deleteMany();
@@ -169,38 +228,41 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
   })));
   await prisma.lesson.createMany({ data: lessons });
 
-  const assignments = courseIds.flatMap((courseId, courseIndex) => [0, 1].map((index) => ({
-    id: courseId + '-assignment-' + String(index + 1).padStart(2, '0'),
-    courseId,
-    title: index === 0 ? 'Tarea · Entrega inicial' : 'Tarea · Proyecto aplicado',
-    description: 'Entrega de demostración con instrucciones y rúbrica.',
-    openAt: new Date(now.getTime() - DAY),
-    dueAt: new Date(now.getTime() + (courseIndex + index + 3) * DAY),
-    maxScore: 100,
-  })));
-  await prisma.assignment.createMany({ data: assignments });
-
-  const activities = courseIds.map((courseId) => ({
+  // No new Assignment rows — unified tasks live on Activity (quiz + ESSAY/FILE).
+  const quizActivities = courseIds.map((courseId) => ({
     id: courseId + '-activity-01', courseId, type: ActivityType.QUIZ,
     title: 'Autoevaluación de la unidad', description: 'Cuestionario de práctica con corrección automática.',
     dueAt: new Date(now.getTime() + 5 * DAY), maxScore: 10, attemptsAllowed: 2,
+    countsTowardFinal: true,
     config: { showSolutions: true, shuffleQuestions: false, shuffleOptions: false },
     status: CourseStatus.PUBLISHED,
   }));
-  await prisma.activity.createMany({ data: activities });
+  const essayActivities = courseIds.map((courseId, courseIndex) => ({
+    id: courseId + '-activity-02', courseId, type: ActivityType.QUIZ,
+    title: 'Tarea · Ensayo y fichero',
+    description: 'Desarrolla la respuesta y adjunta un fichero de evidencia.',
+    openAt: new Date(now.getTime() - DAY),
+    dueAt: new Date(now.getTime() + (courseIndex + 4) * DAY),
+    maxScore: 10, attemptsAllowed: 1, countsTowardFinal: true,
+    config: { showSolutions: false },
+    status: CourseStatus.PUBLISHED,
+  }));
+  await prisma.activity.createMany({ data: [...quizActivities, ...essayActivities] });
   await prisma.question.createMany({
-    data: activities.flatMap((activity) => [
-      {
-        id: activity.id + '-question-01', activityId: activity.id, kind: QuestionKind.MULTIPLE_CHOICE,
-        prompt: '¿Cuál es la opción correcta?', points: 5, order: 0,
-        content: { options: ['Opción correcta', 'Distractor'], correct: [0] },
-      },
-      {
-        id: activity.id + '-question-02', activityId: activity.id, kind: QuestionKind.TRUE_FALSE,
-        prompt: 'El contenido está disponible para el alumnado matriculado.', points: 5, order: 1,
-        content: { answer: true },
-      },
-    ]),
+    data: [
+      ...quizActivities.flatMap((activity) => quizQuestions(activity.id)),
+      ...essayActivities.flatMap((activity) => essayFileQuestions(activity.id)),
+    ],
+  });
+  await prisma.taskTemplate.create({
+    data: {
+      id: options.id + '-template-mixto',
+      organizationId: org.id,
+      createdById: teacherIds[0],
+      title: 'Examen mixto',
+      description: 'Dos opción múltiple, emparejar y un desarrollo.',
+      blocks: mixedExamBlocks(),
+    },
   });
 
   const enrollmentCandidates = [
@@ -228,20 +290,6 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
     return true;
   });
   await prisma.enrollment.createMany({ data: enrollments });
-
-  const submissions = assignments.flatMap((assignment, assignmentIndex) => {
-    const courseIndex = courseIds.indexOf(assignment.courseId);
-    return studentIds.filter((_, index) => index % courseIds.length === courseIndex).slice(0, 12).map((userId, index) => ({
-      id: assignment.id + '-submission-' + String(index + 1).padStart(2, '0'),
-      assignmentId: assignment.id, userId, text: 'Entrega de demostración preparada para la evaluación.',
-      status: index % 3 === 0 ? SubmissionStatus.GRADED : SubmissionStatus.SUBMITTED,
-      score: index % 3 === 0 ? 70 + (index % 4) * 5 : null,
-      feedback: index % 3 === 0 ? 'Buen trabajo. Revisa el último apartado.' : null,
-      gradedById: index % 3 === 0 ? teacherIds[assignmentIndex % teacherIds.length] : null,
-      gradedAt: index % 3 === 0 ? now : null,
-    }));
-  });
-  await prisma.submission.createMany({ data: submissions });
 
   await prisma.lessonCompletion.createMany({
     data: studentIds.slice(0, Math.min(30, studentIds.length)).flatMap((userId, index) => {
@@ -323,17 +371,41 @@ async function seedStandard(passwordHash: string): Promise<void> {
       { id: 'lesson-web-101-3', sectionId: 'section-web-101-2', title: 'CSS responsive', contentMd: '# CSS\nDiseño adaptable.', order: 0 },
     ],
   });
-  await prisma.assignment.createMany({
+  await prisma.activity.createMany({
     data: [
-      { id: 'assignment-web-101-1', courseId: 'course-web-101', title: 'Práctica 1 · Tu primera página HTML', description: 'Crea una página con encabezado, párrafo e imagen.', dueAt: new Date(now.getTime() + 7 * DAY), maxScore: 100 },
-      { id: 'assignment-web-101-2', courseId: 'course-web-101', title: 'Práctica 2 · Landing responsive', description: 'Construye una landing adaptable.', dueAt: new Date(now.getTime() + 14 * DAY), maxScore: 100 },
+      {
+        id: 'activity-web-101-quiz', courseId: 'course-web-101', type: ActivityType.QUIZ,
+        title: 'Autoevaluación de la unidad', description: 'Cuestionario de práctica con corrección automática.',
+        dueAt: new Date(now.getTime() + 7 * DAY), maxScore: 10, attemptsAllowed: 2,
+        countsTowardFinal: true,
+        config: { showSolutions: true, shuffleQuestions: false, shuffleOptions: false },
+        status: CourseStatus.PUBLISHED,
+      },
+      {
+        id: 'activity-web-101-essay', courseId: 'course-web-101', type: ActivityType.QUIZ,
+        title: 'Tarea · Ensayo y fichero',
+        description: 'Desarrolla la respuesta y adjunta un fichero de evidencia.',
+        dueAt: new Date(now.getTime() + 14 * DAY), maxScore: 10, attemptsAllowed: 1,
+        countsTowardFinal: true,
+        config: { showSolutions: false },
+        status: CourseStatus.PUBLISHED,
+      },
     ],
   });
-  await prisma.submission.create({
+  await prisma.question.createMany({
+    data: [
+      ...quizQuestions('activity-web-101-quiz'),
+      ...essayFileQuestions('activity-web-101-essay'),
+    ],
+  });
+  await prisma.taskTemplate.create({
     data: {
-      id: 'submission-web-101-1', assignmentId: 'assignment-web-101-1', userId: 'user-lucia-001',
-      text: 'Entrega de ejemplo.', status: SubmissionStatus.GRADED, score: 85,
-      feedback: 'Muy buen comienzo.', gradedById: 'user-diego-001', gradedAt: now,
+      id: 'template-klass-mixto',
+      organizationId: org.id,
+      createdById: 'user-diego-001',
+      title: 'Examen mixto',
+      description: 'Dos opción múltiple, emparejar y un desarrollo.',
+      blocks: mixedExamBlocks(),
     },
   });
   await prisma.lessonCompletion.create({ data: { lessonId: 'lesson-web-101-1', userId: 'user-lucia-001' } });
@@ -349,7 +421,7 @@ async function seedStandard(passwordHash: string): Promise<void> {
   await prisma.notification.create({
     data: {
       userId: 'user-lucia-001', type: NotificationType.GRADE_PUBLISHED, title: 'Nota publicada',
-      body: 'Tu primera entrega ya tiene nota.', link: '/assignments/assignment-web-101-1',
+      body: 'Tu primera entrega ya tiene nota.', link: '/activities?activityId=activity-web-101-quiz',
     },
   });
 }
@@ -367,13 +439,6 @@ async function seedE2e(passwordHash: string): Promise<void> {
   await createInstitution({
     id: 'org-e2e-b', slug: 'e2e-b', name: 'E2E Academy B', students: 2, teachers: 1, courses: 1,
   }, passwordHash);
-
-  // The acceptance suite creates submissions itself, including simultaneous
-  // writes by the two students. Removing the illustrative demo submissions is
-  // deliberate and remains a Prisma operation, never hand-written SQL.
-  await prisma.submission.deleteMany({
-    where: { assignment: { course: { organizationId: { in: ['org-e2e-a', 'org-e2e-b'] } } } },
-  });
 }
 
 async function main(): Promise<void> {

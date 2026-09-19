@@ -1,13 +1,37 @@
-import { IsNumber, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayUnique,
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 
-/**
- * Body for `PATCH /attempts/:id/grade` (staff manual grading of an attempt that
- * contains subjective questions). Sets the final overall score; the upper bound
- * (activity.maxScore) is checked in the service. (Per-answer feedback/rubric is
- * a Phase C enhancement.)
- */
-export class GradeAttemptDto {
+export class GradeAnswerDto {
+  @IsString()
+  @MinLength(1)
+  questionId: string;
+
   @IsNumber()
   @Min(0)
-  score: number;
+  awarded: number;
+}
+
+/**
+ * Body for `PATCH /attempts/:id/grade`. Per-question awarded points for
+ * subjective blocks; overall score is derived as sum(Answer.awarded).
+ */
+export class GradeAttemptDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @ArrayUnique((a: GradeAnswerDto) => a.questionId)
+  @Type(() => GradeAnswerDto)
+  answers: GradeAnswerDto[];
+
+  @IsOptional()
+  @IsString()
+  feedback?: string;
 }

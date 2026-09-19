@@ -2,13 +2,8 @@ import { test, expect } from '@playwright/test';
 import { actAs, TEACHER as ACT_TEACHER } from './dev-user';
 
 /**
- * A4-teacher — TeacherDashboard with real data (no mock).
- *
- * Runs as the seeded teacher (VITE_DEV_USER_ID=user-diego-001). Setup (via API):
- * the teacher creates a fresh open assignment and the student submits it, so an
- * ungraded submission exists. We then assert the dashboard renders real figures
- * and that "Por calificar" leads to the gradebook. Teardown deletes the
- * assignment (cascades the submission) to keep the seed clean.
+ * TeacherDashboard with real data (no mock). Setup via the activity/attempt
+ * API so we never hit the 410 assignment mutation endpoints.
  */
 
 const BASE_URL = 'http://localhost:3000';
@@ -18,7 +13,7 @@ const STUDENT = 'user-lucia-001';
 
 test.describe('A4-teacher — TeacherDashboard (real data)', () => {
   const title = `E2E panel ${Date.now()}`;
-  let assignmentId = '';
+  let activityId = '';
 
   test.beforeEach(async ({ page }) => {
     await actAs(page, ACT_TEACHER);
@@ -26,24 +21,55 @@ test.describe('A4-teacher — TeacherDashboard (real data)', () => {
 
   test.beforeAll(async ({ request }) => {
     const created = await request.post(
-      `${BASE_URL}/courses/${COURSE_ID}/assignments`,
+      `${BASE_URL}/courses/${COURSE_ID}/activities`,
       {
         headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
-        data: { title },
+        data: { title, type: 'QUIZ' },
       },
     );
-    assignmentId = (await created.json()).id;
+    const activity = (await created.json()) as { id: string };
+    activityId = activity.id;
 
-    await request.post(`${BASE_URL}/assignments/${assignmentId}/submissions`, {
+    const question = await request.post(
+      `${BASE_URL}/activities/${activityId}/questions`,
+      {
+        headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
+        data: {
+          kind: 'ESSAY',
+          prompt: 'Desarrolla.',
+          points: 10,
+          content: {},
+        },
+      },
+    );
+    const q = (await question.json()) as { id: string };
+
+    await request.patch(`${BASE_URL}/activities/${activityId}`, {
+      headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
+      data: { status: 'PUBLISHED' },
+    });
+
+    const started = await request.post(
+      `${BASE_URL}/activities/${activityId}/attempts`,
+      { headers: { 'x-dev-user': STUDENT } },
+    );
+    const attempt = (await started.json()) as { id: string };
+    await request.patch(`${BASE_URL}/attempts/${attempt.id}`, {
       headers: { 'x-dev-user': STUDENT, 'Content-Type': 'application/json' },
-      data: { text: 'Entrega para el panel', status: 'SUBMITTED' },
+      data: {
+        answers: [{ questionId: q.id, response: { text: 'Entrega para el panel' } }],
+      },
+    });
+    await request.post(`${BASE_URL}/attempts/${attempt.id}/submit`, {
+      headers: { 'x-dev-user': STUDENT },
     });
   });
 
   test.afterAll(async ({ request }) => {
-    if (assignmentId) {
-      await request.delete(`${BASE_URL}/assignments/${assignmentId}`, {
-        headers: { 'x-dev-user': TEACHER },
+    if (activityId) {
+      await request.patch(`${BASE_URL}/activities/${activityId}`, {
+        headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
+        data: { status: 'ARCHIVED' },
       });
     }
   });
@@ -53,17 +79,14 @@ test.describe('A4-teacher — TeacherDashboard (real data)', () => {
   }) => {
     await page.goto('/dashboard');
 
-    // Header + stat cards (real, not the old "142" mock).
     await expect(page.getByText('Profesor')).toBeVisible();
     await expect(page.getByText('Cursos activos')).toBeVisible({ timeout: 8000 });
     await expect(page.getByText('Alumnos totales')).toBeVisible();
     await expect(page.getByText('142')).toHaveCount(0);
 
-    // The pending list shows the just-created submission.
     await expect(page.getByText('Entregas por calificar')).toBeVisible();
     await expect(page.getByText(title).first()).toBeVisible({ timeout: 8000 });
 
-    // Clicking "Por calificar" opens the gradebook.
     await page
       .getByRole('button')
       .filter({ hasText: 'Por calificar' })

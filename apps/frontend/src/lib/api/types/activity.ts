@@ -1,8 +1,11 @@
 /**
- * Activity engine DTOs (Phase B). Mirrors the backend `activities/` module.
+ * Activity engine DTOs. Mirrors the backend `activities/` module.
  * `content`/`response`/`config` are loose JSON bags whose shape depends on the
  * question kind; the per-kind editors and the backend validate them.
  */
+import type { FileDTO } from './course';
+import type { SubmissionAuthorDTO } from './assignment';
+
 export type ActivityType = 'QUIZ' | 'LISTENING' | 'SPEAKING';
 export type ActivityStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type QuestionKind =
@@ -11,7 +14,9 @@ export type QuestionKind =
   | 'FILL_BLANK'
   | 'MATCHING'
   | 'ORDERING'
-  | 'SHORT_ANSWER';
+  | 'SHORT_ANSWER'
+  | 'ESSAY'
+  | 'FILE_UPLOAD';
 export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
 
 export interface QuestionDTO {
@@ -24,6 +29,13 @@ export interface QuestionDTO {
   content: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Teacher prompt attachments on an activity (not student FILE_UPLOAD answers). */
+export interface ActivityFileDTO {
+  activityId: string;
+  fileId: string;
+  file: FileDTO;
 }
 
 export interface ActivityDTO {
@@ -40,9 +52,12 @@ export interface ActivityDTO {
   timeLimitSec: number | null;
   config: Record<string, unknown>;
   status: ActivityStatus;
+  countsTowardFinal: boolean;
+  templateId: string | null;
   createdAt: string;
   updatedAt: string;
   questions?: QuestionDTO[];
+  files?: ActivityFileDTO[];
 }
 
 export interface CreateActivityInput {
@@ -52,14 +67,21 @@ export interface CreateActivityInput {
   openAt?: string | null;
   dueAt?: string | null;
   closeAt?: string | null;
+  /** Ignored by the API — maxScore is always sum(question.points). */
   maxScore?: number;
   attemptsAllowed?: number;
   timeLimitSec?: number | null;
   config?: Record<string, unknown>;
   status?: ActivityStatus;
+  countsTowardFinal?: boolean;
+  templateId?: string;
+  sourceActivityId?: string;
+  fileIds?: string[];
 }
 
-export type UpdateActivityInput = Partial<CreateActivityInput>;
+export type UpdateActivityInput = Partial<
+  Omit<CreateActivityInput, 'templateId' | 'sourceActivityId'>
+>;
 
 export interface CreateQuestionInput {
   kind: QuestionKind;
@@ -71,7 +93,7 @@ export interface CreateQuestionInput {
 
 export type UpdateQuestionInput = Partial<CreateQuestionInput>;
 
-// ─── Attempts (used by the student player, B2b) ─────────────────────────────
+// ─── Attempts ───────────────────────────────────────────────────────────────
 export interface AnswerDTO {
   id: string;
   attemptId: string;
@@ -91,10 +113,18 @@ export interface AttemptDTO {
   submittedAt: string | null;
   score: number | null;
   gradedAt: string | null;
+  feedback: string | null;
   answers?: AnswerDTO[];
   activity?: ActivityDTO;
+  /** Present on the staff list endpoint only. */
+  user?: SubmissionAuthorDTO;
 }
 
 export interface SaveAnswersInput {
   answers: { questionId: string; response: Record<string, unknown> }[];
+}
+
+export interface GradeAttemptInput {
+  answers: { questionId: string; awarded: number }[];
+  feedback?: string;
 }

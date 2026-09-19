@@ -20,12 +20,14 @@ test.describe('B2a — activity authoring', () => {
     const title = `E2E quiz ${Date.now()}`;
 
     await page.goto('/activities');
-    await page.getByLabel('Curso').selectOption(COURSE_ID);
+    const course = page.getByRole('combobox', { name: 'Curso' });
+    await expect(course).toBeVisible({ timeout: 8000 });
+    await course.selectOption(COURSE_ID);
 
     // ── Create the activity ──────────────────────────────────────────────
-    await page.getByRole('button', { name: '+ Nueva actividad' }).click();
+    await page.getByRole('button', { name: '+ Nueva tarea' }).click();
     await page.getByLabel('Título').fill(title);
-    await page.getByRole('button', { name: 'Crear actividad' }).click();
+    await page.getByRole('button', { name: 'Crear tarea' }).click();
 
     // The new activity is selected; its detail shows the title + Borrador badge.
     await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible({
@@ -35,7 +37,7 @@ test.describe('B2a — activity authoring', () => {
 
     // Can't publish without questions.
     await page.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByText(/Añade al menos una pregunta/)).toBeVisible({
+    await expect(page.getByText(/Añade al menos un bloque/)).toBeVisible({
       timeout: 8000,
     });
 
@@ -56,7 +58,7 @@ test.describe('B2a — activity authoring', () => {
     await expect(page.getByText('Publicada').first()).toBeVisible({ timeout: 8000 });
 
     // ── Delete (cleanup) ─────────────────────────────────────────────────
-    await page.getByRole('button', { name: 'Borrar actividad' }).click();
+    await page.getByRole('button', { name: 'Borrar tarea' }).click();
     await page.getByRole('button', { name: 'Borrar', exact: true }).last().click();
     await expect(
       page.getByRole('heading', { level: 2, name: title }),

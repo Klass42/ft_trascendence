@@ -62,6 +62,10 @@ export function QuestionContentEditor({ kind, content, onChange }: Props) {
       return <MatchingEditor content={content} onChange={onChange} />;
     case 'ORDERING':
       return <OrderingEditor content={content} onChange={onChange} />;
+    case 'ESSAY':
+      return <EssayEditor content={content} onChange={onChange} />;
+    case 'FILE_UPLOAD':
+      return <FileUploadEditor content={content} onChange={onChange} />;
     default:
       return null;
   }
@@ -394,6 +398,98 @@ function OrderingEditor({ content, onChange }: Omit<Props, 'kind'>) {
         <Button type="button" variant="outline" size="sm" onClick={addItem}>
           + Añadir elemento
         </Button>
+      </div>
+    </FieldGroup>
+  );
+}
+
+// ─── ESSAY ────────────────────────────────────────────────────────────────────
+function EssayEditor({ content, onChange }: Omit<Props, 'kind'>) {
+  const minChars = typeof content.minChars === 'number' ? String(content.minChars) : '';
+  const maxChars = typeof content.maxChars === 'number' ? String(content.maxChars) : '';
+
+  const commit = (min: string, max: string) => {
+    const next: Record<string, unknown> = { ...content };
+    const minN = min === '' ? undefined : Number(min);
+    const maxN = max === '' ? undefined : Number(max);
+    if (minN !== undefined && Number.isInteger(minN) && minN >= 0) next.minChars = minN;
+    else delete next.minChars;
+    if (maxN !== undefined && Number.isInteger(maxN) && maxN >= 0) next.maxChars = maxN;
+    else delete next.maxChars;
+    onChange(next);
+  };
+
+  return (
+    <FieldGroup
+      label="Límites de texto"
+      hint="Opcional. El alumno escribe en un recuadro; se corrige a mano."
+    >
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 140px' }}>
+          <Input
+            type="number"
+            min={0}
+            label="Mínimo de caracteres"
+            value={minChars}
+            onChange={(e) => commit(e.target.value, maxChars)}
+          />
+        </div>
+        <div style={{ flex: '1 1 140px' }}>
+          <Input
+            type="number"
+            min={0}
+            label="Máximo de caracteres"
+            value={maxChars}
+            onChange={(e) => commit(minChars, e.target.value)}
+          />
+        </div>
+      </div>
+    </FieldGroup>
+  );
+}
+
+// ─── FILE_UPLOAD ──────────────────────────────────────────────────────────────
+function FileUploadEditor({ content, onChange }: Omit<Props, 'kind'>) {
+  const maxFiles = typeof content.maxFiles === 'number' ? String(content.maxFiles) : '1';
+  const accept = Array.isArray(content.accept)
+    ? (content.accept as string[]).join(', ')
+    : '';
+
+  return (
+    <FieldGroup
+      label="Entrega de ficheros"
+      hint="El alumno sube archivos; se corrige a mano."
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Input
+          type="number"
+          min={1}
+          label="Número máximo de ficheros"
+          value={maxFiles}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            onChange({
+              ...content,
+              maxFiles: Number.isInteger(n) && n >= 1 ? n : 1,
+            });
+          }}
+        />
+        <Input
+          label="Tipos aceptados"
+          hint="Extensiones o MIME, separados por comas. Vacío = cualquiera."
+          value={accept}
+          onChange={(e) => {
+            const list = e.target.value
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const next: Record<string, unknown> = { ...content };
+            if (list.length) next.accept = list;
+            else delete next.accept;
+            onChange(next);
+          }}
+          placeholder=".pdf, .docx, image/*"
+        />
       </div>
     </FieldGroup>
   );

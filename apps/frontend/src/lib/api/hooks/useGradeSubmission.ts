@@ -55,24 +55,3 @@ export function useGradeSubmission(): UseGradeSubmissionResult {
 
   return { grade, isLoading, error };
 }
-
-/**
- * Fetch the gradebook CSV for a course and trigger a browser download. Reuses
- * the api client (so the auth header is injected) and reads the response as
- * text, then hands it to the browser as a Blob.
- */
-export async function downloadGradebookCsv(
-  courseId: string,
-  filename = `gradebook-${courseId}.csv`,
-): Promise<void> {
-  const csv = await apiClient.get<string>(`/courses/${courseId}/gradebook.csv`);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}

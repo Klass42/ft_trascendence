@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   BookOpen,
   ClipboardCheck,
-  ListChecks,
   Library,
   MessageSquare,
   BarChart3,
@@ -39,8 +38,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { to: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Inicio' },
   { to: '/courses', icon: <BookOpen size={20} />, label: 'Cursos' },
-  { to: '/assignments', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
-  { to: '/activities', icon: <ListChecks size={20} />, label: 'Actividades', teacher: true },
+  { to: '/activities', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
   { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
   { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },

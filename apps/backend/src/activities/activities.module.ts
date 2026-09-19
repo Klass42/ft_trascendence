@@ -4,6 +4,8 @@ import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
 import { AttemptsController } from './attempts/attempts.controller';
 import { AttemptsService } from './attempts/attempts.service';
+import { TaskTemplatesController } from './templates/task-templates.controller';
+import { TaskTemplatesService } from './templates/task-templates.service';
 
 // Owner: David (@dacs-dev) — Interaction. Activity engine (Phase B / B1):
 // rich auto-gradable activities alongside the MANUAL Assignment/Submission flow.
@@ -13,7 +15,11 @@ import { AttemptsService } from './attempts/attempts.service';
   // NotificationsModule exports NotificationsService so a graded attempt can
   // emit GRADE_PUBLISHED to the student (same pattern as submissions/grading).
   imports: [NotificationsModule],
-  controllers: [ActivitiesController, AttemptsController],
-  providers: [ActivitiesService, AttemptsService],
+  controllers: [
+    ActivitiesController,
+    AttemptsController,
+    TaskTemplatesController,
+  ],
+  providers: [ActivitiesService, AttemptsService, TaskTemplatesService],
 })
 export class ActivitiesModule {}

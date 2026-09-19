@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../client';
-import type { AssignmentDTO } from '../types';
+import type { ActivityDTO } from '../types';
 
 interface UseUpcomingAssignmentsResult {
-  data: AssignmentDTO[] | null;
+  data: ActivityDTO[] | null;
   isLoading: boolean;
   error: Error | null;
 }
 
 /**
- * Aggregate assignments across multiple courses and find upcoming ones.
- * Used by StudentDashboard to show the next due assignment.
+ * Aggregate published activities across courses for the student dashboard
+ * "próxima entrega" card. Assignment writes are gone; GET /assignments is
+ * not the product surface anymore.
  */
 export function useUpcomingAssignments(
   courseIds: string[] | undefined,
 ): UseUpcomingAssignmentsResult {
-  const [data, setData] = useState<AssignmentDTO[] | null>(null);
+  const [data, setData] = useState<ActivityDTO[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -33,8 +34,8 @@ export function useUpcomingAssignments(
     Promise.all(
       courseIds.map((id) =>
         apiClient
-          .get<AssignmentDTO[]>(`/courses/${id}/assignments`)
-          .catch(() => [] as AssignmentDTO[]),
+          .get<ActivityDTO[]>(`/courses/${id}/activities`)
+          .catch(() => [] as ActivityDTO[]),
       ),
     )
       .then((results) => {

@@ -11,6 +11,9 @@ task-level brief:
 Product context: [`../../AGENTS.md`](../../AGENTS.md) (conventions) · [`../../MVP_DESIGN.md`](../../MVP_DESIGN.md).
 Target: **14 module points** (planned ~16). Subject: `en.subject.pdf` (v21.1, free-choice).
 
+Tareas unificadas (2026-09-19, landed): [`task-templates.md`](./task-templates.md) · spec
+[`../superpowers/specs/2026-09-19-task-templates-design.md`](../superpowers/specs/2026-09-19-task-templates-design.md).
+
 Current cross-team delivery status: [`session-status-2026-09-03.md`](./session-status-2026-09-03.md).
 
 ---

@@ -6,6 +6,11 @@
 >
 > Note: DevOps/infra is now **Ale's** job. You are a full-stack app developer — you no longer own
 > Docker/CI/monitoring. Focus on the interaction features below.
+>
+> **Estado 2026-09-19 (Fase B plantillas, landed):** el ciclo de tareas es uno, sobre `Activity`
+> (copy «Tarea»). Gradebook lee `Attempt`; writes de `Assignment`/`Submission` → 410. Guía:
+> [`task-templates.md`](./task-templates.md). Los épics de abajo son el brief original; no
+> reescribir historia.
 
 **Theme:** how users interact around the content — assignments & grading, forums, and everything
 real-time (notifications, live updates, presence).

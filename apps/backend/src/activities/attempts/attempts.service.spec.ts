@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import {
   AttemptStatus,
   CourseRole,
@@ -9,6 +10,9 @@ import { AttemptsService } from './attempts.service';
 import { ActivitiesService } from '../activities.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationsService } from '../../notifications/notifications.service';
+import type { GradeAttemptDto } from './dto/grade-attempt.dto';
+
+const ESSAY = 'ESSAY' as unknown as QuestionKind;
 
 /**
  * Attempt lifecycle over a tiny in-memory Prisma fake: window + attempt-cap
@@ -60,17 +64,15 @@ describe('AttemptsService', () => {
       const row = { ...a };
       if (include?.answers) row.answers = answers.filter((x) => x.attemptId === a.id);
       if (include?.activity) {
-        row.activity = { ...activity };
-        if (include.activity.include?.questions) {
-          row.activity.questions = [...opts.questions].sort(
-            (p, q) => p.order - q.order,
-          );
-        }
+        row.activity = {
+          ...activity,
+          questions: [...opts.questions].sort((p, q) => p.order - q.order),
+        };
       }
       return row;
     };
 
-    const prisma = {
+    const prisma: any = {
       activity: {
         findUnique: async ({ where, include }: any) => {
           if (where.id !== activity.id) return null;
@@ -116,6 +118,7 @@ describe('AttemptsService', () => {
             submittedAt: null,
             gradedAt: null,
             gradedById: null,
+            feedback: null,
             ...data,
           };
           attempts.push(row);
@@ -142,24 +145,46 @@ describe('AttemptsService', () => {
             return found;
           }
           seq += 1;
-          const row = { id: `ans-${seq}`, attemptId, questionId, ...create };
+          const row = {
+            id: `ans-${seq}`,
+            attemptId,
+            questionId,
+            awarded: null,
+            correct: null,
+            ...create,
+          };
           answers.push(row);
           return row;
         },
         update: async ({ where, data }: any) => {
-          const an = answers.find((x) => x.id === where.id);
+          const an = where.id
+            ? answers.find((x) => x.id === where.id)
+            : answers.find(
+                (x) =>
+                  x.attemptId === where.attemptId_questionId.attemptId &&
+                  x.questionId === where.attemptId_questionId.questionId,
+              );
           Object.assign(an, data);
           return an;
         },
+        findMany: async ({ where }: any) =>
+          answers.filter((x) => {
+            if (where?.attemptId && x.attemptId !== where.attemptId) return false;
+            if (where?.questionId && x.questionId !== where.questionId) {
+              return false;
+            }
+            return true;
+          }),
         create: async ({ data }: any) => {
           seq += 1;
-          const row = { id: `ans-${seq}`, ...data };
+          const row = { id: `ans-${seq}`, awarded: null, correct: null, ...data };
           answers.push(row);
           return row;
         },
       },
-      $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
-    } as unknown as PrismaService;
+    };
+    prisma.$transaction = async (ops: any) =>
+      typeof ops === 'function' ? ops(prisma) : Promise.all(ops);
 
     const notifications = {
       emit: async (userId: string, type: NotificationType, payload: any) => {
@@ -169,8 +194,8 @@ describe('AttemptsService', () => {
     } as unknown as NotificationsService;
 
     const service = new AttemptsService(
-      prisma,
-      new ActivitiesService(prisma),
+      prisma as PrismaService,
+      new ActivitiesService(prisma as PrismaService),
       notifications,
     );
     return { service, attempts, answers, emitted };
@@ -249,47 +274,116 @@ describe('AttemptsService', () => {
     expect(emitted).toHaveLength(0);
   });
 
-  it('lets staff manually grade a SUBMITTED attempt → GRADED + notify', async () => {
+  it('mixed MCQ+ESSAY submit stays SUBMITTED, auto-awards the MCQ, and skips GRADE_PUBLISHED', async () => {
+    const { service, answers, emitted } = build({
+      questions: [
+        {
+          id: 'mcq-1',
+          kind: QuestionKind.MULTIPLE_CHOICE,
+          content: { options: ['a', 'b', 'c'], correct: [0] },
+          points: 4,
+          order: 0,
+        },
+        { id: 'essay-1', kind: ESSAY, content: {}, points: 6, order: 1 },
+      ],
+      maxScore: 10,
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [
+        { questionId: 'mcq-1', response: { selected: [0] } },
+        { questionId: 'essay-1', response: { text: 'mi ensayo' } },
+      ],
+    });
+    const done = await service.submit(started.id, STUDENT);
+
+    expect(done.status).toBe(AttemptStatus.SUBMITTED);
+    expect(done.score).toBeNull();
+    expect(emitted).toHaveLength(0);
+    expect(answers.find((a) => a.questionId === 'mcq-1')?.awarded).toBe(4);
+    expect(answers.find((a) => a.questionId === 'essay-1')?.awarded ?? null).toBeNull();
+  });
+
+  it('grades subjective answers, sums awarded, emits GRADE_PUBLISHED when complete', async () => {
     const { service, emitted } = build({
       questions: [
         {
-          id: 'q1',
-          kind: QuestionKind.SHORT_ANSWER,
-          content: {},
-          points: 1,
+          id: 'mcq-1',
+          kind: QuestionKind.MULTIPLE_CHOICE,
+          content: { options: ['a', 'b', 'c'], correct: [0] },
+          points: 4,
           order: 0,
         },
+        { id: 'essay-1', kind: ESSAY, content: {}, points: 6, order: 1 },
       ],
-      maxScore: 20,
+      maxScore: 10,
     });
     const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [
+        { questionId: 'mcq-1', response: { selected: [0] } },
+        { questionId: 'essay-1', response: { text: 'mi ensayo' } },
+      ],
+    });
     await service.submit(started.id, STUDENT);
 
-    const graded = await service.grade(started.id, TEACHER, { score: 18 });
+    const graded = await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-1', awarded: 5 }],
+      feedback: 'bien',
+    } as unknown as GradeAttemptDto);
+
     expect(graded.status).toBe(AttemptStatus.GRADED);
-    expect(graded.score).toBe(18);
+    expect(graded.score).toBe(9);
+    expect((graded as any).feedback).toBe('bien');
     expect(emitted).toHaveLength(1);
-    expect(emitted[0].userId).toBe(STUDENT);
+    expect(emitted[0]).toMatchObject({
+      userId: STUDENT,
+      type: NotificationType.GRADE_PUBLISHED,
+    });
   });
 
-  it('rejects a manual grade above maxScore', async () => {
+  it('rejects awarded greater than question.points', async () => {
     const { service } = build({
-      questions: [
-        {
-          id: 'q1',
-          kind: QuestionKind.SHORT_ANSWER,
-          content: {},
-          points: 1,
-          order: 0,
-        },
-      ],
-      maxScore: 20,
+      questions: [{ id: 'essay-1', kind: ESSAY, content: {}, points: 6, order: 0 }],
+      maxScore: 6,
     });
     const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [{ questionId: 'essay-1', response: { text: 'hola' } }],
+    });
     await service.submit(started.id, STUDENT);
+
     await expect(
-      service.grade(started.id, TEACHER, { score: 999 }),
-    ).rejects.toThrow(/no puede superar/i);
+      service.grade(started.id, TEACHER, {
+        answers: [{ questionId: 'essay-1', awarded: 7 }],
+      } as unknown as GradeAttemptDto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('stays SUBMITTED if a subjective answer is omitted', async () => {
+    const { service, emitted } = build({
+      questions: [
+        { id: 'essay-1', kind: ESSAY, content: {}, points: 5, order: 0 },
+        { id: 'essay-2', kind: ESSAY, content: {}, points: 5, order: 1 },
+      ],
+      maxScore: 10,
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [
+        { questionId: 'essay-1', response: { text: 'uno' } },
+        { questionId: 'essay-2', response: { text: 'dos' } },
+      ],
+    });
+    await service.submit(started.id, STUDENT);
+
+    const partial = await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-1', awarded: 4 }],
+    } as unknown as GradeAttemptDto);
+
+    expect(partial.status).toBe(AttemptStatus.SUBMITTED);
+    expect(partial.score).toBe(4);
+    expect(emitted).toHaveLength(0);
   });
 
   it('enforces the open/close window on start', async () => {
@@ -342,7 +436,9 @@ describe('AttemptsService', () => {
     const started = await service.start('act-1', STUDENT);
     await service.submit(started.id, STUDENT);
     await expect(
-      service.grade(started.id, STUDENT, { score: 5 }),
+      service.grade(started.id, STUDENT, {
+        answers: [{ questionId: 'q1', awarded: 5 }],
+      } as unknown as GradeAttemptDto),
     ).rejects.toThrow(/staff/i);
   });
 });

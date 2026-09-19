@@ -136,11 +136,13 @@ export type {
   SubmissionFileDTO,
   SubmissionAuthorDTO,
   SubmissionStatus,
+  PendingAttemptDTO,
   PendingSubmissionDTO,
   TeachingSummaryDTO,
   CreateAssignmentInput,
   UpdateAssignmentInput,
   CreateSubmissionInput,
+  GradeSubmissionInput,
 } from './types/assignment';
 
 export type {
@@ -149,6 +151,7 @@ export type {
   QuestionKind,
   AttemptStatus,
   QuestionDTO,
+  ActivityFileDTO,
   ActivityDTO,
   CreateActivityInput,
   UpdateActivityInput,
@@ -157,16 +160,27 @@ export type {
   AnswerDTO,
   AttemptDTO,
   SaveAnswersInput,
+  GradeAttemptInput,
 } from './types/activity';
 
 export type {
   GradebookDTO,
-  GradebookAssignmentDTO,
+  GradebookItemDTO,
   GradebookCellDTO,
   GradebookRowDTO,
   MyGradeDTO,
-  GradeSubmissionInput,
+  MyGradesDTO,
 } from './types/gradebook';
+export { formatFinalPercent } from './types/gradebook';
+
+export type {
+  TaskTemplateBlock,
+  TaskTemplateDTO,
+  CreateTaskTemplateInput,
+  UpdateTaskTemplateInput,
+  SaveAsTemplateInput,
+  TeachingActivityDTO,
+} from './types/task-template';
 
 export type {
   ForumAuthorDTO,
