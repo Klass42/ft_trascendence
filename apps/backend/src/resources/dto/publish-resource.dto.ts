@@ -2,7 +2,7 @@ import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class PublishResourceDto {
   @IsString()
-  courseId: string;
+  subjectId: string;
 
   @IsInt()
   @Min(0)

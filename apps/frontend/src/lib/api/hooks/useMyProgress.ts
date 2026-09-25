@@ -28,7 +28,7 @@ export function useMyProgress(): UseMyProgressResult {
     setError(null);
 
     apiClient.get<MyProgressItem[]>(
-      `/enrollments/my-progress?organizationId=${orgId}&userId=${userId}`
+      `/me/progress?organizationId=${orgId}&userId=${userId}`
     )
       .then((result) => {
         if (!cancelled) setData(result);

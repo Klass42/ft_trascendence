@@ -105,8 +105,10 @@ non-free (SSPL/BSL/RSAL) — this excludes post-2024 Redis and MongoDB. That's w
 - **Tenant isolation is enforced in the application layer** (Nest guards/services), NOT in the
   DB. **Every query over tenant-scoped data MUST filter by `organizationId`.** A missing
   `organizationId` filter is a security bug, treat it as such in review.
-- **Roles**: separate *global* role (within org: admin/teacher/student) from *course-scoped*
-  role (enrollment). Don't duplicate role logic across the two.
+- **Roles**: separate the *global* role (within org: admin/teacher/student) from cohort
+  membership (`CourseMembership`, students) and subject staff (`SubjectStaff`,
+  teacher/assistant). A global teacher is not staff of every subject. Don't
+  duplicate that logic.
 - Standardize timestamps as `createdAt` / `updatedAt` (camelCase in Prisma). One naming style.
 - **Schema is phased** — build only what a feature needs now. Deferred to Phase 2: billing
   (plans/subscriptions/payments), attendance, certificates, calendar events, full quiz engine,

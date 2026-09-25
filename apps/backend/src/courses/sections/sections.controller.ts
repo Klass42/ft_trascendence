@@ -13,7 +13,7 @@ import { UpdateSectionDto } from './dto/update-section.dto';
 import { AuthUser, CurrentUser } from '@/common/auth';
 import { CourseAccessService } from '../course-access.service';
 
-@Controller('courses/:courseId/sections')
+@Controller('subjects/:subjectId/sections')
 export class SectionsController {
   constructor(
     private readonly sectionsService: SectionsService,
@@ -22,63 +22,63 @@ export class SectionsController {
 
   @Post()
   async create(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSectionDto,
   ) {
-    await this.courseAccess.assertStaff(courseId, user);
-    return this.sectionsService.create(courseId, user.organizationId, dto);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    return this.sectionsService.create(subjectId, user.organizationId, dto);
   }
 
   @Get()
   async findAll(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.courseAccess.assertReadable(courseId, user);
-    return this.sectionsService.findAll(courseId, user.organizationId);
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
+    return this.sectionsService.findAll(subjectId, user.organizationId);
   }
 
   @Patch('reorder')
   async reorder(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body('orderedIds') orderedIds: string[],
   ) {
-    await this.courseAccess.assertStaff(courseId, user);
-    await this.sectionsService.reorder(courseId, user.organizationId, orderedIds);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    await this.sectionsService.reorder(subjectId, user.organizationId, orderedIds);
     return { reordered: true };
   }
 
   @Get(':id')
   async findOne(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.courseAccess.assertReadable(courseId, user);
-    return this.sectionsService.findOne(courseId, id, user.organizationId);
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
+    return this.sectionsService.findOne(subjectId, id, user.organizationId);
   }
 
   @Patch(':id')
   async update(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateSectionDto,
   ) {
-    await this.courseAccess.assertStaff(courseId, user);
-    return this.sectionsService.update(courseId, id, user.organizationId, dto);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    return this.sectionsService.update(subjectId, id, user.organizationId, dto);
   }
 
   @Delete(':id')
   async delete(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.courseAccess.assertStaff(courseId, user);
-    await this.sectionsService.delete(courseId, id, user.organizationId);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    await this.sectionsService.delete(subjectId, id, user.organizationId);
     return { deleted: true };
   }
 }

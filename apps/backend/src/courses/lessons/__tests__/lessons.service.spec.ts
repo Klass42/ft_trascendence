@@ -14,12 +14,12 @@ const FILE_ID = 'file-1';
 function buildFake() {
   const sections: Record<string, any> = {
     [SECTION_ID]: {
-      id: SECTION_ID, courseId: COURSE_ID, title: 'HTML & CSS',
-      course: { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID },
+      id: SECTION_ID, subjectId: COURSE_ID, title: 'HTML & CSS',
+      subject: { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID },
     },
     [OTHER_SECTION]: {
-      id: OTHER_SECTION, courseId: 'course-other',
-      course: { id: 'course-other', title: 'Other', organizationId: OTHER_ORG },
+      id: OTHER_SECTION, subjectId: 'course-other',
+      subject: { id: 'course-other', title: 'Other', organizationId: OTHER_ORG },
     },
   };
 
@@ -48,8 +48,8 @@ function buildFake() {
         const s = sections[where.id];
         if (!s) return null;
         const result = { ...s };
-        if (include?.course) {
-          result.course = s.course ?? { id: s.courseId, title: 'Unknown', organizationId: ORG_ID };
+        if (include?.subject) {
+          result.subject = s.subject ?? { id: s.subjectId, title: 'Unknown', organizationId: ORG_ID };
         }
         return result;
       },
@@ -59,9 +59,9 @@ function buildFake() {
         const l = lessons[where.id];
         if (!l) return null;
         const result = { ...l, attachments: [...(l.attachments ?? [])] };
-        if (include?.section?.include?.course) {
+        if (include?.section?.include?.subject) {
           const s = sections[l.sectionId];
-          result.section = { ...s, course: { ...s.course } };
+          result.section = { ...s, subject: { ...s.subject } };
         }
         if (include?.attachments?.include?.file) {
           result.attachments = (l.attachments ?? []).map((a: any) => ({
@@ -107,10 +107,10 @@ function buildFake() {
         const a = attachments[key];
         if (!a) return null;
         const result: Record<string, any> = { ...a };
-        if (include?.lesson?.include?.section?.include?.course) {
+        if (include?.lesson?.include?.section?.include?.subject) {
           const l = lessons[a.lessonId];
           const s = sections[l.sectionId];
-          result.lesson = { ...l, section: { ...s, course: { ...s.course } } };
+          result.lesson = { ...l, section: { ...s, subject: { ...s.subject } } };
         }
         return result;
       },

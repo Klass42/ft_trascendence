@@ -40,31 +40,31 @@ export class ResourcesController {
     return { deleted: true };
   }
 
-  @Post('resources/:id/courses')
-  publishToCourse(
+  @Post('resources/:id/subjects')
+  publishToSubject(
     @Param('id') id: string,
     @Body() dto: PublishResourceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.resources.publishToCourse(id, dto.courseId, dto, user);
+    return this.resources.publishToSubject(id, dto.subjectId, dto, user);
   }
 
-  @Delete('resources/:id/courses/:courseId')
-  async removeFromCourse(
+  @Delete('resources/:id/subjects/:subjectId')
+  async removeFromSubject(
     @Param('id') id: string,
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.resources.removeFromCourse(id, courseId, user);
+    await this.resources.removeFromSubject(id, subjectId, user);
     return { deleted: true };
   }
 
-  @Get('courses/:courseId/resources')
-  findForCourse(
-    @Param('courseId') courseId: string,
+  @Get('subjects/:subjectId/resources')
+  findForSubject(
+    @Param('subjectId') subjectId: string,
     @Query() query: ListResourcesDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.resources.findForCourse(courseId, query, user);
+    return this.resources.findForSubject(subjectId, query, user);
   }
 }

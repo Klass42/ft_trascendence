@@ -12,7 +12,7 @@ import {
 } from '@/components/ui';
 import {
   useAuth,
-  useCourses,
+  useMySubjects,
   useAssignments,
   useMySubmission,
   useDeleteAssignment,
@@ -41,7 +41,7 @@ export function AssignmentsPage() {
   const { user } = useAuth();
   const isStaff = user?.role === 'TEACHER' || user?.role === 'ADMIN';
 
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -120,7 +120,7 @@ export function AssignmentsPage() {
                 setSelectedId(null);
                 setCreating(false);
               }}
-              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
             />
           </div>
         )}
@@ -423,7 +423,7 @@ function AssignmentDetail({
         size="lg"
       >
         <AssignmentForm
-          courseId={assignment.courseId}
+          courseId={assignment.subjectId}
           initial={assignment}
           inModal
           onSaved={() => {

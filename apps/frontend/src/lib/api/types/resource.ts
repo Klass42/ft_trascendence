@@ -10,12 +10,12 @@ export interface ResourceFileDTO {
   createdAt: string;
 }
 
-export interface ResourceCourseDTO {
+export interface ResourceSubjectDTO {
   resourceId: string;
-  courseId: string;
+  subjectId: string;
   order: number;
   required: boolean;
-  course: { id: string; title: string };
+  subject: { id: string; title: string };
 }
 
 export interface LearningResourceDTO {
@@ -38,12 +38,12 @@ export interface LearningResourceDTO {
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  courses: ResourceCourseDTO[];
+  subjects: ResourceSubjectDTO[];
 }
 
-export interface CourseResourceDTO {
+export interface SubjectResourceDTO {
   resourceId: string;
-  courseId: string;
+  subjectId: string;
   order: number;
   required: boolean;
   resource: LearningResourceDTO;
@@ -75,7 +75,7 @@ export type UpdateLearningResourceInput = Partial<CreateLearningResourceInput> &
 };
 
 export interface PublishResourceInput {
-  courseId: string;
+  subjectId: string;
   order?: number;
   required?: boolean;
 }

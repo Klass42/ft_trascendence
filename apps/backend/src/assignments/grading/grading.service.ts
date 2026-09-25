@@ -5,14 +5,13 @@ import {
 } from '@nestjs/common';
 import {
   AttemptStatus,
-  CourseRole,
-  CourseStatus,
+  PublicationStatus,
   NotificationType,
   SubmissionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { AssignmentsService, STAFF_ROLES } from '../assignments.service';
+import { AssignmentsService } from '../assignments.service';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
 import {
   computeFinalGrade,
@@ -65,7 +64,7 @@ export class GradingService {
     const { assignment } = await this.assignments.requireAssignmentMembership(
       submission.assignmentId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     if (dto.score > assignment.maxScore) {
@@ -106,17 +105,17 @@ export class GradingService {
    * The full gradebook for a course (staff only): every enrolled student × every
    * published/archived activity, plus a `final` average of countable items.
    */
-  async getGradebook(courseId: string, actingUserId: string) {
-    const { course } = await this.assignments.requireCourseMembership(
-      courseId,
+  async getGradebook(subjectId: string, actingUserId: string) {
+    const { subject } = await this.assignments.requireCourseMembership(
+      subjectId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     const activities = await this.prisma.activity.findMany({
       where: {
-        courseId,
-        status: { in: [CourseStatus.PUBLISHED, CourseStatus.ARCHIVED] },
+        subjectId,
+        status: { in: [PublicationStatus.PUBLISHED, PublicationStatus.ARCHIVED] },
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -130,8 +129,11 @@ export class GradingService {
       },
     });
 
-    const enrollments = await this.prisma.enrollment.findMany({
-      where: { courseId, role: CourseRole.STUDENT },
+    const enrollments = await this.prisma.courseMembership.findMany({
+      where: {
+        courseId: subject.courseId,
+        course: { organizationId: subject.organizationId },
+      },
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
@@ -171,7 +173,7 @@ export class GradingService {
     }));
 
     return {
-      course: { id: course.id, title: course.title },
+      course: { id: subject.id, title: subject.title },
       items: activities,
       students,
     };
@@ -181,16 +183,16 @@ export class GradingService {
    * A single student's grades for a course (any member). Never 404 for an
    * empty book: members get `{ items: [], final: null }`.
    */
-  async getMyGrades(courseId: string, actingUserId: string) {
-    const { course } = await this.assignments.requireCourseMembership(
-      courseId,
+  async getMyGrades(subjectId: string, actingUserId: string) {
+    const { subject } = await this.assignments.requireCourseMembership(
+      subjectId,
       actingUserId,
     );
 
     const activities = await this.prisma.activity.findMany({
       where: {
-        courseId,
-        status: { in: [CourseStatus.PUBLISHED, CourseStatus.ARCHIVED] },
+        subjectId,
+        status: { in: [PublicationStatus.PUBLISHED, PublicationStatus.ARCHIVED] },
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -243,7 +245,7 @@ export class GradingService {
     });
 
     return {
-      course: { id: course.id, title: course.title },
+      course: { id: subject.id, title: subject.title },
       items,
       final: computeFinalGrade(
         activities.map(toFinalItem),
@@ -269,13 +271,25 @@ export class GradingService {
   async getTeachingSummary(actingUserId: string) {
     const PENDING_LIMIT = 50;
 
-    const staffEnrollments = await this.prisma.enrollment.findMany({
-      where: { userId: actingUserId, role: { in: STAFF_ROLES } },
-      select: { course: { select: { id: true, status: true } } },
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { organizationId: true, role: true },
     });
-    const courseIds = staffEnrollments.map((e) => e.course.id);
+    const organizationId = actor?.organizationId;
+    const staffSubjects = organizationId
+      ? await this.prisma.subject.findMany({
+          where: actor.role === 'ADMIN'
+            ? { organizationId }
+            : {
+                organizationId,
+                staff: { some: { userId: actingUserId } },
+              },
+          select: { id: true, status: true, courseId: true },
+        })
+      : [];
+    const subjectIds = staffSubjects.map((subject) => subject.id);
 
-    if (courseIds.length === 0) {
+    if (!organizationId || subjectIds.length === 0) {
       return {
         activeCourses: 0,
         totalStudents: 0,
@@ -284,13 +298,15 @@ export class GradingService {
       };
     }
 
-    const activeCourses = staffEnrollments.filter(
-      (e) => e.course.status === 'PUBLISHED',
+    const activeCourses = staffSubjects.filter(
+      (subject) => subject.status === 'PUBLISHED',
     ).length;
 
-    // Distinct students across the taught courses.
-    const studentEnrollments = await this.prisma.enrollment.findMany({
-      where: { courseId: { in: courseIds }, role: CourseRole.STUDENT },
+    const studentEnrollments = await this.prisma.courseMembership.findMany({
+      where: {
+        courseId: { in: staffSubjects.map((subject) => subject.courseId) },
+        course: { organizationId },
+      },
       select: { userId: true },
     });
     const totalStudents = new Set(
@@ -300,7 +316,7 @@ export class GradingService {
     // Attempts awaiting manual grading (subjective blocks still pending).
     const pendingWhere = {
       status: AttemptStatus.SUBMITTED,
-      activity: { courseId: { in: courseIds } },
+      activity: { subjectId: { in: subjectIds } },
     };
     const [pendingCount, pendingRows] = await Promise.all([
       this.prisma.attempt.count({ where: pendingWhere }),
@@ -319,7 +335,7 @@ export class GradingService {
             select: {
               id: true,
               title: true,
-              course: { select: { id: true, title: true } },
+              subject: { select: { id: true, title: true } },
             },
           },
         },
@@ -333,8 +349,8 @@ export class GradingService {
       student: a.user,
       activityId: a.activity.id,
       activityTitle: a.activity.title,
-      courseId: a.activity.course.id,
-      courseTitle: a.activity.course.title,
+      courseId: a.activity.subject.id,
+      courseTitle: a.activity.subject.title,
     }));
 
     return { activeCourses, totalStudents, pendingCount, pending };
@@ -388,7 +404,7 @@ function toFinalItem(a: {
   id: string;
   maxScore: number;
   countsTowardFinal: boolean;
-  status: CourseStatus;
+  status: PublicationStatus;
   closeAt: Date | null;
   dueAt: Date | null;
 }): FinalItem {

@@ -25,7 +25,7 @@ export function useCreateThread() {
       setState({ isLoading: true, error: null });
       try {
         const thread = await apiClient.post<ForumThreadListItemDTO>(
-          `/courses/${courseId}/forum/threads`,
+          `/subjects/${courseId}/forum/threads`,
           input,
         );
         setState({ isLoading: false, error: null });

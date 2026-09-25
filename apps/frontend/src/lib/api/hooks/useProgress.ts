@@ -28,7 +28,7 @@ export function useProgress(courseId: string | undefined): UseProgressResult {
     setError(null);
 
     apiClient.get<ProgressDTO>(
-      `/courses/${courseId}/progress?organizationId=${orgId}&userId=${userId}`
+      `/subjects/${courseId}/progress?organizationId=${orgId}&userId=${userId}`
     )
       .then((result) => {
         if (!cancelled) setData(result);

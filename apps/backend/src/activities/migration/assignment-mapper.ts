@@ -1,5 +1,5 @@
 export type MappedActivity = {
-  courseId: string;
+  subjectId: string;
   title: string;
   description: string | null;
   openAt: Date | null;
@@ -37,7 +37,7 @@ export type MappedSubmission = {
 export function mapAssignment(input: {
   assignment: {
     id: string;
-    courseId: string;
+    subjectId: string;
     title: string;
     description: string | null;
     openAt: Date | null;
@@ -68,7 +68,7 @@ export function mapAssignment(input: {
     });
   }
   return {
-    courseId: assignment.courseId,
+    subjectId: assignment.subjectId,
     title: assignment.title,
     description: assignment.description,
     openAt: assignment.openAt,

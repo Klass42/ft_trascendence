@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useAuth,
-  useCourses,
+  useMySubjects,
   useMyProgress,
   useUpcomingAssignments,
 } from '@/lib/api';
@@ -42,7 +42,7 @@ function formatDue(iso: string): string {
 export function StudentDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: courses } = useCourses('PUBLISHED');
+  const { data: courses } = useMySubjects();
   const { data: myProgress, isLoading: progressLoading } = useMyProgress();
 
   const courseIds = useMemo(() => courses?.map((c) => c.id) ?? [], [courses]);
@@ -51,7 +51,7 @@ export function StudentDashboard() {
 
   const progressMap = useMemo(() => {
     const map: Record<string, number> = {};
-    if (myProgress) myProgress.forEach((p: MyProgressItem) => { map[p.courseId] = p.percentage; });
+    if (myProgress) myProgress.forEach((p: MyProgressItem) => { map[p.subjectId] = p.percentage; });
     return map;
   }, [myProgress]);
 
@@ -155,12 +155,12 @@ export function StudentDashboard() {
             {!progressLoading && myProgress && myProgress.length > 0 && (
               <div>
                 {myProgress.map((p: MyProgressItem) => {
-                  const course = courses?.find((c) => c.id === p.courseId);
+                  const course = courses?.find((c) => c.id === p.subjectId);
                   if (!course) return null;
                   const color = hashToColor(course.title);
                   return (
                     <div
-                      key={p.courseId}
+                      key={p.subjectId}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -183,7 +183,7 @@ export function StudentDashboard() {
                           color: 'var(--color-text-primary)',
                         }}
                       >
-                        {course.title} · {p.percentage}%
+                        {`${course.title} · ${course.course.name} · ${course.course.academicYear}`} · {p.percentage}%
                       </span>
                     </div>
                   );
@@ -308,7 +308,7 @@ export function StudentDashboard() {
           return (
             <div
               key={c.id}
-              onClick={() => navigate(`/courses/${c.id}`)}
+              onClick={() => navigate(`/courses/${c.course.id}/subjects/${c.id}`)}
               style={{
                 background: 'var(--color-bg-secondary)',
                 border: '1px solid var(--color-border-primary)',
@@ -338,7 +338,7 @@ export function StudentDashboard() {
               </div>
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-                  {c.title}
+                  {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
                 </div>
                 <div
                   style={{

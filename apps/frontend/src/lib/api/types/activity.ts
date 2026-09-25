@@ -40,7 +40,7 @@ export interface ActivityFileDTO {
 
 export interface ActivityDTO {
   id: string;
-  courseId: string;
+  subjectId: string;
   type: ActivityType;
   title: string;
   description: string | null;

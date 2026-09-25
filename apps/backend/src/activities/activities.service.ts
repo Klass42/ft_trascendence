@@ -7,98 +7,63 @@ import {
 } from '@nestjs/common';
 import {
   Activity,
-  Course,
-  CourseRole,
-  CourseStatus,
-  Enrollment,
   Prisma,
+  PublicationStatus,
   Question,
   QuestionKind,
+  Subject,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CourseAccessService, SubjectAccess } from '../courses/course-access.service';
 import { getAdapter } from './blocks/registry';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 
-/** Course roles allowed to author activities — teacher or teaching assistant.
- * Replicated locally to keep this module decoupled from AssignmentsModule
- * (same pattern as forums/analytics). TODO(shared): a CourseMembershipService. */
-export const STAFF_ROLES: CourseRole[] = [
-  CourseRole.TEACHER,
-  CourseRole.ASSISTANT,
-];
-
 @Injectable()
 export class ActivitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: CourseAccessService,
+  ) {}
 
-  // ─── Tenancy / membership gates ───────────────────────────────────────────
+  // ─── Tenancy / staff gates ────────────────────────────────────────────────
 
-  /** Resolve a course + the acting user's enrollment; the enrollment lookup is
-   * the tenant gate (a non-member is treated as if the course doesn't exist).
-   * `organizationId` is derived from the course, never from the client. */
-  private async requireCourse(
-    courseId: string,
+  private async requireSubject(
+    subjectId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ course: Course; enrollment: Enrollment }> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-    if (!course) throw new NotFoundException(`Course ${courseId} not found`);
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId: actingUserId } },
-    });
-    if (!enrollment) throw new NotFoundException(`Course ${courseId} not found`);
-
-    if (roles && !roles.includes(enrollment.role)) {
-      throw new ForbiddenException('Only course staff can perform this action');
-    }
-    return { course, enrollment };
+    staffOnly = false,
+  ): Promise<SubjectAccess> {
+    return staffOnly
+      ? this.access.assertSubjectStaffForUser(subjectId, actingUserId)
+      : this.access.assertSubjectReadableForUser(subjectId, actingUserId);
   }
 
-  /** Load an activity and enforce course membership. When `roles` is omitted any
-   * member passes, but a non-staff member can only see a PUBLISHED activity
-   * (drafts/archived 404 for them, so unpublished work never leaks). */
+  /** Load an activity. Non-staff can only see a PUBLISHED activity. */
   async requireActivity(
     activityId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ activity: Activity; course: Course; enrollment: Enrollment }> {
+    staffOnly = false,
+  ): Promise<{ activity: Activity; subject: Subject; access: SubjectAccess }> {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      include: { course: true },
+      include: { subject: true },
     });
     if (!activity) {
       throw new NotFoundException(`Activity ${activityId} not found`);
     }
-    const { course, enrollment } = await this.requireCourse(
-      activity.courseId,
-      actingUserId,
-      roles,
-    );
-    const isStaff = STAFF_ROLES.includes(enrollment.role);
-    if (!isStaff && activity.status !== CourseStatus.PUBLISHED) {
+    const access = await this.requireSubject(activity.subjectId, actingUserId, staffOnly);
+    if (!access.isStaff && activity.status !== PublicationStatus.PUBLISHED) {
       throw new NotFoundException(`Activity ${activityId} not found`);
     }
-    return { activity, course, enrollment };
-  }
-
-  private isStaff(role: CourseRole): boolean {
-    return STAFF_ROLES.includes(role);
+    return { activity, subject: activity.subject, access };
   }
 
   // ─── Authoring: activities ────────────────────────────────────────────────
 
-  async create(courseId: string, actingUserId: string, dto: CreateActivityDto) {
-    const { course } = await this.requireCourse(
-      courseId,
-      actingUserId,
-      STAFF_ROLES,
-    );
+  async create(subjectId: string, actingUserId: string, dto: CreateActivityDto) {
+    const { subject } = await this.requireSubject(subjectId, actingUserId, true);
     this.assertWindow(dto.openAt, dto.dueAt, dto.closeAt);
 
     if (dto.templateId && dto.sourceActivityId) {
@@ -107,15 +72,15 @@ export class ActivitiesService {
       );
     }
 
-    const blocks = await this.resolveCreateBlocks(course.organizationId, dto);
+    const blocks = await this.resolveCreateBlocks(subject.organizationId, dto);
 
-    if (dto.status === CourseStatus.PUBLISHED && blocks.length === 0) {
+    if (dto.status === PublicationStatus.PUBLISHED && blocks.length === 0) {
       throw new BadRequestException('no se puede publicar vacía');
     }
 
     const created = await this.prisma.activity.create({
       data: {
-        courseId,
+        subjectId,
         ...(dto.type !== undefined && { type: dto.type }),
         title: dto.title,
         description: dto.description,
@@ -151,7 +116,7 @@ export class ActivitiesService {
     if (dto.fileIds?.length) {
       await this.replaceActivityFiles(
         created.id,
-        course.organizationId,
+        subject.organizationId,
         dto.fileIds,
       );
     }
@@ -169,14 +134,14 @@ export class ActivitiesService {
 
   /** List a course's activities. Students see only PUBLISHED ones and never the
    * answer keys; staff see everything with full question content. */
-  async findAllForCourse(courseId: string, actingUserId: string) {
-    const { enrollment } = await this.requireCourse(courseId, actingUserId);
-    const staff = this.isStaff(enrollment.role);
+  async findAllForCourse(subjectId: string, actingUserId: string) {
+    const access = await this.requireSubject(subjectId, actingUserId);
+    const staff = access.isStaff;
 
     const activities = await this.prisma.activity.findMany({
       where: {
-        courseId,
-        ...(staff ? {} : { status: CourseStatus.PUBLISHED }),
+        subjectId,
+        ...(staff ? {} : { status: PublicationStatus.PUBLISHED }),
       },
       orderBy: { createdAt: 'desc' },
       include: { questions: { orderBy: { order: 'asc' } } },
@@ -188,7 +153,7 @@ export class ActivitiesService {
   /** A single activity, scoped to a member. Non-staff get the student view
    * (answer keys stripped); drafts are already 404 for them via requireActivity. */
   async findOne(activityId: string, actingUserId: string) {
-    const { activity, enrollment } = await this.requireActivity(
+    const { activity, access } = await this.requireActivity(
       activityId,
       actingUserId,
     );
@@ -196,14 +161,14 @@ export class ActivitiesService {
       where: { id: activityId },
       include: { questions: { orderBy: { order: 'asc' } } },
     });
-    return this.viewFor(full ?? activity, this.isStaff(enrollment.role));
+    return this.viewFor(full ?? activity, access.isStaff);
   }
 
   async update(activityId: string, actingUserId: string, dto: UpdateActivityDto) {
-    const { activity, course } = await this.requireActivity(
+    const { activity, subject } = await this.requireActivity(
       activityId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     const merged = {
@@ -213,7 +178,7 @@ export class ActivitiesService {
     };
     this.assertWindow(merged.openAt, merged.dueAt, merged.closeAt);
 
-    if (dto.status === CourseStatus.PUBLISHED) {
+    if (dto.status === PublicationStatus.PUBLISHED) {
       await this.assertPublishable(activityId);
     }
 
@@ -246,7 +211,7 @@ export class ActivitiesService {
     if (dto.fileIds) {
       await this.replaceActivityFiles(
         activityId,
-        course.organizationId,
+        subject.organizationId,
         dto.fileIds,
       );
     }
@@ -254,7 +219,7 @@ export class ActivitiesService {
   }
 
   async remove(activityId: string, actingUserId: string) {
-    await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.requireActivity(activityId, actingUserId, true);
     const attempts = await this.prisma.attempt.count({
       where: { activityId },
     });
@@ -266,25 +231,34 @@ export class ActivitiesService {
 
   /** Activities of courses the actor staffs, newest first (template library). */
   async listTeachingActivities(actingUserId: string) {
-    const staff = await this.prisma.enrollment.findMany({
-      where: { userId: actingUserId, role: { in: STAFF_ROLES } },
-      select: { courseId: true },
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { organizationId: true, role: true },
     });
-    const courseIds = staff.map((e) => e.courseId);
-    if (courseIds.length === 0) return [];
+    if (!actor?.organizationId) return [];
+    const staffWhere = actor.role === 'ADMIN'
+      ? { organizationId: actor.organizationId }
+      : { organizationId: actor.organizationId, staff: { some: { userId: actingUserId } } };
+    const subjects = await this.prisma.subject.findMany({
+      where: staffWhere,
+      select: { id: true },
+    });
+    const subjectIds = subjects.map((subject) => subject.id);
+    if (subjectIds.length === 0) return [];
 
     const activities = await this.prisma.activity.findMany({
-      where: { courseId: { in: courseIds } },
+      where: { subjectId: { in: subjectIds } },
       orderBy: { createdAt: 'desc' },
       include: {
-        course: { select: { id: true, title: true } },
+        subject: { select: { id: true, title: true } },
         _count: { select: { attempts: true } },
       },
     });
     return activities.map((a) => ({
       id: a.id,
-      courseId: a.courseId,
-      courseTitle: a.course.title,
+      subjectId: a.subjectId,
+      courseId: a.subjectId,
+      courseTitle: a.subject.title,
       title: a.title,
       status: a.status,
       countsTowardFinal: a.countsTowardFinal,
@@ -301,7 +275,7 @@ export class ActivitiesService {
     actingUserId: string,
     dto: CreateQuestionDto,
   ) {
-    await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.requireActivity(activityId, actingUserId, true);
     await this.assertNoAttempts(activityId);
     this.validateQuestionContent(dto.kind, dto.content);
 
@@ -373,7 +347,7 @@ export class ActivitiesService {
     actingUserId: string,
     questionIds: string[],
   ) {
-    await this.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.requireActivity(activityId, actingUserId, true);
     await this.assertNoAttempts(activityId);
     const existing = await this.prisma.question.findMany({
       where: { activityId },
@@ -428,7 +402,7 @@ export class ActivitiesService {
     if (!question) {
       throw new NotFoundException(`Question ${questionId} not found`);
     }
-    await this.requireActivity(question.activityId, actingUserId, STAFF_ROLES);
+    await this.requireActivity(question.activityId, actingUserId, true);
     return question;
   }
 
@@ -529,11 +503,11 @@ export class ActivitiesService {
       const source = await this.prisma.activity.findUnique({
         where: { id: dto.sourceActivityId },
         include: {
-          course: true,
+          subject: true,
           questions: { orderBy: { order: 'asc' } },
         },
       });
-      if (!source || source.course.organizationId !== organizationId) {
+      if (!source || source.subject.organizationId !== organizationId) {
         throw new NotFoundException(
           `Activity ${dto.sourceActivityId} not found`,
         );

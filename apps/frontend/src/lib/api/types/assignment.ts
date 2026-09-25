@@ -26,7 +26,7 @@ export interface AssignmentFileDTO {
 
 export interface AssignmentDTO {
   id: string;
-  courseId: string;
+  subjectId: string;
   title: string;
   description: string | null;
   /** Submission window (all optional). */
@@ -87,7 +87,7 @@ export interface PendingAttemptDTO {
   student: SubmissionAuthorDTO;
   activityId: string;
   activityTitle: string;
-  courseId: string;
+  subjectId: string;
   courseTitle: string;
 }
 

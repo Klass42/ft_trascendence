@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Spinner } from '@/components/ui';
-import { useCourses, useForumThreads } from '@/lib/api';
+import { useMySubjects, useForumThreads } from '@/lib/api';
 import { NewThreadForm } from './NewThreadForm';
 import { formatDateTime, initialsOf } from './helpers';
 
@@ -14,7 +14,7 @@ import { formatDateTime, initialsOf } from './helpers';
  */
 export function ForumsPage() {
   const navigate = useNavigate();
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
 
   const [courseId, setCourseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -83,7 +83,7 @@ export function ForumsPage() {
           >
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.title}
+                {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
               </option>
             ))}
           </select>

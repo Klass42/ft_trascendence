@@ -5,18 +5,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  CourseRole,
   LearningResourceStatus,
   Prisma,
 } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
+import { CourseAccessService } from '@/courses/course-access.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { ListResourcesDto } from './dto/list-resources.dto';
 import { PublishResourceDto } from './dto/publish-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
-
-const STAFF_COURSE_ROLES: readonly CourseRole[] = [CourseRole.TEACHER, CourseRole.ASSISTANT];
 
 // Resource API responses never disclose the storage bucket or object key. A
 // caller must use GET /files/:id/url, which authorizes the linked resource
@@ -31,19 +29,19 @@ const RESOURCE_FILE_SELECT = {
 
 const RESOURCE_INCLUDE = {
   file: { select: RESOURCE_FILE_SELECT },
-  courses: {
-    include: { course: { select: { id: true, title: true } } },
+  subjects: {
+    include: { subject: { select: { id: true, title: true } } },
     orderBy: { order: 'asc' },
   },
 } satisfies Prisma.LearningResourceInclude;
 
-/** A course view must never reveal which other courses reuse the resource. */
-function resourceIncludeForCourse(courseId: string) {
+/** A subject view must never reveal which other subjects reuse the resource. */
+function resourceIncludeForSubject(subjectId: string) {
   return {
     file: { select: RESOURCE_FILE_SELECT },
-    courses: {
-      where: { courseId },
-      include: { course: { select: { id: true, title: true } } },
+    subjects: {
+      where: { subjectId },
+      include: { subject: { select: { id: true, title: true } } },
       orderBy: { order: 'asc' },
     },
   } satisfies Prisma.LearningResourceInclude;
@@ -51,7 +49,10 @@ function resourceIncludeForCourse(courseId: string) {
 
 @Injectable()
 export class ResourcesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: CourseAccessService,
+  ) {}
 
   private isLibraryStaff(user: AuthUser) {
     return user.role === 'ADMIN' || user.role === 'TEACHER';
@@ -202,21 +203,21 @@ export class ResourcesService {
     await this.prisma.learningResource.delete({ where: { id } });
   }
 
-  /** Link a resource to a course; course staff or an organization admin may do so. */
-  async publishToCourse(
+  /** Link a resource to a subject; subject staff or an organization admin may do so. */
+  async publishToSubject(
     resourceId: string,
-    courseId: string,
+    subjectId: string,
     dto: PublishResourceDto,
     user: AuthUser,
   ) {
     await this.requireOwnedResource(resourceId, user);
-    await this.requireCourseMembership(courseId, user, true);
+    await this.access.assertSubjectStaff(subjectId, user);
 
-    return this.prisma.courseResource.upsert({
-      where: { resourceId_courseId: { resourceId, courseId } },
+    return this.prisma.subjectResource.upsert({
+      where: { resourceId_subjectId: { resourceId, subjectId } },
       create: {
         resourceId,
-        courseId,
+        subjectId,
         order: dto.order ?? 0,
         required: dto.required ?? false,
       },
@@ -228,20 +229,20 @@ export class ResourcesService {
     });
   }
 
-  async removeFromCourse(resourceId: string, courseId: string, user: AuthUser) {
+  async removeFromSubject(resourceId: string, subjectId: string, user: AuthUser) {
     await this.requireOwnedResource(resourceId, user);
-    await this.requireCourseMembership(courseId, user, true);
-    await this.prisma.courseResource.deleteMany({ where: { resourceId, courseId } });
+    await this.access.assertSubjectStaff(subjectId, user);
+    await this.prisma.subjectResource.deleteMany({ where: { resourceId, subjectId } });
   }
 
-  /** Resource list inside one course. Students see only PUBLISHED entries. */
-  async findForCourse(courseId: string, dto: ListResourcesDto, user: AuthUser) {
-    const membership = await this.requireCourseMembership(courseId, user, false);
+  /** Resource list inside one subject. Students see only PUBLISHED entries. */
+  async findForSubject(subjectId: string, dto: ListResourcesDto, user: AuthUser) {
+    const access = await this.access.assertSubjectReadable(subjectId, user);
     const search = dto.search?.trim();
-    const studentView = !membership.isStaff;
-    return this.prisma.courseResource.findMany({
+    const studentView = !access.isStaff;
+    return this.prisma.subjectResource.findMany({
       where: {
-        courseId,
+        subjectId,
         resource: {
           organizationId: user.organizationId,
           ...(studentView && { status: LearningResourceStatus.PUBLISHED }),
@@ -256,7 +257,7 @@ export class ResourcesService {
           }),
         },
       },
-      include: { resource: { include: resourceIncludeForCourse(courseId) } },
+      include: { resource: { include: resourceIncludeForSubject(subjectId) } },
       orderBy: { order: 'asc' },
     });
   }
@@ -272,7 +273,7 @@ export class ResourcesService {
       select: {
         createdById: true,
         status: true,
-        courses: { select: { courseId: true } },
+        subjects: { select: { subjectId: true, subject: { select: { courseId: true, status: true } } } },
       },
     });
     if (resources.length === 0) return false;
@@ -280,44 +281,31 @@ export class ResourcesService {
       return true;
     }
 
-    const courseIds = [...new Set(resources.flatMap((resource) => resource.courses.map((course) => course.courseId)))];
-    if (courseIds.length === 0) return false;
-    const enrollments = await this.prisma.enrollment.findMany({
-      where: { userId: user.userId, courseId: { in: courseIds } },
-      select: { courseId: true, role: true },
-    });
-    const rolesByCourse = new Map(enrollments.map((item) => [item.courseId, item.role]));
+    const subjectIds = [...new Set(resources.flatMap((resource) => resource.subjects.map((link) => link.subjectId)))];
+    if (subjectIds.length === 0) return false;
+    const [staffRows, memberships] = await Promise.all([
+      this.prisma.subjectStaff.findMany({
+        where: { userId: user.userId, subjectId: { in: subjectIds } },
+        select: { subjectId: true },
+      }),
+      this.prisma.courseMembership.findMany({
+        where: {
+          userId: user.userId,
+          course: { organizationId: user.organizationId },
+        },
+        select: { courseId: true },
+      }),
+    ]);
+    const staffIds = new Set(staffRows.map((row) => row.subjectId));
+    const memberCourseIds = new Set(memberships.map((row) => row.courseId));
     return resources.some((resource) =>
-      resource.courses.some((course) => {
-        const role = rolesByCourse.get(course.courseId);
-        return role !== undefined &&
-          (STAFF_COURSE_ROLES.includes(role) || resource.status === LearningResourceStatus.PUBLISHED);
+      resource.subjects.some((link) => {
+        if (staffIds.has(link.subjectId)) return true;
+        return link.subject.status === 'PUBLISHED'
+          && memberCourseIds.has(link.subject.courseId)
+          && resource.status === LearningResourceStatus.PUBLISHED;
       }),
     );
-  }
-
-  private async requireCourseMembership(
-    courseId: string,
-    user: AuthUser,
-    requireStaff: boolean,
-  ): Promise<{ isStaff: boolean }> {
-    const course = await this.prisma.course.findFirst({
-      where: { id: courseId, organizationId: user.organizationId },
-      select: { id: true },
-    });
-    if (!course) throw new NotFoundException(`Course ${courseId} not found`);
-    if (user.role === 'ADMIN') return { isStaff: true };
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId: user.userId } },
-      select: { role: true },
-    });
-    if (!enrollment) throw new NotFoundException(`Course ${courseId} not found`);
-    const isStaff = STAFF_COURSE_ROLES.includes(enrollment.role);
-    if (requireStaff && !isStaff) {
-      throw new ForbiddenException('Only course staff can publish resources');
-    }
-    return { isStaff };
   }
 
   private cleanList(values?: string[]) {

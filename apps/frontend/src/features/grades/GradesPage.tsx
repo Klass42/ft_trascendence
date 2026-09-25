@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Badge, EmptyState, Select, Spinner } from '@/components/ui';
-import { formatFinalPercent, useAuth, useCourses, useMyGrades } from '@/lib/api';
+import { formatFinalPercent, useAuth, useMySubjects, useMyGrades } from '@/lib/api';
 import type { MyGradeDTO } from '@/lib/api';
 import { formatDate } from '@/features/assignments/helpers';
 import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
@@ -21,7 +21,7 @@ export function GradesPage() {
 }
 
 function StudentGrades() {
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ function StudentGrades() {
               aria-label="Curso"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
-              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
             />
           </div>
         )}

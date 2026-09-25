@@ -20,7 +20,7 @@ export function useDeleteSection(): UseDeleteSectionResult {
       setError(null);
       try {
         await apiClient.delete(
-          `/courses/${courseId}/sections/${sectionId}?organizationId=${orgId}`,
+          `/subjects/${courseId}/sections/${sectionId}?organizationId=${orgId}`,
         );
       } catch (err) {
         const e = err as Error;

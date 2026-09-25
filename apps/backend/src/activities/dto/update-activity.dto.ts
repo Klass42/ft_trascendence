@@ -1,4 +1,4 @@
-import { ActivityType, CourseStatus } from '@prisma/client';
+import { ActivityType, PublicationStatus } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -73,7 +73,7 @@ export class UpdateActivityDto {
   @IsOptional()
   config?: Record<string, unknown>;
 
-  @IsEnum(CourseStatus)
+  @IsEnum(PublicationStatus)
   @IsOptional()
-  status?: CourseStatus;
+  status?: PublicationStatus;
 }

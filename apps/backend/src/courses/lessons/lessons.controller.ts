@@ -26,11 +26,11 @@ export class LessonsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateLessonDto,
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(section.subjectId, user);
     return this.lessonsService.create(sectionId, user.organizationId, dto);
   }
 
@@ -39,11 +39,11 @@ export class LessonsController {
     @Param('sectionId') sectionId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertReadable(section.courseId, user);
+    await this.courseAccess.assertSubjectReadable(section.subjectId, user);
     return this.lessonsService.findAll(sectionId, user.organizationId);
   }
 
@@ -53,11 +53,11 @@ export class LessonsController {
     @CurrentUser() user: AuthUser,
     @Body('orderedIds') orderedIds: string[],
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(section.subjectId, user);
     await this.lessonsService.reorder(sectionId, user.organizationId, orderedIds);
     return { reordered: true };
   }
@@ -68,11 +68,11 @@ export class LessonsController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertReadable(section.courseId, user);
+    await this.courseAccess.assertSubjectReadable(section.subjectId, user);
     return this.lessonsService.findOne(sectionId, id, user.organizationId);
   }
 
@@ -81,11 +81,11 @@ export class LessonsController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const lesson = await this.lessonsService.findCourseId(
+    const lesson = await this.lessonsService.findSubjectId(
       id,
       user.organizationId,
     );
-    await this.courseAccess.assertReadable(lesson.section.courseId, user);
+    await this.courseAccess.assertSubjectReadable(lesson.section.subjectId, user);
     return this.lessonsService.findById(id, user.organizationId);
   }
 
@@ -96,11 +96,11 @@ export class LessonsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateLessonDto,
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(section.subjectId, user);
     return this.lessonsService.update(sectionId, id, user.organizationId, dto);
   }
 
@@ -110,11 +110,11 @@ export class LessonsController {
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const section = await this.lessonsService.findSectionCourseId(
+    const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(section.subjectId, user);
     await this.lessonsService.delete(sectionId, id, user.organizationId);
     return { deleted: true };
   }
@@ -125,11 +125,11 @@ export class LessonsController {
     @CurrentUser() user: AuthUser,
     @Body('fileId') fileId: string,
   ) {
-    const lesson = await this.lessonsService.findCourseId(
+    const lesson = await this.lessonsService.findSubjectId(
       lessonId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(lesson.section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
     return this.lessonsService.attachFile(lessonId, fileId, user.organizationId);
   }
 
@@ -139,11 +139,11 @@ export class LessonsController {
     @Param('fileId') fileId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const lesson = await this.lessonsService.findCourseId(
+    const lesson = await this.lessonsService.findSubjectId(
       lessonId,
       user.organizationId,
     );
-    await this.courseAccess.assertStaff(lesson.section.courseId, user);
+    await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
     await this.lessonsService.detachFile(lessonId, fileId, user.organizationId);
     return { deleted: true };
   }

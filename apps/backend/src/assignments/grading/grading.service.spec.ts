@@ -2,9 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { CourseRole, NotificationType, SubmissionStatus } from '@prisma/client';
+import { NotificationType, SubmissionStatus } from '@prisma/client';
 import { GradingService } from './grading.service';
 import { AssignmentsService } from '../assignments.service';
+import { accessFromPrisma } from '../../test/access-from-prisma';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationsService } from '../../notifications/notifications.service';
 
@@ -52,14 +53,14 @@ describe('GradingService', () => {
             where.id === ASSIGNMENT_ID
               ? {
                   id: ASSIGNMENT_ID,
-                  courseId: COURSE_ID,
+                  subjectId: COURSE_ID,
                   title: 'Práctica 1',
                   maxScore: MAX_SCORE,
-                  course: { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID },
+                  subject: { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID, courseId: COURSE_ID },
                 }
               : null,
           findMany: async ({ where }: any) =>
-            where.courseId === COURSE_ID
+            where.subjectId === COURSE_ID || where.courseId === COURSE_ID
               ? [
                   {
                     id: ASSIGNMENT_ID,
@@ -75,13 +76,13 @@ describe('GradingService', () => {
             const { courseId, userId } = where.courseId_userId;
             if (courseId !== COURSE_ID) return null;
             if (userId === STUDENT)
-              return { courseId, userId, role: CourseRole.STUDENT };
+              return { courseId, userId, role: 'STUDENT' as never };
             if (userId === TEACHER)
-              return { courseId, userId, role: CourseRole.TEACHER };
+              return { courseId, userId, role: 'TEACHER' as never };
             return null;
           },
           findMany: async ({ where }: any) =>
-            where.role === CourseRole.STUDENT
+            where.role === 'STUDENT' as never
               ? [
                   {
                     userId: STUDENT,
@@ -115,7 +116,7 @@ describe('GradingService', () => {
         return { id: 'n-1' };
       },
     } as unknown as NotificationsService;
-    const assignments = new AssignmentsService(prisma);
+    const assignments = new AssignmentsService(prisma, accessFromPrisma(prisma));
     return new GradingService(prisma, assignments, notifications);
   }
 
@@ -173,13 +174,13 @@ describe('GradingService', () => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE_ID) return null;
           if (userId === STUDENT)
-            return { courseId, userId, role: CourseRole.STUDENT };
+            return { courseId, userId, role: 'STUDENT' as never };
           if (userId === TEACHER)
-            return { courseId, userId, role: CourseRole.TEACHER };
+            return { courseId, userId, role: 'TEACHER' as never };
           return null;
         },
         findMany: async ({ where }: any) =>
-          where.role === CourseRole.STUDENT
+          where.role === 'STUDENT' as never
             ? [
                 {
                   userId: STUDENT,
@@ -193,9 +194,22 @@ describe('GradingService', () => {
               ]
             : [],
       },
+      courseMembership: {
+        findMany: async () => [
+          {
+            userId: STUDENT,
+            user: {
+              id: STUDENT,
+              name: 'Lucía Molina',
+              email: 'dev@example.com',
+              avatarUrl: null,
+            },
+          },
+        ],
+      },
       activity: {
         findMany: async ({ where }: any) =>
-          where.courseId === COURSE_ID
+          where.subjectId === COURSE_ID || where.courseId === COURSE_ID
             ? [
                 {
                   id: ACTIVITY_ID,
@@ -240,6 +254,15 @@ describe('GradingService', () => {
   describe('getTeachingSummary', () => {
     function buildSummaryFake() {
       const prisma = {
+        user: {
+          findUnique: async () => ({ organizationId: ORG_ID, role: 'TEACHER' }),
+        },
+        subject: {
+          findMany: async () => [{ id: COURSE_ID, status: 'PUBLISHED', courseId: COURSE_ID }],
+        },
+        courseMembership: {
+          findMany: async () => [{ userId: STUDENT }, { userId: STUDENT }],
+        },
         enrollment: {
           findMany: async ({ where }: any) => {
             // Staff-of-the-user lookup (role is `{ in: [...] }`).
@@ -247,7 +270,7 @@ describe('GradingService', () => {
               return [{ course: { id: COURSE_ID, status: 'PUBLISHED' } }];
             }
             // Students of the taught courses.
-            if (where.role === CourseRole.STUDENT && where.courseId?.in) {
+            if (where.role === 'STUDENT' as never && where.courseId?.in) {
               return [{ userId: STUDENT }, { userId: STUDENT }]; // dup → deduped
             }
             return [];
@@ -269,7 +292,7 @@ describe('GradingService', () => {
               activity: {
                 id: 'act-1',
                 title: 'Examen mixto',
-                course: { id: COURSE_ID, title: 'Web 101' },
+                subject: { id: COURSE_ID, title: 'Web 101' },
               },
             },
           ],
@@ -299,6 +322,7 @@ describe('GradingService', () => {
 
     it('returns zeros for a user who teaches nothing', async () => {
       const prisma = {
+        user: { findUnique: async () => null },
         enrollment: { findMany: async () => [] },
         attempt: { count: async () => 0, findMany: async () => [] },
       } as unknown as PrismaService;

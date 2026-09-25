@@ -70,7 +70,7 @@ function useAnalyticsResource<T>(
 export function useAnalyticsOverview(courseId: string | null) {
   return useAnalyticsResource<AnalyticsOverviewDTO>(
     courseId,
-    courseId ? `/courses/${courseId}/analytics/overview` : null,
+    courseId ? `/subjects/${courseId}/analytics/overview` : null,
   );
 }
 
@@ -90,7 +90,7 @@ export function useSubmissionsOverTime(
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     const qs = params.toString();
-    path = `/courses/${courseId}/analytics/submissions-over-time${qs ? `?${qs}` : ''}`;
+    path = `/subjects/${courseId}/analytics/submissions-over-time${qs ? `?${qs}` : ''}`;
   }
   return useAnalyticsResource<SubmissionsOverTimeDTO>(courseId, path);
 }
@@ -99,7 +99,7 @@ export function useSubmissionsOverTime(
 export function useGradeDistribution(courseId: string | null) {
   return useAnalyticsResource<GradeDistributionDTO>(
     courseId,
-    courseId ? `/courses/${courseId}/analytics/grade-distribution` : null,
+    courseId ? `/subjects/${courseId}/analytics/grade-distribution` : null,
   );
 }
 
@@ -114,7 +114,7 @@ export async function downloadAnalyticsCsv(
   filename = `analytics-${courseId}.csv`,
 ): Promise<void> {
   const csv = await apiClient.get<string>(
-    `/courses/${courseId}/analytics/export.csv`,
+    `/subjects/${courseId}/analytics/export.csv`,
   );
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);

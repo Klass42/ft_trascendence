@@ -1,4 +1,4 @@
-import { ActivityType, CourseStatus } from '@prisma/client';
+import { ActivityType, PublicationStatus } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -85,7 +85,7 @@ export class CreateActivityDto {
   config?: Record<string, unknown>;
 
   // DRAFT (default) hides it from students; PUBLISHED makes it takeable.
-  @IsEnum(CourseStatus)
+  @IsEnum(PublicationStatus)
   @IsOptional()
-  status?: CourseStatus;
+  status?: PublicationStatus;
 }

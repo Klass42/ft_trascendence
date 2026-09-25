@@ -41,8 +41,8 @@ export function useForumThreads(
     setError(null);
 
     const path = q
-      ? `/courses/${courseId}/forum/search?q=${encodeURIComponent(q)}`
-      : `/courses/${courseId}/forum/threads`;
+      ? `/subjects/${courseId}/forum/search?q=${encodeURIComponent(q)}`
+      : `/subjects/${courseId}/forum/threads`;
 
     apiClient
       .get<ForumThreadListItemDTO[]>(path)

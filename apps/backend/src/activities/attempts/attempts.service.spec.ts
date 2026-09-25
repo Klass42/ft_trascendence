@@ -1,13 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   AttemptStatus,
-  CourseRole,
-  CourseStatus,
+  PublicationStatus,
   NotificationType,
   QuestionKind,
 } from '@prisma/client';
 import { AttemptsService } from './attempts.service';
 import { ActivitiesService } from '../activities.service';
+import { accessFromPrisma } from '../../test/access-from-prisma';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationsService } from '../../notifications/notifications.service';
 import type { GradeAttemptDto } from './dto/grade-attempt.dto';
@@ -42,10 +42,10 @@ describe('AttemptsService', () => {
   }) {
     const activity = {
       id: 'act-1',
-      courseId: COURSE,
+      subjectId: COURSE,
       title: 'Quiz de prueba',
       type: 'QUIZ',
-      status: CourseStatus.PUBLISHED,
+      status: PublicationStatus.PUBLISHED,
       openAt: opts.openAt ?? null,
       closeAt: opts.closeAt ?? null,
       dueAt: null,
@@ -77,8 +77,9 @@ describe('AttemptsService', () => {
         findUnique: async ({ where, include }: any) => {
           if (where.id !== activity.id) return null;
           const base: any = { ...activity };
-          if (include?.course) {
-            base.course = { id: COURSE, organizationId: 'org-klass-0001' };
+          if (include?.course || include?.subject) {
+            base.subject = { id: COURSE, organizationId: 'org-klass-0001', courseId: COURSE };
+            base.course = base.subject;
           }
           if (include?.questions) base.questions = opts.questions;
           return base;
@@ -93,8 +94,8 @@ describe('AttemptsService', () => {
       enrollment: {
         findUnique: async ({ where }: any) => {
           const u = where.courseId_userId.userId;
-          if (u === STUDENT) return { role: CourseRole.STUDENT };
-          if (u === TEACHER) return { role: CourseRole.TEACHER };
+          if (u === STUDENT) return { role: 'STUDENT' as never };
+          if (u === TEACHER) return { role: 'TEACHER' as never };
           return null;
         },
       },
@@ -195,7 +196,7 @@ describe('AttemptsService', () => {
 
     const service = new AttemptsService(
       prisma as PrismaService,
-      new ActivitiesService(prisma as PrismaService),
+      new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma as never)),
       notifications,
     );
     return { service, attempts, answers, emitted };

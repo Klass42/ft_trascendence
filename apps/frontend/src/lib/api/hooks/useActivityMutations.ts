@@ -35,7 +35,7 @@ export function useActivityMutations() {
   const createActivity = useCallback(
     (courseId: string, input: CreateActivityInput) =>
       run(() =>
-        apiClient.post<ActivityDTO>(`/courses/${courseId}/activities`, input),
+        apiClient.post<ActivityDTO>(`/subjects/${courseId}/activities`, input),
       ),
     [run],
   );

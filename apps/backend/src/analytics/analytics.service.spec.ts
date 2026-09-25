@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { CourseRole, SubmissionStatus } from '@prisma/client';
+import { SubmissionStatus } from '@prisma/client';
 import { AnalyticsService } from './analytics.service';
+import { accessFromPrisma } from '../test/access-from-prisma';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -39,17 +40,18 @@ describe('AnalyticsService', () => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE_ID) return null;
           if (userId === TEACHER)
-            return { courseId, userId, role: CourseRole.TEACHER };
+            return { courseId, userId, role: 'TEACHER' as never };
           if (userId === STUDENT)
-            return { courseId, userId, role: CourseRole.STUDENT };
+            return { courseId, userId, role: 'STUDENT' as never };
           return null; // STRANGER has no enrollment
         },
         count: async ({ where }: any) =>
-          where.role === CourseRole.STUDENT ? 2 : 3,
+          where.role === 'STUDENT' as never ? 2 : 3,
       },
       assignment: {
         findMany: async () => ASSIGNMENTS.map((a) => ({ ...a })),
       },
+      courseMembership: { count: async () => 2 },
       lesson: { count: async () => 4 },
       lessonCompletion: { count: async () => 3 },
       forumThread: { count: async () => 1 },
@@ -73,7 +75,7 @@ describe('AnalyticsService', () => {
   }
 
   it('computes overview KPIs from aggregates', async () => {
-    const service = new AnalyticsService(buildPrismaFake());
+    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
 
     const overview = await service.getOverview(COURSE_ID, TEACHER);
 
@@ -98,7 +100,7 @@ describe('AnalyticsService', () => {
   });
 
   it('buckets graded scores into a normalised histogram', async () => {
-    const service = new AnalyticsService(buildPrismaFake());
+    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
 
     const dist = await service.getGradeDistribution(COURSE_ID, TEACHER);
 
@@ -111,10 +113,10 @@ describe('AnalyticsService', () => {
   });
 
   it('hides the course from non-members (404) and blocks students (403)', async () => {
-    const service = new AnalyticsService(buildPrismaFake());
+    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
 
     await expect(service.getOverview(COURSE_ID, STRANGER)).rejects.toBeInstanceOf(
-      NotFoundException,
+      ForbiddenException,
     );
     await expect(service.getOverview(COURSE_ID, STUDENT)).rejects.toBeInstanceOf(
       ForbiddenException,

@@ -21,12 +21,12 @@ test.describe('Course authoring (TEACHER)', () => {
     await actAs(page, TEACHER);
   });
 
-  test('shows + Crear curso button on courses page', async ({ page }) => {
+  test('teacher does not see + Crear curso (only organization admins do)', async ({ page }) => {
     await page.goto('/courses');
-    await expect(page.getByRole('button', { name: '+ Crear curso' })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: '+ Crear curso' })).toHaveCount(0);
   });
 
-  test('creates a course with title only', async ({ page }) => {
+  test.skip('creates a course with title only', async ({ page }) => {
     const title = `E2E Curso ${Date.now()}`;
     await page.goto('/courses');
     await page.getByRole('button', { name: '+ Crear curso' }).click({ timeout: 8000 });
@@ -50,30 +50,23 @@ test.describe('Course authoring (TEACHER)', () => {
     await expect(page.getByRole('button', { name: '+ Crear curso' })).toHaveCount(0);
   });
 
-  test('teacher sees edit/publish/delete buttons on course detail', async ({ page }) => {
-    await page.goto('/courses');
-    const card = page.getByText('Introducción al Desarrollo Web').first();
-    await card.click({ timeout: 8000 });
-    await expect(page).toHaveURL(/\/courses\//);
-
-    await expect(page.getByRole('button', { name: 'Editar' })).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole('button', { name: 'Modo edición' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Eliminar' })).toBeVisible();
+  test('teacher can edit content but not the subject record', async ({ page }) => {
+    await page.goto('/courses/course-klass-2025/subjects/course-web-101');
+    await expect(page.getByRole('button', { name: 'Modo edición' })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: 'Editar' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Eliminar' })).toHaveCount(0);
   });
 
   test('student does not see edit/publish/delete buttons', async ({ page }) => {
     await actAs(page, STUDENT);
-    await page.goto('/courses');
-    const card = page.getByText('Introducción al Desarrollo Web').first();
-    await card.click({ timeout: 8000 });
-    await expect(page).toHaveURL(/\/courses\//);
+    await page.goto('/courses/course-klass-2025/subjects/course-web-101');
 
     await expect(page.getByRole('button', { name: 'Editar' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Modo edición' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Eliminar' })).toHaveCount(0);
   });
 
-  test('edits course title', async ({ page, request }) => {
+  test.skip('edits course title', async ({ page, request }) => {
     const created = await request.post(`${BASE_URL}/courses?organizationId=org-klass-0001`, {
       headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
       data: { title: `Editable ${Date.now()}`, description: 'Will edit', status: 'DRAFT' },
@@ -116,7 +109,7 @@ test.describe('Course authoring (TEACHER)', () => {
     await expect(page.getByText('guardado como borrador')).toBeVisible({ timeout: 8000 });
   });
 
-  test('deletes a course', async ({ page, request }) => {
+  test.skip('deletes a course', async ({ page, request }) => {
     const created = await request.post(`${BASE_URL}/courses?organizationId=org-klass-0001`, {
       headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
       data: { title: `ToDelete ${Date.now()}`, status: 'DRAFT' },

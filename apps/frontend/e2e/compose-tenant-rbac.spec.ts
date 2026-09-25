@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 
 const password = 'demo1234';
-const courseA = 'e2e-a-course-01';
-const courseB = 'e2e-b-course-01';
-const activityA = 'e2e-a-course-01-activity-02';
-const activityB = 'e2e-b-course-01-activity-02';
-const essayA = 'e2e-a-course-01-activity-02-question-01';
+const courseA = 'e2e-a-cohort-01';
+const courseB = 'e2e-b-cohort-01';
+const activityA = 'e2e-a-subject-01-activity-02';
+const activityB = 'e2e-b-subject-01-activity-02';
+const essayA = 'e2e-a-subject-01-activity-02-question-01';
 
 type Login = { accessToken: string };
 
@@ -38,7 +38,7 @@ test.describe('E2E tenant, RBAC, files and submissions — Compose over HTTPS', 
     expect(listA.ok()).toBeTruthy();
     expect((await listA.json()).map((course: { id: string }) => course.id)).toContain(courseA);
     expect((await request.get(`/api/courses/${courseB}`, { headers: bearer(studentA) })).status()).toBe(404);
-    expect((await request.get(`/api/courses/${courseB}/preview`, { headers: bearer(studentA) })).status()).toBe(404);
+    expect((await request.get('/api/subjects/e2e-b-subject-01', { headers: bearer(studentA) })).status()).toBe(404);
 
     const listB = await request.get('/api/courses', { headers: bearer(studentB) });
     expect(listB.ok()).toBeTruthy();

@@ -3,9 +3,10 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { CourseRole, CourseStatus, QuestionKind } from '@prisma/client';
+import { PublicationStatus, QuestionKind } from '@prisma/client';
 import { ActivitiesService } from '../activities.service';
 import { TaskTemplatesService } from './task-templates.service';
+import { accessFromPrisma } from '../../test/access-from-prisma';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CreateActivityDto } from '../dto/create-activity.dto';
 
@@ -37,11 +38,11 @@ describe('TaskTemplatesService', () => {
       { id: COURSE_B, organizationId: ORG_B, title: 'Other org' },
     ];
     const enrollments = [
-      { courseId: COURSE_A, userId: TEACHER, role: CourseRole.TEACHER },
-      { courseId: COURSE_A2, userId: TEACHER, role: CourseRole.TEACHER },
-      { courseId: COURSE_A, userId: ASSISTANT, role: CourseRole.ASSISTANT },
-      { courseId: COURSE_A, userId: STUDENT, role: CourseRole.STUDENT },
-      { courseId: COURSE_B, userId: TEACHER_B, role: CourseRole.TEACHER },
+      { courseId: COURSE_A, userId: TEACHER, role: 'TEACHER' as never },
+      { courseId: COURSE_A2, userId: TEACHER, role: 'TEACHER' as never },
+      { courseId: COURSE_A, userId: ASSISTANT, role: 'ASSISTANT' as never },
+      { courseId: COURSE_A, userId: STUDENT, role: 'STUDENT' as never },
+      { courseId: COURSE_B, userId: TEACHER_B, role: 'TEACHER' as never },
     ];
     const activities: any[] = [];
     const questions: any[] = [];
@@ -54,7 +55,10 @@ describe('TaskTemplatesService', () => {
     const withActivityIncludes = (row: any, include: any) => {
       if (!row) return null;
       const out: any = { ...row };
-      if (include?.course) out.course = courseById(row.courseId);
+      if (include?.course || include?.subject) {
+        out.subject = courseById(row.subjectId ?? row.courseId);
+        out.course = out.subject;
+      }
       if (include?.questions) {
         out.questions = questions
           .filter((q) => q.activityId === row.id)
@@ -73,6 +77,20 @@ describe('TaskTemplatesService', () => {
       },
       course: {
         findUnique: async ({ where }: any) => courseById(where.id),
+      },
+      subjectStaff: {
+        findFirst: async ({ where }: any) => {
+          const hit = enrollments.find((e) => {
+            if (e.role === 'STUDENT') return false;
+            if (where.userId && e.userId !== where.userId) return false;
+            if (where.subject?.organizationId) {
+              const course = courseById(e.courseId);
+              if (!course || course.organizationId !== where.subject.organizationId) return false;
+            }
+            return true;
+          });
+          return hit ? { id: 'staff' } : null;
+        },
       },
       enrollment: {
         findUnique: async ({ where }: any) => {
@@ -124,7 +142,7 @@ describe('TaskTemplatesService', () => {
             id: rest.id ?? `act-${seq}`,
             maxScore: 0,
             countsTowardFinal: true,
-            status: CourseStatus.DRAFT,
+            status: PublicationStatus.DRAFT,
             type: 'QUIZ',
             description: null,
             openAt: null,
@@ -251,8 +269,8 @@ describe('TaskTemplatesService', () => {
       return Promise.all(arg);
     };
 
-    const activitiesService = new ActivitiesService(prisma as PrismaService);
-    const templatesService = new TaskTemplatesService(prisma as PrismaService);
+    const activitiesService = new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma));
+    const templatesService = new TaskTemplatesService(prisma as PrismaService, accessFromPrisma(prisma));
     return {
       activitiesService,
       templatesService,

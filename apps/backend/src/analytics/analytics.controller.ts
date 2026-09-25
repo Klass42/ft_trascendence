@@ -10,23 +10,23 @@ import { SubmissionsOverTimeDto } from './dto/submissions-over-time.dto';
  * service derives the tenant org from the course, so no client-supplied org is
  * ever trusted.
  */
-@Controller('courses/:id/analytics')
+@Controller('subjects/:subjectId/analytics')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('overview')
-  async overview(@Param('id') courseId: string, @CurrentUser() user: AuthUser) {
-    return this.analytics.getOverview(courseId, user.userId);
+  async overview(@Param('subjectId') subjectId: string, @CurrentUser() user: AuthUser) {
+    return this.analytics.getOverview(subjectId, user.userId);
   }
 
   @Get('submissions-over-time')
   async submissionsOverTime(
-    @Param('id') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Query() query: SubmissionsOverTimeDto,
   ) {
     return this.analytics.getSubmissionsOverTime(
-      courseId,
+      subjectId,
       user.userId,
       query.from,
       query.to,
@@ -35,20 +35,20 @@ export class AnalyticsController {
 
   @Get('grade-distribution')
   async gradeDistribution(
-    @Param('id') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.analytics.getGradeDistribution(courseId, user.userId);
+    return this.analytics.getGradeDistribution(subjectId, user.userId);
   }
 
   @Get('export.csv')
   async exportCsv(
-    @Param('id') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Res() res: Response,
   ) {
     const { filename, csv } = await this.analytics.getExportCsv(
-      courseId,
+      subjectId,
       user.userId,
     );
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

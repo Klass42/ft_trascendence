@@ -1,11 +1,11 @@
-import { useUsers, useCourses } from '@/lib/api';
+import { useUsers, useMySubjects } from '@/lib/api';
 import { Spinner, EmptyState } from '@/components/ui';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './AdminDashboard.module.css';
 
 export function AdminDashboard() {
   const { data: users, isLoading: usersLoading } = useUsers();
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
 
   if (usersLoading || coursesLoading) {
     return (

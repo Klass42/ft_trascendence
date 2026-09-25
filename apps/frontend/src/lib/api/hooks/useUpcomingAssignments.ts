@@ -34,7 +34,7 @@ export function useUpcomingAssignments(
     Promise.all(
       courseIds.map((id) =>
         apiClient
-          .get<ActivityDTO[]>(`/courses/${id}/activities`)
+          .get<ActivityDTO[]>(`/subjects/${id}/activities`)
           .catch(() => [] as ActivityDTO[]),
       ),
     )

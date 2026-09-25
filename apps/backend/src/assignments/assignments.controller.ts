@@ -17,17 +17,17 @@ const GONE =
 export class AssignmentsController {
   constructor(private readonly assignments: AssignmentsService) {}
 
-  @Post('courses/:courseId/assignments')
+  @Post('subjects/:subjectId/assignments')
   create() {
     throw new GoneException(GONE);
   }
 
-  @Get('courses/:courseId/assignments')
+  @Get('subjects/:subjectId/assignments')
   async findAll(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.assignments.findAll(courseId, user.userId);
+    return this.assignments.findAll(subjectId, user.userId);
   }
 
   @Get('assignments/:id')

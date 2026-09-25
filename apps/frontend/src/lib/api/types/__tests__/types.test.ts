@@ -8,50 +8,52 @@
 
 import type {
   CourseDTO,
+  SubjectDTO,
   SectionDTO,
   LessonDTO,
   FileDTO,
   LessonAttachmentDTO,
-  EnrollmentDTO,
+  CourseMembershipDTO,
   ProgressDTO,
   CompleteLessonDTO,
-  CourseStatus,
-  CourseRole,
+  CohortStatus,
+  PublicationStatus,
+  SubjectStaffRole,
 } from '../../types';
-
-// =============================================================================
-// CourseDTO shape verification
-// =============================================================================
 
 type _CourseShape = {
   id: string;
   organizationId: string;
-  ownerId: string | null;
-  title: string;
-  description: string | null;
-  category: string | null;
-  imageUrl: string | null;
-  accessCode: string | null;
-  status: CourseStatus;
+  name: string;
+  academicYear: string;
+  startsOn: string;
+  endsOn: string;
+  status: CohortStatus;
   createdAt: string;
   updatedAt: string;
 };
 
-// Ensure CourseDTO matches the expected shape
 type _CourseCheck = CourseDTO extends _CourseShape ? true : false;
 const _c: _CourseCheck = true;
 
-// All status values are valid
-type _StatusCheck = 'DRAFT' extends CourseStatus ? 'PUBLISHED' extends CourseStatus ? 'ARCHIVED' extends CourseStatus ? true : false : false : false;
-const _s: _StatusCheck = true;
+type _SubjectShape = {
+  id: string;
+  organizationId: string;
+  courseId: string;
+  title: string;
+  status: PublicationStatus;
+};
 
-// =============================================================================
-// SectionDTO shape verification
-// =============================================================================
+type _SubjectCheck = SubjectDTO extends _SubjectShape ? true : false;
+const _sub: _SubjectCheck = true;
+void _sub;
+
+type _StatusCheck = 'DRAFT' extends PublicationStatus ? 'PUBLISHED' extends PublicationStatus ? 'ARCHIVED' extends PublicationStatus ? true : false : false : false;
+const _s: _StatusCheck = true;
 
 type _SectionShape = {
   id: string;
-  courseId: string;
+  subjectId: string;
   title: string;
   order: number;
   createdAt: string;
@@ -119,16 +121,13 @@ type _EnrollmentShape = {
   id: string;
   courseId: string;
   userId: string;
-  role: CourseRole;
-  progress: number;
   createdAt: string;
 };
 
-type _EnrollmentCheck = EnrollmentDTO extends _EnrollmentShape ? true : false;
+type _EnrollmentCheck = CourseMembershipDTO extends _EnrollmentShape ? true : false;
 const _e: _EnrollmentCheck = true;
 
-// All role values are valid
-type _RoleCheck = 'TEACHER' extends CourseRole ? 'ASSISTANT' extends CourseRole ? 'STUDENT' extends CourseRole ? true : false : false : false;
+type _RoleCheck = 'TEACHER' extends SubjectStaffRole ? 'ASSISTANT' extends SubjectStaffRole ? true : false : false;
 const _r: _RoleCheck = true;
 
 // =============================================================================
