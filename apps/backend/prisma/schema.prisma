@@ -39,6 +39,13 @@ model Organization {
   primaryColor String?
   defaultLanguage String @default("es")
   timezone String @default("Europe/Madrid")
+  // SUPERADMIN-configurable plan/limits (issue #18). `null` on a limit means
+  // "unlimited"; enforcing it (e.g. blocking sign-ups past maxUsers) is the
+  // owning feature's job (users/courses/files) — this model only stores it.
+  plan OrganizationPlan @default(STARTER)
+  maxUsers Int?
+  maxCourses Int?
+  maxStorageMb Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -481,6 +488,13 @@ enum OrganizationStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+enum OrganizationPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+  CUSTOM
 }
 
 enum InvitationStatus {

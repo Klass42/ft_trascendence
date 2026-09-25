@@ -85,6 +85,7 @@ const OrgMembersPage = lazy(() =>
 );
 const PlatformOrganizationsPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationsPage })));
 const PlatformOrganizationFormPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationFormPage })));
+const PlatformOrganizationDetailPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationDetailPage })));
 const PlatformLoginPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformLoginPage })));
 
 function PageLoader() {
@@ -114,7 +115,7 @@ const routes: RouteObject[] = [
       { index: true, element: <Navigate to="organizations" replace /> },
       { path: 'organizations', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
       { path: 'organizations/new', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationFormPage /></Suspense> },
-      { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
+      { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationDetailPage /></Suspense> },
     ] }],
   },
   {

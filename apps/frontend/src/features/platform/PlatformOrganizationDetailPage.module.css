@@ -1,0 +1,134 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-8) var(--space-16);
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+.backLink:hover {
+  color: var(--color-accent-primary);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: var(--space-6) 0 var(--space-8);
+}
+.header h1 {
+  font-size: clamp(var(--text-2xl), 3vw, var(--text-3xl));
+  letter-spacing: -0.03em;
+}
+.header p {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.wide {
+  grid-column: 1 / -1;
+}
+
+.grid h2 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-2);
+}
+.hint {
+  margin-bottom: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.inviteForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.inviteBox {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-lg);
+}
+.inviteHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+.inviteControl {
+  display: flex;
+  gap: var(--space-2);
+}
+.inviteControl input {
+  min-width: 0;
+  flex: 1;
+  height: 2.5rem;
+  padding: 0 var(--space-3);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  outline: 0;
+}
+.inviteControl input:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-muted);
+}
+
+.error {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  color: var(--color-error);
+  background: var(--color-error-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: var(--space-6) var(--space-4) var(--space-10);
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .header {
+    flex-direction: column;
+  }
+  .inviteForm {
+    grid-template-columns: 1fr;
+  }
+}

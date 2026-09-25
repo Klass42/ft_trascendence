@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 export class UpdatePlatformOrganizationDto {
  @IsOptional() @IsString() @MinLength(1) name?: string;
  @IsOptional() @IsString() logoUrl?: string;
@@ -6,4 +6,9 @@ export class UpdatePlatformOrganizationDto {
  @IsOptional() @IsString() defaultLanguage?: string;
  @IsOptional() @IsString() timezone?: string;
  @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED', 'ARCHIVED']) status?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+ // Custom plans/limits (issue #18). `null` resets a limit back to unlimited.
+ @IsOptional() @IsIn(['STARTER', 'GROWTH', 'ENTERPRISE', 'CUSTOM']) plan?: 'STARTER' | 'GROWTH' | 'ENTERPRISE' | 'CUSTOM';
+ @IsOptional() @IsInt() @Min(1) maxUsers?: number | null;
+ @IsOptional() @IsInt() @Min(1) maxCourses?: number | null;
+ @IsOptional() @IsInt() @Min(1) maxStorageMb?: number | null;
 }
