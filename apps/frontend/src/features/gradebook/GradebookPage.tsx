@@ -11,7 +11,7 @@ import {
 import {
   downloadGradebookCsv,
   formatFinalPercent,
-  useCourses,
+  useMySubjects,
   useGradebook,
 } from '@/lib/api';
 import type { GradebookCellDTO, GradebookItemDTO, GradebookRowDTO } from '@/lib/api';
@@ -24,7 +24,7 @@ import { GradePanel, type GradeTarget } from './GradePanel';
  */
 export function GradebookPage() {
   const { toast } = useToast();
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [target, setTarget] = useState<GradeTarget | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -91,7 +91,7 @@ export function GradebookPage() {
               aria-label="Curso"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
-              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
             />
           )}
           <Button

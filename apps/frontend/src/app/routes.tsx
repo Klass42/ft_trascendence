@@ -35,6 +35,9 @@ const DashboardPage = lazy(() =>
 const CoursesPage = lazy(() =>
   import('@/features/courses').then((m) => ({ default: m.CoursesPage }))
 );
+const CourseCohortPage = lazy(() =>
+  import('@/features/courses').then((m) => ({ default: m.CourseCohortPage }))
+);
 const CourseDetailPage = lazy(() =>
   import('@/features/courses').then((m) => ({ default: m.CourseDetailPage }))
 );
@@ -200,12 +203,20 @@ const routes: RouteObject[] = [
         path: '/courses/:courseId',
         element: (
           <Suspense fallback={<PageLoader />}>
+            <CourseCohortPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/courses/:courseId/subjects/:subjectId',
+        element: (
+          <Suspense fallback={<PageLoader />}>
             <CourseDetailPage />
           </Suspense>
         ),
       },
       {
-        path: '/courses/:courseId/lessons/:lessonId',
+        path: '/courses/:courseId/subjects/:subjectId/lessons/:lessonId',
         element: (
           <Suspense fallback={<PageLoader />}>
             <LessonPage />

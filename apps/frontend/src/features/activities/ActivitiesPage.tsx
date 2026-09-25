@@ -14,7 +14,7 @@ import {
   useAuth,
   useActivities,
   useActivityMutations,
-  useCourses,
+  useMySubjects,
   useSaveAsTemplate,
   useStaffAttempts,
 } from '@/lib/api';
@@ -36,7 +36,7 @@ export function ActivitiesPage() {
   const { user } = useAuth();
   const isStaff = user?.role === 'TEACHER' || user?.role === 'ADMIN';
 
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -98,7 +98,7 @@ export function ActivitiesPage() {
                 setSelectedId(null);
                 setCreating(false);
               }}
-              options={courses.map((c) => ({ value: c.id, label: c.title }))}
+              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
             />
           </div>
         )}
@@ -237,7 +237,7 @@ export function ActivitiesPage() {
 /** Learner workspace. The activity and attempt endpoints determine membership
  * and course role on the server; this UI never receives an answer key. */
 function StudentActivitiesPage() {
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -268,7 +268,7 @@ function StudentActivitiesPage() {
     <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Tareas</h1>
-        {courses?.length ? <div style={{ marginLeft: 'auto', minWidth: 220 }}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: course.title }))} /></div> : null}
+        {courses?.length ? <div style={{ marginLeft: 'auto', minWidth: 220 }}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: `${`${course.title} · ${course.course.name} · ${course.course.academicYear}`} · ${course.course.name} · ${course.course.academicYear}` }))} /></div> : null}
       </div>
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
       {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus tareas aparecerán aquí." />}
@@ -419,7 +419,7 @@ function ActivityDetail({
 
       <Modal open={editing} onClose={() => setEditing(false)} title="Editar tarea" size="lg">
         <ActivityForm
-          courseId={activity.courseId}
+          courseId={activity.subjectId}
           initial={activity}
           inModal
           onSaved={() => {

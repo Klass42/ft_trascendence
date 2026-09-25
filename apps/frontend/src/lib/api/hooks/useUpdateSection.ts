@@ -25,7 +25,7 @@ export function useUpdateSection(): UseUpdateSectionResult {
       setError(null);
       try {
         return await apiClient.patch<SectionDTO>(
-          `/courses/${courseId}/sections/${sectionId}?organizationId=${orgId}`,
+          `/subjects/${courseId}/sections/${sectionId}?organizationId=${orgId}`,
           input,
         );
       } catch (err) {

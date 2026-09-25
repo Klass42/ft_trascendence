@@ -21,7 +21,7 @@ test.describe('A4-teacher — TeacherDashboard (real data)', () => {
 
   test.beforeAll(async ({ request }) => {
     const created = await request.post(
-      `${BASE_URL}/courses/${COURSE_ID}/activities`,
+      `${BASE_URL}/subjects/${COURSE_ID}/activities`,
       {
         headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
         data: { title, type: 'QUIZ' },

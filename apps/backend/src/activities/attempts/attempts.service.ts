@@ -12,7 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { ActivitiesService, STAFF_ROLES } from '../activities.service';
+import { ActivitiesService } from '../activities.service';
 import { gradeQuestion, isAutoGradable } from '../grading/graders';
 import { SaveAnswersDto } from './dto/save-answers.dto';
 import { GradeAttemptDto } from './dto/grade-attempt.dto';
@@ -214,7 +214,7 @@ export class AttemptsService {
 
   /** Every attempt for an activity (course staff only), with student + answers. */
   async listForActivity(activityId: string, actingUserId: string) {
-    await this.activities.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.activities.requireActivity(activityId, actingUserId, true);
     return this.prisma.attempt.findMany({
       where: { activityId },
       orderBy: [{ userId: 'asc' }, { attemptNo: 'asc' }],
@@ -239,7 +239,7 @@ export class AttemptsService {
     await this.activities.requireActivity(
       attempt.activityId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     if (attempt.status === AttemptStatus.IN_PROGRESS) {

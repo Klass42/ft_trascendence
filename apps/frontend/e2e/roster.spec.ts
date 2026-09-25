@@ -16,7 +16,7 @@ const COURSE_ID = 'course-web-101';
 test.describe('A3 — Roster de inscripciones', () => {
   test('staff ve la pestaña Alumnos con los inscritos', async ({ page }) => {
     await actAs(page, TEACHER);
-    await page.goto(`/courses/${COURSE_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}`);
 
     // Tabs visible for teacher
     const alumnosTab = page.getByRole('tab', { name: 'Alumnos' });
@@ -30,7 +30,7 @@ test.describe('A3 — Roster de inscripciones', () => {
 
   test('alumno NO ve la pestaña Alumnos', async ({ page }) => {
     await actAs(page, STUDENT);
-    await page.goto(`/courses/${COURSE_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}`);
 
     // Student should not see the Alumnos tab
     await expect(page.getByRole('tab', { name: 'Alumnos' })).not.toBeVisible();
@@ -38,7 +38,7 @@ test.describe('A3 — Roster de inscripciones', () => {
 
   test('staff cambia rol de un alumno', async ({ page }) => {
     await actAs(page, TEACHER);
-    await page.goto(`/courses/${COURSE_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}`);
     await page.getByRole('tab', { name: 'Alumnos' }).click();
 
     // Find the role Select for a student row and change to ASSISTANT

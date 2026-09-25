@@ -4,7 +4,7 @@ import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import {
   useAuth,
-  useCourses,
+  useMySubjects,
   useResourceMutations,
   useResources,
   type CreateLearningResourceInput,
@@ -32,7 +32,7 @@ export function ResourcesPage() {
   const { data: resources, isLoading, error, refresh } = useResources({ search, type: type || undefined, status: status || undefined });
   // Staff also need to prepare resources for a draft course before it is
   // published; the backend still enforces course-level staff access.
-  const { data: courses } = useCourses();
+  const { data: courses } = useMySubjects();
   const mutations = useResourceMutations();
 
   const publishingResource = useMemo(() => resources?.find((item) => item.id === publishId) ?? null, [publishId, resources]);
@@ -113,7 +113,7 @@ export function ResourcesPage() {
         onClose={() => setPublishId(null)}
         onPublish={async (courseId, required) => {
           if (!publishingResource) return;
-          await mutations.publishToCourse(publishingResource.id, { courseId, required });
+          await mutations.publishToCourse(publishingResource.id, { subjectId: courseId, required });
           toast({ variant: 'success', message: 'Recurso vinculado al curso.' });
           setPublishId(null);
           await refresh();
@@ -187,16 +187,16 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
 }
 
 function PublishModal({ resource, courses, open, onClose, onPublish, loading }: {
-  resource: { id: string; title: string; courses: { courseId: string }[] } | null;
-  courses: { id: string; title: string }[]; open: boolean; onClose: () => void;
+  resource: { id: string; title: string; subjects: { subjectId: string }[] } | null;
+  courses: { id: string; title: string; course: { name: string; academicYear: string } }[]; open: boolean; onClose: () => void;
   onPublish: (courseId: string, required: boolean) => Promise<void>; loading: boolean;
 }) {
   const [courseId, setCourseId] = useState('');
   const [required, setRequired] = useState(false);
-  const eligible = courses.filter((course) => !resource?.courses.some((link) => link.courseId === course.id));
+  const eligible = courses.filter((course) => !resource?.subjects.some((link) => link.subjectId === course.id));
   const submit = async () => { if (courseId) await onPublish(courseId, required); };
   return <Modal open={open} onClose={onClose} title={`Publicar: ${resource?.title ?? ''}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading} disabled={!courseId}>Publicar</Button></>}>
-    {eligible.length ? <div style={{ display: 'grid', gap: 12 }}><label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}</select></label><label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label></div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
+    {eligible.length ? <div style={{ display: 'grid', gap: 12 }}><label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{`${course.title} · ${course.course.name} · ${course.course.academicYear}`}</option>)}</select></label><label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label></div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
   </Modal>;
 }
 

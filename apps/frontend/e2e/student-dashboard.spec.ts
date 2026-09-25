@@ -52,7 +52,7 @@ test.describe('StudentDashboard (real data)', () => {
     await expect(card).toBeVisible({ timeout: 8000 });
     // Click navigates to course detail
     await card.click();
-    await expect(page).toHaveURL(/\/courses\/course-web-101/);
+    await expect(page).toHaveURL(/\/courses\/course-klass-2025\/subjects\/course-web-101/);
   });
 
   test('zero console errors', async ({ page }) => {

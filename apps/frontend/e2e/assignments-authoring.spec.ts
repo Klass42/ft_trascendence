@@ -58,7 +58,7 @@ test.describe('Tareas — authoring & window', () => {
 
     const activities = await page.evaluate(
       async ({ base, course, teacher }) => {
-        const res = await fetch(`${base}/courses/${course}/activities`, {
+        const res = await fetch(`${base}/subjects/${course}/activities`, {
           headers: { 'x-dev-user': teacher },
         });
         return (await res.json()) as Array<{ id: string; title: string }>;

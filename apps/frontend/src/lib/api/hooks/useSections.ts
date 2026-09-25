@@ -30,7 +30,7 @@ export function useSections(courseId: string | undefined): UseSectionsResult {
     setIsLoading(true);
     setError(null);
 
-    apiClient.get<SectionDTO[]>(`/courses/${courseId}/sections?organizationId=${orgId}`)
+    apiClient.get<SectionDTO[]>(`/subjects/${courseId}/sections?organizationId=${orgId}`)
       .then((result) => {
         if (!cancelled) setData(result);
       })

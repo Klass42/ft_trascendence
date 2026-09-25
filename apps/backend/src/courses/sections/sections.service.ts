@@ -7,33 +7,33 @@ import { UpdateSectionDto } from './dto/update-section.dto';
 export class SectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async findCourseOrThrow(courseId: string, organizationId: string) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
+  private async findSubjectOrThrow(subjectId: string, organizationId: string) {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, organizationId },
     });
-    if (!course || course.organizationId !== organizationId) {
-      throw new NotFoundException(`Course ${courseId} not found`);
+    if (!subject) {
+      throw new NotFoundException(`Subject ${subjectId} not found`);
     }
-    return course;
+    return subject;
   }
 
-  async create(courseId: string, organizationId: string, dto: CreateSectionDto) {
-    await this.findCourseOrThrow(courseId, organizationId);
+  async create(subjectId: string, organizationId: string, dto: CreateSectionDto) {
+    await this.findSubjectOrThrow(subjectId, organizationId);
 
     return this.prisma.section.create({
       data: {
-        courseId,
+        subjectId,
         title: dto.title,
         order: dto.order ?? 0,
       },
     });
   }
 
-  async findAll(courseId: string, organizationId: string) {
-    await this.findCourseOrThrow(courseId, organizationId);
+  async findAll(subjectId: string, organizationId: string) {
+    await this.findSubjectOrThrow(subjectId, organizationId);
 
     return this.prisma.section.findMany({
-      where: { courseId },
+      where: { subjectId },
       include: {
         lessons: { orderBy: { order: 'asc' } },
       },
@@ -41,8 +41,8 @@ export class SectionsService {
     });
   }
 
-  async findOne(courseId: string, sectionId: string, organizationId: string) {
-    await this.findCourseOrThrow(courseId, organizationId);
+  async findOne(subjectId: string, sectionId: string, organizationId: string) {
+    await this.findSubjectOrThrow(subjectId, organizationId);
 
     const section = await this.prisma.section.findUnique({
       where: { id: sectionId },
@@ -51,7 +51,7 @@ export class SectionsService {
       },
     });
 
-    if (!section || section.courseId !== courseId) {
+    if (!section || section.subjectId !== subjectId) {
       throw new NotFoundException(`Section ${sectionId} not found`);
     }
 
@@ -59,12 +59,12 @@ export class SectionsService {
   }
 
   async update(
-    courseId: string,
+    subjectId: string,
     sectionId: string,
     organizationId: string,
     dto: UpdateSectionDto,
   ) {
-    await this.findOne(courseId, sectionId, organizationId);
+    await this.findOne(subjectId, sectionId, organizationId);
 
     return this.prisma.section.update({
       where: { id: sectionId },
@@ -72,14 +72,14 @@ export class SectionsService {
     });
   }
 
-  async delete(courseId: string, sectionId: string, organizationId: string) {
-    await this.findOne(courseId, sectionId, organizationId);
+  async delete(subjectId: string, sectionId: string, organizationId: string) {
+    await this.findOne(subjectId, sectionId, organizationId);
 
     await this.prisma.section.delete({ where: { id: sectionId } });
   }
 
   async reorder(
-    courseId: string,
+    subjectId: string,
     organizationId: string,
     orderedIds: string[],
   ) {
@@ -87,10 +87,10 @@ export class SectionsService {
       throw new BadRequestException('orderedIds must not be empty');
     }
 
-    await this.findCourseOrThrow(courseId, organizationId);
+    await this.findSubjectOrThrow(subjectId, organizationId);
 
     const existing = await this.prisma.section.findMany({
-      where: { id: { in: orderedIds }, courseId },
+      where: { id: { in: orderedIds }, subjectId },
       select: { id: true },
     });
 

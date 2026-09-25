@@ -1,34 +1,26 @@
-import {
-  IsEnum,
-  IsOptional,
-  IsString,
-  MinLength,
-} from 'class-validator';
-import { CourseStatus } from '@prisma/client';
+import { CohortStatus } from '@prisma/client';
+import { IsDateString, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class UpdateCourseDto {
   @IsString()
   @MinLength(1)
   @IsOptional()
-  title?: string;
+  name?: string;
 
   @IsString()
+  @Matches(/^\d{4}-\d{4}$/)
   @IsOptional()
-  description?: string;
+  academicYear?: string;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
-  category?: string;
+  startsOn?: string;
 
-  @IsString()
+  @IsDateString()
   @IsOptional()
-  imageUrl?: string;
+  endsOn?: string;
 
-  @IsString()
+  @IsEnum(CohortStatus)
   @IsOptional()
-  accessCode?: string;
-
-  @IsEnum(CourseStatus)
-  @IsOptional()
-  status?: CourseStatus;
+  status?: CohortStatus;
 }

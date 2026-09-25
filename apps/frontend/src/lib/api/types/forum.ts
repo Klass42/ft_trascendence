@@ -5,7 +5,7 @@
  * apps/backend/src/forums.
  */
 
-import type { CourseRole } from './course';
+import type { SubjectStaffRole } from './course';
 
 /** Minimal author projection embedded in threads/posts. */
 export interface ForumAuthorDTO {
@@ -17,7 +17,7 @@ export interface ForumAuthorDTO {
 /** A thread as returned by the list/search endpoints. */
 export interface ForumThreadListItemDTO {
   id: string;
-  courseId: string;
+  subjectId: string;
   authorId: string | null;
   title: string;
   pinned: boolean;
@@ -35,20 +35,20 @@ export interface ForumPostDTO {
   body: string;
   createdAt: string;
   author: ForumAuthorDTO | null;
-  authorRole: CourseRole | null;
+  authorRole: SubjectStaffRole | null;
   replies: ForumPostDTO[];
 }
 
 /** A single thread with its posts nested into a reply tree. */
 export interface ForumThreadDTO {
   id: string;
-  courseId: string;
+  subjectId: string;
   authorId: string | null;
   title: string;
   pinned: boolean;
   createdAt: string;
   author: ForumAuthorDTO | null;
-  authorRole: CourseRole | null;
+  authorRole: SubjectStaffRole | null;
   posts: ForumPostDTO[];
 }
 

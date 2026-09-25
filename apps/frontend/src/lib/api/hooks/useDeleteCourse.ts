@@ -15,7 +15,7 @@ export function useDeleteCourse(): UseDeleteCourseResult {
     setIsLoading(true);
     setError(null);
     try {
-      await apiClient.delete(`/courses/${courseId}`);
+      await apiClient.delete(`/subjects/${courseId}`);
     } catch (err) {
       const e = err as Error;
       setError(e);

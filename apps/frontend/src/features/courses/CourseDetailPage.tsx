@@ -2,15 +2,13 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useCourseDetail,
-  useCoursePreview,
   useSections,
   useProgress,
   useCompletedLessons,
-  useEnroll,
+  useIsAdmin,
   useIsTeacher,
   useUpdateCourse,
   useDeleteCourse,
-  ApiError,
 } from '@/lib/api';
 import {
   Button,
@@ -39,39 +37,28 @@ function hashToColor(title: string): string {
 }
 
 export function CourseDetailPage() {
-  const { courseId } = useParams<{ courseId: string }>();
+  const { courseId, subjectId } = useParams<{ courseId: string; subjectId: string }>();
   const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   const isTeacher = useIsTeacher();
   const { toast } = useToast();
   const { update, isLoading: updating } = useUpdateCourse();
   const { remove, isLoading: deleting } = useDeleteCourse();
 
-  const { data: fullCourse, isLoading: courseLoading } = useCourseDetail(courseId);
-  const {
-    data: previewCourse,
-    isLoading: previewLoading,
-  } = useCoursePreview(courseId, !courseLoading && !fullCourse);
-  // Do not request course content/progress until CourseAccess has confirmed
-  // membership through the private detail endpoint.
-  const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? courseId : undefined);
-  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? courseId : undefined);
-  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? courseId : undefined);
-  const { enroll, isLoading: enrolling } = useEnroll();
-
-  const [accessCode, setAccessCode] = useState('');
-  const [enrollError, setEnrollError] = useState<string | null>(null);
-  const [justEnrolled, setJustEnrolled] = useState(false);
+  const { data: fullCourse, isLoading: courseLoading } = useCourseDetail(subjectId);
+  const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? subjectId : undefined);
+  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? subjectId : undefined);
+  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? subjectId : undefined);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCategory, setEditCategory] = useState('');
-  const [editAccessCode, setEditAccessCode] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
 
   if (
-    courseLoading || previewLoading ||
+    courseLoading ||
     (fullCourse && (sectionsLoading || progressLoading || completedLoading))
   ) {
     return (
@@ -81,44 +68,24 @@ export function CourseDetailPage() {
     );
   }
 
-  const course = fullCourse ?? previewCourse;
-  const isPreview = !fullCourse && !!previewCourse;
+  const course = fullCourse;
 
   if (!course) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
-        Curso no encontrado
+        Asignatura no encontrada
       </div>
     );
   }
 
   const color = hashToColor(course.title);
-  const isNotEnrolled = isPreview;
   const pct = progress?.progress ?? 0;
-
-  const handleEnroll = async () => {
-    setEnrollError(null);
-    try {
-      // Whether a code is required is intentionally not exposed by preview.
-      // Submitting it (or an empty value for open courses) lets the backend
-      // make that authorization decision.
-      await enroll(course.id, accessCode || undefined);
-      setJustEnrolled(true);
-      setTimeout(() => window.location.reload(), 1200);
-    } catch (err) {
-      const msg = err instanceof ApiError && err.isNotFound
-        ? 'Código de acceso incorrecto'
-        : err instanceof Error ? err.message : 'Error al inscribirse';
-      setEnrollError(msg);
-    }
-  };
 
   const openEdit = () => {
     if (!fullCourse) return;
     setEditTitle(fullCourse.title);
     setEditDescription(fullCourse.description ?? '');
     setEditCategory(fullCourse.category ?? '');
-    setEditAccessCode(fullCourse.accessCode ?? '');
     setEditOpen(true);
   };
 
@@ -130,7 +97,6 @@ export function CourseDetailPage() {
         title: editTitle.trim(),
         description: editDescription.trim() || undefined,
         category: editCategory.trim() || undefined,
-        accessCode: editAccessCode.trim() || undefined,
       });
       setEditOpen(false);
       toast({ message: 'Curso actualizado', variant: 'success' });
@@ -154,7 +120,7 @@ export function CourseDetailPage() {
       if (!fullCourse) return;
       await remove(fullCourse.id);
       toast({ message: 'Curso eliminado', variant: 'success' });
-      navigate('/courses');
+      navigate(courseId ? `/courses/${courseId}` : '/courses');
     } catch {
       toast({ message: 'Error al eliminar el curso', variant: 'error' });
     }
@@ -166,7 +132,7 @@ export function CourseDetailPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <button
-              onClick={() => navigate('/courses')}
+              onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}
               style={{
                 background: 'rgba(255,255,255,.18)',
                 border: 'none',
@@ -187,28 +153,36 @@ export function CourseDetailPage() {
             </h1>
           </div>
 
-          {isTeacher && fullCourse && (
+          {fullCourse && (isAdmin || isTeacher) && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button variant="secondary" size="sm" onClick={openEdit}>
-                Editar
-              </Button>
-              <Button
-                variant={editing ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setEditing(!editing)}
-              >
-                {editing ? 'Ver como alumno' : 'Modo edición'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => handleStatusChange(course.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED')}
-              >
-                {course.status === 'PUBLISHED' ? 'Guardar borrador' : 'Publicar'}
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
-                Eliminar
-              </Button>
+              {isAdmin && (
+                <Button variant="secondary" size="sm" onClick={openEdit}>
+                  Editar
+                </Button>
+              )}
+              {isTeacher && (
+                <Button
+                  variant={editing ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => setEditing(!editing)}
+                >
+                  {editing ? 'Ver como alumno' : 'Modo edición'}
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleStatusChange(course.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED')}
+                >
+                  {course.status === 'PUBLISHED' ? 'Guardar borrador' : 'Publicar'}
+                </Button>
+              )}
+              {isAdmin && (
+                <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+                  Eliminar
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -224,65 +198,11 @@ export function CourseDetailPage() {
           </div>
         )}
 
-        {isNotEnrolled ? (
-          <div style={{ marginTop: 14 }}>
-            {course.description && (
-              <p style={{ fontSize: 14, opacity: 0.88, margin: '0 0 14px', lineHeight: 1.5 }}>
-                {course.description}
-              </p>
-            )}
-            {justEnrolled ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, fontWeight: 700 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                ¡Inscrito! Cargando...
-              </div>
-            ) : (
-              <div>
-                <input
-                  value={accessCode}
-                  onChange={(e) => setAccessCode(e.target.value)}
-                  placeholder="Código de acceso (si lo requiere)"
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 9,
-                    border: 'none',
-                    fontSize: 14,
-                    fontFamily: 'inherit',
-                    width: 200,
-                    marginRight: 10,
-                    marginBottom: 8,
-                  }}
-                />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button
-                    onClick={handleEnroll}
-                    disabled={enrolling}
-                    style={{
-                      background: enrolling ? 'rgba(255,255,255,.4)' : '#fff',
-                      border: 'none',
-                      color: color,
-                      fontWeight: 700,
-                      fontSize: 14.5,
-                      padding: '10px 22px',
-                      borderRadius: 9,
-                      cursor: enrolling ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {enrolling ? 'Inscribiendo...' : 'Inscribirse'}
-                  </button>
-                  {enrollError && (
-                    <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.95 }}>
-                      {enrollError}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+        {course.course && (
+          <div style={{ fontSize: 14, opacity: 0.9, marginTop: 6 }}>
+            {course.course.name} · {course.course.academicYear}
           </div>
-        ) : (
+        )}
           <>
             <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
               <span>Progreso {pct}%</span>
@@ -306,7 +226,6 @@ export function CourseDetailPage() {
               />
             </div>
           </>
-        )}
       </div>
 
       {(() => {
@@ -340,7 +259,7 @@ export function CourseDetailPage() {
                     return (
                       <div
                         key={l.id}
-                        onClick={() => !isNotEnrolled && navigate(`/courses/${courseId}/lessons/${l.id}`)}
+                        onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}/lessons/${l.id}`)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -395,7 +314,7 @@ export function CourseDetailPage() {
           </div>
         );
 
-        if (isNotEnrolled || !courseId) {
+        if (!courseId || !subjectId) {
           return lessonListContent;
         }
 
@@ -407,18 +326,18 @@ export function CourseDetailPage() {
                   id: 'content',
                   label: 'Contenido',
                   content: editing
-                    ? <ContentEditor courseId={courseId} />
+                    ? <ContentEditor courseId={subjectId ?? ''} />
                     : lessonListContent,
                 },
                 {
                   id: 'students',
                   label: 'Alumnos',
-                  content: <RosterPage courseId={courseId} />,
+                  content: <RosterPage courseId={subjectId ?? ''} />,
                 },
                 {
                   id: 'resources',
                   label: 'Recursos',
-                  content: <CourseResourcesTab courseId={courseId} showStaffStatus />,
+                  content: <CourseResourcesTab courseId={subjectId ?? ''} showStaffStatus />,
                 },
               ] satisfies TabItem[]}
             />
@@ -432,7 +351,7 @@ export function CourseDetailPage() {
               {
                 id: 'resources',
                 label: 'Recursos',
-                content: <CourseResourcesTab courseId={courseId} />,
+                content: <CourseResourcesTab courseId={subjectId ?? ''} />,
               },
             ] satisfies TabItem[]}
           />
@@ -464,10 +383,6 @@ export function CourseDetailPage() {
         <div style={{ height: 12 }} />
         <FormField label="Categoría">
           {(f) => <input {...f} value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }} />}
-        </FormField>
-        <div style={{ height: 12 }} />
-        <FormField label="Código de acceso">
-          {(f) => <input {...f} value={editAccessCode} onChange={(e) => setEditAccessCode(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }} />}
         </FormField>
       </Modal>
 

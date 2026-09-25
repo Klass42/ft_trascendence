@@ -2,7 +2,7 @@ import { mapAssignment, mapSubmission } from './assignment-mapper';
 
 const assignment = {
   id: 'asg-1',
-  courseId: 'course-web-101',
+  subjectId: 'course-web-101',
   title: 'Práctica 1',
   description: 'Entrega el informe',
   openAt: new Date('2026-09-01T00:00:00Z'),
@@ -16,7 +16,7 @@ describe('mapAssignment', () => {
     const mapped = mapAssignment({ assignment, hasStudentFiles: false });
 
     expect(mapped).toMatchObject({
-      courseId: 'course-web-101',
+      subjectId: 'course-web-101',
       title: 'Práctica 1',
       description: 'Entrega el informe',
       openAt: assignment.openAt,

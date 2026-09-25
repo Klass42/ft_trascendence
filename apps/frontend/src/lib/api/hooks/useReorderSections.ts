@@ -20,7 +20,7 @@ export function useReorderSections(): UseReorderSectionsResult {
       setError(null);
       try {
         await apiClient.patch(
-          `/courses/${courseId}/sections/reorder?organizationId=${orgId}`,
+          `/subjects/${courseId}/sections/reorder?organizationId=${orgId}`,
           { orderedIds },
         );
       } catch (err) {

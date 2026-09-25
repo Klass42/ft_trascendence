@@ -52,7 +52,7 @@ async function migrate() {
 
     const activity = await prisma.activity.create({
       data: {
-        courseId: mapped.courseId,
+        subjectId: mapped.subjectId,
         title: mapped.title,
         description: mapped.description,
         openAt: mapped.openAt,

@@ -2,14 +2,15 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { CourseRole, CourseStatus, QuestionKind } from '@prisma/client';
+import { PublicationStatus, QuestionKind } from '@prisma/client';
 import { ActivitiesService } from './activities.service';
+import { accessFromPrisma } from '../test/access-from-prisma';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { UpdateActivityDto } from './dto/update-activity.dto';
 import type { CreateQuestionDto } from './dto/create-question.dto';
 
 describe('ActivitiesService.validateQuestionContent', () => {
-  const svc = new ActivitiesService({} as unknown as PrismaService);
+  const svc = new ActivitiesService({} as unknown as PrismaService, {} as never);
   const ok = (kind: QuestionKind, content: unknown) =>
     expect(() => svc.validateQuestionContent(kind, content)).not.toThrow();
   const bad = (kind: QuestionKind, content: unknown) =>
@@ -97,7 +98,7 @@ describe('ActivitiesService tenancy', () => {
             ? {
                 id: ACTIVITY,
                 courseId: COURSE,
-                status: CourseStatus.PUBLISHED,
+                status: PublicationStatus.PUBLISHED,
                 course: { id: COURSE, organizationId: 'org-klass-0001' },
               }
             : null,
@@ -112,14 +113,15 @@ describe('ActivitiesService tenancy', () => {
         // Only the teacher is enrolled; strangers get no enrollment.
         findUnique: async ({ where }: any) =>
           where.courseId_userId.userId === 'user-diego-001'
-            ? { role: CourseRole.TEACHER }
+            ? { role: 'TEACHER' as never }
             : null,
       },
     } as unknown as PrismaService;
   }
 
   it('treats a non-member as if the activity does not exist (404)', async () => {
-    const svc = new ActivitiesService(prismaFake());
+    const prisma = prismaFake();
+    const svc = new ActivitiesService(prisma, accessFromPrisma(prisma));
     await expect(svc.findOne(ACTIVITY, 'stranger-999')).rejects.toThrow(
       /not found/i,
     );
@@ -171,8 +173,8 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
         findUnique: async ({ where }: any) => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE) return null;
-          if (userId === TEACHER) return { role: CourseRole.TEACHER };
-          if (userId === STUDENT) return { role: CourseRole.STUDENT };
+          if (userId === TEACHER) return { role: 'TEACHER' as never };
+          if (userId === STUDENT) return { role: 'STUDENT' as never };
           return null;
         },
       },
@@ -188,7 +190,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
             id: `act-${seq}`,
             maxScore: 0,
             countsTowardFinal: true,
-            status: CourseStatus.DRAFT,
+            status: PublicationStatus.DRAFT,
             type: 'QUIZ',
             description: null,
             openAt: null,
@@ -269,7 +271,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     };
 
     return {
-      service: new ActivitiesService(prisma as PrismaService),
+      service: new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma)),
       activities,
       questions,
       attempts,
@@ -358,10 +360,10 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     const created = await service.create(COURSE, TEACHER, { title: 'Vacía' });
 
     await expect(
-      service.update(created.id, TEACHER, { status: CourseStatus.PUBLISHED }),
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      service.update(created.id, TEACHER, { status: CourseStatus.PUBLISHED }),
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
     ).rejects.toThrow(/no se puede publicar vacía/);
   });
 });

@@ -1,6 +1,7 @@
-import { CourseRole, SubmissionStatus, NotificationType } from '@prisma/client';
+import { SubmissionStatus, NotificationType } from '@prisma/client';
 import { SubmissionsService } from './submissions.service';
 import { AssignmentsService } from '../assignments.service';
+import { accessFromPrisma } from '../../test/access-from-prisma';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { NotificationsService } from '../../notifications/notifications.service';
 
@@ -33,9 +34,9 @@ describe('SubmissionsService', () => {
       assignment: {
         findUnique: async ({ where }: any) => {
           const base = {
-            courseId: COURSE_ID,
+            subjectId: COURSE_ID,
             title: 'Práctica 1',
-            course: { id: COURSE_ID, organizationId: ORG_ID },
+            subject: { id: COURSE_ID, organizationId: ORG_ID, courseId: COURSE_ID },
           };
           if (where.id === ASSIGNMENT_ID) {
             return { ...base, id: ASSIGNMENT_ID, dueAt: new Date(2999, 0, 1) }; // far future → not LATE
@@ -58,14 +59,17 @@ describe('SubmissionsService', () => {
           return null;
         },
       },
+      subjectStaff: {
+        findMany: async () => [{ userId: TEACHER }],
+      },
       enrollment: {
         findUnique: async ({ where }: any) => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE_ID) return null;
           if (userId === STUDENT)
-            return { courseId, userId, role: CourseRole.STUDENT };
+            return { courseId, userId, role: 'STUDENT' as never };
           if (userId === TEACHER)
-            return { courseId, userId, role: CourseRole.TEACHER };
+            return { courseId, userId, role: 'TEACHER' as never };
           return null;
         },
         findMany: async ({ where }: any) =>
@@ -130,7 +134,7 @@ describe('SubmissionsService', () => {
       },
     } as unknown as NotificationsService;
 
-    const assignments = new AssignmentsService(prisma);
+    const assignments = new AssignmentsService(prisma, accessFromPrisma(prisma));
     const service = new SubmissionsService(prisma, assignments, notifications);
 
     const result = await service.submit(ASSIGNMENT_ID, STUDENT, {
@@ -159,7 +163,7 @@ describe('SubmissionsService', () => {
     const notifications = {
       emit: async () => ({ id: 'n-1' }),
     } as unknown as NotificationsService;
-    const assignments = new AssignmentsService(prisma);
+    const assignments = new AssignmentsService(prisma, accessFromPrisma(prisma));
     const service = new SubmissionsService(prisma, assignments, notifications);
 
     await expect(
@@ -175,7 +179,7 @@ describe('SubmissionsService', () => {
     const notifications = {
       emit: async () => ({ id: 'n-1' }),
     } as unknown as NotificationsService;
-    const assignments = new AssignmentsService(prisma);
+    const assignments = new AssignmentsService(prisma, accessFromPrisma(prisma));
     const service = new SubmissionsService(prisma, assignments, notifications);
 
     await expect(
@@ -191,7 +195,7 @@ describe('SubmissionsService', () => {
     const notifications = {
       emit: async () => ({ id: 'n-1' }),
     } as unknown as NotificationsService;
-    const assignments = new AssignmentsService(prisma);
+    const assignments = new AssignmentsService(prisma, accessFromPrisma(prisma));
     const service = new SubmissionsService(prisma, assignments, notifications);
 
     const draft = await service.submit(ASSIGNMENT_NOT_OPEN, STUDENT, {

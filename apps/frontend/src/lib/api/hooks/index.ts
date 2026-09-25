@@ -13,6 +13,7 @@ export { useAttachFile } from './useAttachFile';
 export { useDetachFile } from './useDetachFile';
 export { useUpcomingAssignments } from './useUpcomingAssignments';
 export { useCourses } from './useCourses';
+export { useMySubjects } from './useMySubjects';
 export { useCourseDetail } from './useCourseDetail';
 export { useCoursePreview } from './useCoursePreview';
 export { useSections } from './useSections';

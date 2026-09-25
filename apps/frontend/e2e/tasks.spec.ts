@@ -66,7 +66,7 @@ async function createPublishedMixed(
   },
 ): Promise<{ activity: ActivityDTO; questions: QuestionDTO[] }> {
   const courseId = opts.courseId ?? COURSE_ID;
-  const created = await request.post(`${API}/courses/${courseId}/activities`, {
+  const created = await request.post(`${API}/subjects/${courseId}/activities`, {
     headers: jsonHeaders(TEACHER),
     data: {
       title: opts.title,
@@ -242,7 +242,7 @@ test.describe('Tareas — unified E2E', () => {
     await page.goto('/assignments');
     await expect(page).toHaveURL(/\/activities/);
 
-    const gone = await request.post(`${API}/courses/${COURSE_ID}/assignments`, {
+    const gone = await request.post(`${API}/subjects/${COURSE_ID}/assignments`, {
       headers: jsonHeaders(TEACHER),
       data: { title: 'no-op' },
     });
@@ -422,7 +422,7 @@ test.describe('Tareas — unified E2E', () => {
       timeout: 8000,
     });
 
-    const copiesRes = await request.get(`${API}/courses/${otherCourse.id}/activities`, {
+    const copiesRes = await request.get(`${API}/subjects/${otherCourse.id}/activities`, {
       headers: { 'x-dev-user': TEACHER },
     });
     const copies = ((await copiesRes.json()) as ActivityDTO[]).filter((a) => a.title === title);
@@ -449,7 +449,7 @@ test.describe('Tareas — unified E2E', () => {
     page,
     request,
   }) => {
-    const beforeRes = await request.get(`${API}/courses/${COURSE_ID}/grades/me`, {
+    const beforeRes = await request.get(`${API}/subjects/${COURSE_ID}/grades/me`, {
       headers: { 'x-dev-user': STUDENT },
     });
     expect(beforeRes.ok()).toBeTruthy();
@@ -501,7 +501,7 @@ test.describe('Tareas — unified E2E', () => {
     await expect(page.getByText('1/1').first()).toBeVisible();
     await expect(page.getByText('Práctica').first()).toBeVisible();
 
-    const afterRes = await request.get(`${API}/courses/${COURSE_ID}/grades/me`, {
+    const afterRes = await request.get(`${API}/subjects/${COURSE_ID}/grades/me`, {
       headers: { 'x-dev-user': STUDENT },
     });
     const after = (await afterRes.json()) as MyGradesDTO;
@@ -642,7 +642,7 @@ test.describe('Tareas — unified E2E', () => {
     });
     expect(activity.status()).toBe(404);
 
-    const instantiate = await request.post(`${API}/courses/${COURSE_ID}/activities`, {
+    const instantiate = await request.post(`${API}/subjects/${COURSE_ID}/activities`, {
       headers: jsonHeaders(orgBUser),
       data: { title: 'cross-org', templateId: orgATemplate },
     });

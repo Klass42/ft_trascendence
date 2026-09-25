@@ -36,7 +36,7 @@ export function useGradebook(courseId: string | null): UseGradebookResult {
     setError(null);
 
     apiClient
-      .get<GradebookDTO>(`/courses/${courseId}/gradebook`)
+      .get<GradebookDTO>(`/subjects/${courseId}/gradebook`)
       .then((result) => {
         if (!cancelled) setData(result);
       })
@@ -67,7 +67,7 @@ export async function downloadGradebookCsv(
   courseId: string,
   filename = `gradebook-${courseId}.csv`,
 ): Promise<void> {
-  const csv = await apiClient.get<string>(`/courses/${courseId}/gradebook.csv`);
+  const csv = await apiClient.get<string>(`/subjects/${courseId}/gradebook.csv`);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -33,7 +33,7 @@ export function useActivities(courseId: string | null): UseActivitiesResult {
     setIsLoading(true);
     setError(null);
     apiClient
-      .get<ActivityDTO[]>(`/courses/${courseId}/activities`)
+      .get<ActivityDTO[]>(`/subjects/${courseId}/activities`)
       .then((r) => !cancelled && setData(r))
       .catch((err) => {
         if (!cancelled) {

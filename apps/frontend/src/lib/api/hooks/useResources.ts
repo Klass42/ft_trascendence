@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
 import type {
-  CourseResourceDTO,
+  SubjectResourceDTO,
   LearningResourceDTO,
   LearningResourceStatus,
   LearningResourceType,
@@ -51,7 +51,7 @@ export function useResources(filters: ResourceFilters = {}) {
 
 export function useCourseResources(courseId: string | undefined, filters: Omit<ResourceFilters, 'status'> = {}) {
   const { user } = useAuth();
-  const [data, setData] = useState<CourseResourceDTO[] | null>(null);
+  const [data, setData] = useState<SubjectResourceDTO[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const search = filters.search ?? '';
@@ -69,7 +69,7 @@ export function useCourseResources(courseId: string | undefined, filters: Omit<R
     if (search) params.set('search', search);
     if (type) params.set('type', type);
     try {
-      const result = await apiClient.get<CourseResourceDTO[]>(`/courses/${courseId}/resources?${params}`);
+      const result = await apiClient.get<SubjectResourceDTO[]>(`/subjects/${courseId}/resources?${params}`);
       setData(result);
     } catch (err) {
       setError(err as Error);

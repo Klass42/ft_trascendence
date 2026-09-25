@@ -17,33 +17,33 @@ import { SearchForumDto } from './dto/search-forum.dto';
 export class ForumsController {
   constructor(private readonly forums: ForumsService) {}
 
-  @Get('courses/:courseId/forum/threads')
+  @Get('subjects/:subjectId/forum/threads')
   async listThreads(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.forums.listThreads(courseId, user.userId);
+    return this.forums.listThreads(subjectId, user.userId);
   }
 
-  @Post('courses/:courseId/forum/threads')
+  @Post('subjects/:subjectId/forum/threads')
   async createThread(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateThreadDto,
   ) {
-    return this.forums.createThread(courseId, user.userId, dto);
+    return this.forums.createThread(subjectId, user.userId, dto);
   }
 
   // Declared before the parametrised search-less routes so Nest's router does
   // not treat "search" as a courseId — but these live under distinct paths so
   // order is not actually load-bearing here.
-  @Get('courses/:courseId/forum/search')
+  @Get('subjects/:subjectId/forum/search')
   async search(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Query() query: SearchForumDto,
   ) {
-    return this.forums.search(courseId, user.userId, query.q);
+    return this.forums.search(subjectId, user.userId, query.q);
   }
 
   @Get('threads/:id')

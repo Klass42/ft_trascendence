@@ -29,18 +29,18 @@ test.describe('Content builder (TEACHER)', () => {
   });
 
   test('teacher sees Modo edición button', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await expect(page.getByRole('button', { name: 'Modo edición' })).toBeVisible({ timeout: 8000 });
   });
 
   test('student does not see Modo edición button', async ({ page }) => {
     await actAs(page, STUDENT);
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await expect(page.getByRole('button', { name: 'Modo edición' })).toHaveCount(0);
   });
 
   test('adds a section', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
     await expect(page.getByText('Estructura del curso')).toBeVisible();
 
@@ -55,7 +55,7 @@ test.describe('Content builder (TEACHER)', () => {
   // TODO(aloiki): broken selector — input.filter({has:[value=…]}) is invalid (inputs
   // have no descendants). Feature works (Renombrar→input→Guardar). Use input:focus and re-enable.
   test.fixme('renames a section', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
 
     // First add a section
@@ -74,7 +74,7 @@ test.describe('Content builder (TEACHER)', () => {
   });
 
   test('adds a lesson to a section', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
 
     await page.getByRole('button', { name: '+ Añadir sección' }).click();
@@ -94,7 +94,7 @@ test.describe('Content builder (TEACHER)', () => {
   // TODO(aloiki): fragile selectors — getByText('Título').locator('..').locator('input')
   // depends on FormField nesting + shared-course state across tests. Feature works. Re-enable after hardening.
   test.fixme('edits a lesson title, content, and video', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
 
     // Ensure a section with a lesson exists
@@ -135,7 +135,7 @@ test.describe('Content builder (TEACHER)', () => {
   // TODO(aloiki): fragile — depends on Eliminar-button ordering and shared-course state.
   // Feature works (ConfirmDialog delete). Scope to the lesson row and re-enable.
   test.fixme('deletes a lesson', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
 
     // Find any lesson's Eliminar button
@@ -167,7 +167,7 @@ test.describe('Content builder (TEACHER)', () => {
   // TODO(aloiki): fragile — Eliminar .first() + shared-course state across tests.
   // Feature works. Scope to a specific section header and re-enable.
   test.fixme('deletes a section', async ({ page }) => {
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
 
     // Find the section header's "Eliminar" button
@@ -191,7 +191,7 @@ test.describe('Content builder (TEACHER)', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
-    await page.goto(`/courses/${courseId}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${courseId}`);
     await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
     await expect(page.getByText('Estructura del curso')).toBeVisible({ timeout: 5000 });
     expect(errors).toEqual([]);

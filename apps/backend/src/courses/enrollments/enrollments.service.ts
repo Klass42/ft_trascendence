@@ -1,196 +1,44 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CourseRole } from '@prisma/client';
 import { AuthUser } from '@/common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EnrollCourseDto } from './dto/enroll-course.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Injectable()
 export class EnrollmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async findCourseOrThrow(courseId: string, organizationId: string) {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-    if (!course || course.organizationId !== organizationId) {
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-    return course;
-  }
-
-  async enroll(
-    courseId: string,
-    organizationId: string,
-    userId: string,
-    dto: EnrollCourseDto,
-  ) {
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    const course = await this.findCourseOrThrow(courseId, organizationId);
-
-    if (course.status !== 'PUBLISHED') {
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    if (course.accessCode) {
-      if (!dto.accessCode || dto.accessCode !== course.accessCode) {
-        throw new NotFoundException(`Course ${courseId} not found`);
-      }
-    }
-
-    const existing = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId } },
-    });
-
-    if (existing) {
-      throw new ConflictException('Already enrolled');
-    }
-
-    // Never manufacture a user from a client-controlled id. Besides producing
-    // unusable accounts, that used to make enrollment an identity-creation API.
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, organizationId: true },
-    });
-    if (!user || user.organizationId !== organizationId) {
-      throw new NotFoundException('User not found in this organization');
-    }
-
-    const enrollment = await this.prisma.enrollment.create({
-      data: { courseId, userId },
-    });
-
-    await this.recalculateProgress(courseId, userId);
-
-    return this.prisma.enrollment.findUniqueOrThrow({
-      where: { id: enrollment.id },
-    });
-  }
-
-  async unenroll(
-    courseId: string,
-    organizationId: string,
-    userId: string,
-  ) {
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    await this.findCourseOrThrow(courseId, organizationId);
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId } },
-    });
-
-    if (!enrollment) {
-      throw new NotFoundException('Enrollment not found');
-    }
-
-    await this.prisma.enrollment.delete({
-      where: { courseId_userId: { courseId, userId } },
-    });
-  }
-
-  async findAll(courseId: string, organizationId: string) {
-    await this.findCourseOrThrow(courseId, organizationId);
-
-    return this.prisma.enrollment.findMany({
-      where: { courseId },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async updateRole(
-    enrollmentId: string,
-    organizationId: string,
-    dto: UpdateRoleDto,
-  ) {
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
-      include: { course: true },
-    });
-
-    if (!enrollment || enrollment.course.organizationId !== organizationId) {
-      throw new NotFoundException(`Enrollment ${enrollmentId} not found`);
-    }
-
-    return this.prisma.enrollment.update({
-      where: { id: enrollmentId },
-      data: { role: dto.role },
-    });
-  }
-
-  /** Resolves the course that owns an enrollment with tenant isolation. */
-  async findEnrollmentCourseId(enrollmentId: string, organizationId: string) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
-      include: { course: true },
-    });
-
-    if (!enrollment || enrollment.course.organizationId !== organizationId) {
-      throw new NotFoundException(`Enrollment ${enrollmentId} not found`);
-    }
-
-    return enrollment.courseId;
-  }
-
-  /** Resolves a lesson's course with tenant isolation for controller guards. */
-  async findLessonCourseId(lessonId: string, organizationId: string) {
+  /** Resolves a lesson's subject with tenant isolation for controller guards. */
+  async findLessonSubjectId(lessonId: string, organizationId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
       select: {
         section: {
           select: {
-            courseId: true,
-            course: { select: { organizationId: true } },
+            subjectId: true,
+            subject: { select: { organizationId: true } },
           },
         },
       },
     });
 
-    if (!lesson || lesson.section.course.organizationId !== organizationId) {
+    if (!lesson || lesson.section.subject.organizationId !== organizationId) {
       throw new NotFoundException(`Lesson ${lessonId} not found`);
     }
 
-    return { courseId: lesson.section.courseId };
+    return { subjectId: lesson.section.subjectId };
   }
 
-  async completeLesson(
-    lessonId: string,
-    organizationId: string,
-    userId: string,
-  ) {
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
+  async completeLesson(lessonId: string, organizationId: string, userId: string) {
+    this.requireIds(userId, organizationId);
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      include: { section: { include: { course: true } } },
+      include: { section: { include: { subject: true } } },
     });
-
-    if (
-      !lesson ||
-      lesson.section.course.organizationId !== organizationId
-    ) {
+    if (!lesson || lesson.section.subject.organizationId !== organizationId) {
       throw new NotFoundException(`Lesson ${lessonId} not found`);
-    }
-
-    const courseId = lesson.section.courseId;
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId } },
-    });
-
-    if (!enrollment) {
-      throw new NotFoundException('Not enrolled in this course');
     }
 
     await this.prisma.lessonCompletion.upsert({
@@ -199,121 +47,78 @@ export class EnrollmentsService {
       update: {},
     });
 
-    const progress = await this.recalculateProgress(courseId, userId);
-
-    return { completed: true, progress };
+    const progress = await this.computeProgress(lesson.section.subjectId, userId);
+    return { completed: true, progress: progress.progress };
   }
 
-  async getProgress(
-    courseId: string,
-    organizationId: string,
-    userId: string,
-  ) {
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    await this.findCourseOrThrow(courseId, organizationId);
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId } },
-    });
-
-    if (!enrollment) {
-      throw new NotFoundException('Not enrolled in this course');
-    }
-
-    const total = await this.prisma.lesson.count({
-      where: { section: { courseId } },
-    });
-
-    const completed = await this.prisma.lessonCompletion.count({
-      where: { userId, lesson: { section: { courseId } } },
-    });
-
-    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    return { progress, completed, total };
+  async getProgress(subjectId: string, organizationId: string, userId: string) {
+    this.requireIds(userId, organizationId);
+    await this.requireSubject(subjectId, organizationId);
+    return this.computeProgress(subjectId, userId);
   }
 
-  async getCompletedLessonIds(
-    courseId: string,
-    organizationId: string,
-    userId: string,
-  ) {
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    await this.findCourseOrThrow(courseId, organizationId);
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId } },
-    });
-
-    if (!enrollment) {
-      throw new NotFoundException('Not enrolled in this course');
-    }
-
+  async getCompletedLessonIds(subjectId: string, organizationId: string, userId: string) {
+    this.requireIds(userId, organizationId);
+    await this.requireSubject(subjectId, organizationId);
     const completions = await this.prisma.lessonCompletion.findMany({
-      where: { userId, lesson: { section: { courseId } } },
+      where: { userId, lesson: { section: { subjectId } } },
       select: { lessonId: true },
     });
-
-    return completions.map(c => c.lessonId);
+    return completions.map((completion) => completion.lessonId);
   }
 
+  /**
+   * Progress for every subject the caller can see, computed from lesson
+   * completions. Nothing is stored on the membership.
+   */
   async getMyProgress(user: AuthUser) {
-    const { organizationId, userId } = user;
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!organizationId) throw new BadRequestException('organizationId is required');
-
-    const enrollments = await this.prisma.enrollment.findMany({
+    this.requireIds(user.userId, user.organizationId);
+    const subjects = await this.prisma.subject.findMany({
       where: {
-        userId,
-        course: {
-          organizationId,
-          ...(user.role === 'ADMIN'
-            ? {}
+        organizationId: user.organizationId,
+        ...(user.role === 'ADMIN'
+          ? {}
+          : user.role === 'TEACHER'
+            ? { staff: { some: { userId: user.userId } } }
             : {
-                OR: [
-                  { status: 'PUBLISHED' },
-                  { ownerId: userId },
-                  {
-                    enrollments: {
-                      some: {
-                        userId,
-                        role: { in: [CourseRole.TEACHER, CourseRole.ASSISTANT] },
-                      },
-                    },
-                  },
-                ],
+                status: 'PUBLISHED',
+                course: { memberships: { some: { userId: user.userId } } },
               }),
-        },
       },
-      select: { courseId: true, progress: true },
+      select: { id: true, courseId: true },
     });
 
-    return enrollments.map(e => ({
-      courseId: e.courseId,
-      percentage: e.progress,
+    return Promise.all(subjects.map(async (subject) => {
+      const progress = await this.computeProgress(subject.id, user.userId);
+      return {
+        subjectId: subject.id,
+        courseId: subject.courseId,
+        percentage: progress.progress,
+      };
     }));
   }
 
-  private async recalculateProgress(courseId: string, userId: string) {
+  private async computeProgress(subjectId: string, userId: string) {
     const total = await this.prisma.lesson.count({
-      where: { section: { courseId } },
+      where: { section: { subjectId } },
     });
-
     const completed = await this.prisma.lessonCompletion.count({
-      where: { userId, lesson: { section: { courseId } } },
+      where: { userId, lesson: { section: { subjectId } } },
     });
-
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { progress, completed, total };
+  }
 
-    await this.prisma.enrollment.update({
-      where: { courseId_userId: { courseId, userId } },
-      data: { progress },
+  private async requireSubject(subjectId: string, organizationId: string) {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id: subjectId, organizationId },
     });
+    if (!subject) throw new NotFoundException(`Subject ${subjectId} not found`);
+    return subject;
+  }
 
-    return progress;
+  private requireIds(userId: string, organizationId: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!organizationId) throw new BadRequestException('organizationId is required');
   }
 }

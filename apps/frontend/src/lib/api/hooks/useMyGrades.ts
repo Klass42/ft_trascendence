@@ -36,7 +36,7 @@ export function useMyGrades(courseId: string | null): UseMyGradesResult {
     setError(null);
 
     apiClient
-      .get<MyGradesDTO>(`/courses/${courseId}/grades/me`)
+      .get<MyGradesDTO>(`/subjects/${courseId}/grades/me`)
       .then((result) => {
         if (!cancelled) setData(result);
       })

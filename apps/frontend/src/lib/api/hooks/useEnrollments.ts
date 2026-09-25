@@ -2,12 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
 
-/** Enrollment row as returned by GET /courses/:id/enrollments (no user include). */
+/** Student of the parent cohort, from GET /subjects/:id/members. */
 export interface EnrollmentRow {
   id: string;
   userId: string;
   courseId: string;
-  role: 'TEACHER' | 'ASSISTANT' | 'STUDENT';
   progress: number;
   createdAt: string;
 }
@@ -37,7 +36,7 @@ export function useEnrollments(courseId: string | undefined): UseEnrollmentsResu
     setIsLoading(true);
     apiClient
       .get<EnrollmentRow[]>(
-        `/courses/${courseId}/enrollments?organizationId=${user.organizationId}`,
+        `/subjects/${courseId}/members?organizationId=${user.organizationId}`,
       )
       .then((d) => { if (!cancelled) setData(d); })
       .catch((e) => { if (!cancelled) setError(e as Error); })

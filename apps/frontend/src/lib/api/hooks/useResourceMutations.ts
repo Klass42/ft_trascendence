@@ -34,8 +34,8 @@ export function useResourceMutations() {
       run(() => apiClient.patch<LearningResourceDTO>(`/resources/${id}`, input)),
     remove: (id: string) => run(() => apiClient.delete<void>(`/resources/${id}`)),
     publishToCourse: (id: string, input: PublishResourceInput) =>
-      run(() => apiClient.post(`/resources/${id}/courses`, input)),
-    removeFromCourse: (id: string, courseId: string) =>
-      run(() => apiClient.delete<void>(`/resources/${id}/courses/${courseId}`)),
+      run(() => apiClient.post(`/resources/${id}/subjects`, input)),
+    removeFromCourse: (id: string, subjectId: string) =>
+      run(() => apiClient.delete<void>(`/resources/${id}/subjects/${subjectId}`)),
   };
 }

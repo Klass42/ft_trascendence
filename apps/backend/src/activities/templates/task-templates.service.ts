@@ -9,7 +9,7 @@ import {
   QuestionKind,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { STAFF_ROLES } from '../activities.service';
+import { CourseAccessService } from '../../courses/course-access.service';
 import { getAdapter } from '../blocks/registry';
 import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
 import { SaveAsTemplateDto } from './dto/save-as-template.dto';
@@ -25,7 +25,10 @@ export type TemplateBlock = {
 
 @Injectable()
 export class TaskTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: CourseAccessService,
+  ) {}
 
   async create(actingUserId: string, dto: CreateTaskTemplateDto) {
     const user = await this.requireOrgUser(actingUserId);
@@ -91,7 +94,7 @@ export class TaskTemplatesService {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
       include: {
-        course: true,
+        subject: true,
         questions: { orderBy: { order: 'asc' } },
       },
     });
@@ -99,17 +102,7 @@ export class TaskTemplatesService {
       throw new NotFoundException(`Activity ${activityId} not found`);
     }
 
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: {
-        courseId_userId: { courseId: activity.courseId, userId: actingUserId },
-      },
-    });
-    if (!enrollment) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
-    }
-    if (!STAFF_ROLES.includes(enrollment.role)) {
-      throw new ForbiddenException('Only course staff can perform this action');
-    }
+    await this.access.assertSubjectStaffForUser(activity.subjectId, actingUserId);
 
     const blocks: TemplateBlock[] = activity.questions.map((q) => ({
       kind: q.kind,
@@ -122,7 +115,7 @@ export class TaskTemplatesService {
 
     return this.prisma.taskTemplate.create({
       data: {
-        organizationId: activity.course.organizationId,
+        organizationId: activity.subject.organizationId,
         createdById: actingUserId,
         title: dto?.title ?? activity.title,
         description:
@@ -157,11 +150,10 @@ export class TaskTemplatesService {
     if (user.role === GlobalRole.TEACHER || user.role === GlobalRole.ADMIN) {
       return;
     }
-    const staff = await this.prisma.enrollment.findFirst({
+    const staff = await this.prisma.subjectStaff.findFirst({
       where: {
         userId: user.id,
-        role: { in: STAFF_ROLES },
-        course: { organizationId: user.organizationId },
+        subject: { organizationId: user.organizationId },
       },
     });
     if (!staff) {

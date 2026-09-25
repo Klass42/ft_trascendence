@@ -25,21 +25,21 @@ import { ReorderQuestionsDto } from './dto/reorder-questions.dto';
 export class ActivitiesController {
   constructor(private readonly activities: ActivitiesService) {}
 
-  @Post('courses/:courseId/activities')
+  @Post('subjects/:subjectId/activities')
   create(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateActivityDto,
   ) {
-    return this.activities.create(courseId, user.userId, dto);
+    return this.activities.create(subjectId, user.userId, dto);
   }
 
-  @Get('courses/:courseId/activities')
+  @Get('subjects/:subjectId/activities')
   findAll(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.activities.findAllForCourse(courseId, user.userId);
+    return this.activities.findAllForCourse(subjectId, user.userId);
   }
 
   @Get('me/teaching/activities')

@@ -14,6 +14,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 // ── Content & UX — illia ──
+import { CourseAccessModule } from './courses/course-access.module';
 import { CoursesModule } from './courses/courses.module';
 import { FilesModule } from './files/files.module';
 import { ResourcesModule } from './resources/resources.module';
@@ -40,6 +41,7 @@ import { PlatformModule } from './platform/platform.module';
     AuthModule,
     UsersModule,
     OrganizationsModule,
+    CourseAccessModule,
     CoursesModule,
     FilesModule,
     ResourcesModule,

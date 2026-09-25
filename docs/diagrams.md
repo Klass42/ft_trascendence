@@ -25,7 +25,9 @@ flowchart TB
 
   subgraph content["Cursos y contenido"]
     Course
-    Enrollment
+    Subject
+    CourseMembership
+    SubjectStaff
     Section
     Lesson
     LearningResource
@@ -52,12 +54,16 @@ flowchart TB
 
   Organization --> User
   Organization --> Course
+  Organization --> Subject
   Organization --> TaskTemplate
   Organization --> File
-  User --> Enrollment
-  Course --> Enrollment
-  Course --> Activity
-  Course --> Assignment
+  User --> CourseMembership
+  User --> SubjectStaff
+  Course --> Subject
+  Course --> CourseMembership
+  Subject --> SubjectStaff
+  Subject --> Activity
+  Subject --> Assignment
   Activity --> Question
   Activity --> Attempt
   Attempt --> Answer
@@ -72,22 +78,26 @@ Tenancy: `organizationId` en org, usuario, fichero y plantilla. El resto se aís
 ```mermaid
 erDiagram
   Organization ||--o{ User : members
-  Organization ||--o{ Course : offers
+  Organization ||--o{ Course : cohorts
+  Organization ||--o{ Subject : subjects
   Organization ||--o{ File : stores
   Organization ||--o{ TaskTemplate : recipes
   Organization ||--o{ LearningResource : library
 
-  User ||--o{ Enrollment : enrolls
+  User ||--o{ CourseMembership : "student of cohort"
+  User ||--o{ SubjectStaff : "teaches subject"
   User ||--o{ Session : sessions
   User ||--o{ Friendship : friends
   User ||--o{ Notification : inbox
 
-  Course ||--o{ Enrollment : roster
-  Course ||--o{ Section : outline
-  Course ||--o{ Activity : tasks
-  Course ||--o{ Assignment : legacy
-  Course ||--o{ ForumThread : forum
-  Course ||--o{ CourseResource : library
+  Course ||--o{ Subject : contains
+  Course ||--o{ CourseMembership : roster
+  Subject ||--o{ SubjectStaff : staff
+  Subject ||--o{ Section : outline
+  Subject ||--o{ Activity : tasks
+  Subject ||--o{ Assignment : legacy
+  Subject ||--o{ ForumThread : forum
+  Subject ||--o{ SubjectResource : library
 
   Section ||--o{ Lesson : lessons
   Lesson ||--o{ LessonCompletion : done
@@ -110,17 +120,27 @@ erDiagram
   Course {
     string id PK
     string organizationId FK
-    string ownerId FK
-    string title
-    string status
-    string accessCode
+    string name
+    string academicYear
+    string status "PLANNED ACTIVE ARCHIVED"
   }
-  Enrollment {
+  Subject {
+    string id PK
+    string organizationId FK
+    string courseId FK
+    string title
+    string status "DRAFT PUBLISHED ARCHIVED"
+  }
+  CourseMembership {
     string id PK
     string courseId FK
     string userId FK
-    string role
-    float progress
+  }
+  SubjectStaff {
+    string id PK
+    string subjectId FK
+    string userId FK
+    string role "TEACHER ASSISTANT"
   }
   File {
     string id PK
@@ -140,7 +160,7 @@ Tres objetos que no se mezclan: **plantilla** (receta), **actividad** (instancia
 erDiagram
   Organization ||--o{ TaskTemplate : owns
   User ||--o{ TaskTemplate : authors
-  Course ||--o{ Activity : publishes
+  Subject ||--o{ Activity : publishes
   Activity ||--o{ Question : blocks
   Activity ||--o{ Attempt : attempts
   Activity ||--o{ ActivityFile : promptFiles
@@ -160,7 +180,7 @@ erDiagram
   }
   Activity {
     string id PK
-    string courseId FK
+    string subjectId FK
     string title
     string status "DRAFT PUBLISHED ARCHIVED"
     boolean countsTowardFinal

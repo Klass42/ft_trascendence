@@ -2,10 +2,10 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
-import { CourseRole, SubmissionStatus, NotificationType } from '@prisma/client';
+import { SubmissionStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { AssignmentsService, STAFF_ROLES } from '../assignments.service';
+import { AssignmentsService } from '../assignments.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 
 @Injectable()
@@ -30,7 +30,7 @@ export class SubmissionsService {
     dto: CreateSubmissionDto,
   ) {
     // Any member of the course may submit (typically a student).
-    const { assignment, course } =
+    const { assignment, subject } =
       await this.assignments.requireAssignmentMembership(
         assignmentId,
         actingUserId,
@@ -66,7 +66,7 @@ export class SubmissionsService {
       const files = await this.prisma.file.findMany({
         where: {
           id: { in: fileIds },
-          organizationId: course.organizationId,
+          organizationId: subject.organizationId,
           uploaderId: actingUserId,
         },
         select: { id: true },
@@ -117,7 +117,7 @@ export class SubmissionsService {
       existing?.status === SubmissionStatus.SUBMITTED ||
       existing?.status === SubmissionStatus.LATE;
     if (!isDraft && !wasSubmitted) {
-      await this.notifyStaff(course.id, actingUserId, assignment.title, assignment.id);
+      await this.notifyStaff(subject.id, actingUserId, assignment.title, assignment.id);
     }
 
     return submission;
@@ -128,7 +128,7 @@ export class SubmissionsService {
     await this.assignments.requireAssignmentMembership(
       assignmentId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     return this.prisma.submission.findMany({
@@ -158,15 +158,14 @@ export class SubmissionsService {
 
   /** Emit NEW_ASSIGNMENT to every staff member of the course except the author. */
   private async notifyStaff(
-    courseId: string,
+    subjectId: string,
     authorId: string,
     assignmentTitle: string,
     assignmentId: string,
   ) {
-    const staff = await this.prisma.enrollment.findMany({
+    const staff = await this.prisma.subjectStaff.findMany({
       where: {
-        courseId,
-        role: { in: STAFF_ROLES as CourseRole[] },
+        subjectId,
         userId: { not: authorId },
       },
       select: { userId: true },
