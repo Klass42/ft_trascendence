@@ -23,16 +23,17 @@ real-time, modular. The subject explicitly lists an LMS as a valid example proje
 - **Jorge** (`@SrJorgeG`) — Tech Lead, Identity & Access (auth/RBAC/org).
 - **Aloiki** (`@illia`) — Content & UX (frontend shell + design system, courses, files).
 - **David** (`@dacs-dev`) — Interaction (evaluations, forums, notifications, real-time).
-- **Ale Pinto** (handle TBD) — **DevOps / Infra**: owns `infra/**`, `.github/**`, `scripts/**`,
-  `Makefile`, `flake.nix`, Dockerfiles, HTTPS/proxy, storage backend, CI/CD, monitoring, deploy.
+- **Viacheslav** (`@ViacheslavTrofymenko`, 42 login `vtrofyme`) — **DevOps / Infra**: owns
+  `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `compose.yaml`, `.env.example`, `flake.nix`,
+  Dockerfiles, HTTPS/proxy, storage backend, CI/CD, monitoring, deploy.
   **App devs do not touch infra.**
 
-Per-person deep task plans: `docs/planning/{Jorge,Aloiki,David,Ale}.md`;
+Per-person deep task plans: `docs/planning/{Jorge,Aloiki,David,vtrofyme}.md`;
 `docs/planning/README.md` is the combined master plan + directory-ownership map.
 
 ### Branching (see docs/planning/README.md §2)
 Trunk is **`master`** (the GitHub default). Each person has a personal branch off `master`
-(`jorge`/`aloiki`/`david`/`ale`); sub-branches per task are fine. **Nothing goes straight to
+(`jorge`/`aloiki`/`david`/`vtrofyme`); sub-branches per task are fine. **Nothing goes straight to
 `master` — flow is personal → `staging` → `master`.** `staging` is where branches integrate and
 get tested before `master`.
 
@@ -81,12 +82,12 @@ GDPR (Minor), 2FA (Minor), Advanced analytics dashboard (Major).
 | Frontend | **Vite 6 + React 19** (SPA) | Not Next.js. No SSR. Proxies `/api` → backend |
 | Backend | **NestJS 10** | OpenTelemetry pre-wired (`src/telemetry`) |
 | Data layer | **Prisma** (Postgres) | `apps/backend/prisma/schema.prisma` is the source of truth |
-| Database | **PostgreSQL 16** | `postgres` service in the dev compose |
+| Database | **PostgreSQL 16** | `postgres` service in `compose.yaml` |
 | Cache/Queue | Valkey + BullMQ | Planned, not scaffolded |
-| Object storage | Garage (S3-compatible) | Files stored as references, not blobs |
+| Object storage | Garage (S3-compatible) | Files stored as references, not blobs. Default driver is the local volume (`STORAGE_DRIVER`) |
 | Real-time | Socket.io via NestJS Gateway | |
-| Reverse proxy / HTTPS | Caddy (or nginx TLS) | Planned, not scaffolded |
-| Observability | OTel Collector → Prometheus + Tempo + Loki + Grafana | Built |
+| Reverse proxy / HTTPS | **Caddy 2** | Built — the only container that publishes ports |
+| Observability | OTel Collector → Prometheus + Tempo + Loki + Grafana, exporters, alert rules | Built — see `docs/infra/README.md` |
 | Dev env | Nix flake devShells + direnv | `dev` / `debug` / `ci` |
 
 **License policy**: prefer OSI-approved (MIT/BSD/Apache/AGPL). Avoid source-available
@@ -117,41 +118,43 @@ non-free (SSPL/BSL/RSAL) — this excludes post-2024 Redis and MongoDB. That's w
 ## 6. Repo layout & commands
 
 ```
-apps/backend      NestJS 10 API (OTel-instrumented). Only /, /health exist today.
-apps/frontend     Vite + React 19 SPA (currently a health dashboard).
-infra/docker      docker-compose.yml + .env.example (app + postgres + observability + Caddy).
-infra/monitoring  otel-collector, prometheus, tempo, loki, grafana configs + dashboards.
-infra/k8s         k8s manifests + HPA (aspirational; compose is the dev/eval path).
-infra/nix         Nix-built OCI images (backend/frontend).
-flake.nix         devShells: dev / debug / ci (entered via nix-portable, not a Nix install).
+apps/backend      NestJS 10 API (OTel-instrumented) + Dockerfile.
+apps/frontend     Vite + React 19 SPA + Dockerfile (static build served by nginx).
+compose.yaml      the whole stack: caddy, frontend, backend, postgres, garage, observability.
+.env.example      deployment settings and secrets template → `.env` (gitignored).
+infra/caddy       Caddyfile: TLS, routing, security headers.
+infra/garage      Garage (S3) node config.
+infra/monitoring  otel-collector, prometheus (+ alert rules), blackbox, tempo, loki, grafana.
+scripts/          gen-env.sh (make env), smoke.sh (make smoke), ci.sh (make ci).
+flake.nix         optional devShells: dev / debug / ci (entered via nix-portable).
 Makefile          task runner (see below).
-infra/docker/.env.example  single source of truth for ports, URLs, image tags, credentials.
+docs/infra        how the deployment works, runbook, evaluation demo.
 MVP_DESIGN.md     product plan (partly stale — see §1).
 ```
 
-Common commands (prefer the Makefile):
+Common commands (prefer the Makefile; plain `docker compose …` works too, from the repo root):
 
 ```bash
-make             # default: nix-portable + compose up --build from .env.example + seed
-make up          # same as `make`
+make             # deploy: create .env, build, start, seed demo data on first run
 make help        # list targets
-make down        # stop; make fclean also drops volumes
-make logs        # follow logs; make logs-backend for just the API
-make status      # compose ps
-make dev         # nix-portable → flake devShell (Node 22, pnpm, docker)
+make down        # stop (data kept); make fclean also drops volumes; make re = fclean + make
+make status      # service state and health
+make logs        # follow logs; make logs-backend for one service
+make smoke       # test the running stack through HTTPS
+make reload      # restart services after editing a mounted config (Caddyfile, Prometheus…)
+make db-seed     # REPLACE data with the standard demo (also -small / -large / -e2e)
+make db-migrate NAME=add_x   # create a Prisma migration
 make ci          # nix-portable → flake ci shell + scripts/ci.sh
-make env         # create infra/docker/.env from .env.example (local overlays)
 pnpm dev         # run apps in watch mode (parallel)
-pnpm -r run lint # lint all packages
 ```
 
-Ports, public URLs, image tags, and credentials live in **`infra/docker/.env.example`**.
-Compose and the Makefile import that file (`--env-file`); optional `infra/docker/.env`
-overlays it. Do not hardcode ports in the Makefile or compose.
+Deployment settings (public host name, published ports, credentials, secrets) live in `.env`,
+created from **`.env.example`** by `make env` with random secrets. Service names, internal ports
+and image tags are fixed in `compose.yaml` — do not move them into `.env`.
 
-Default published URLs (change in `.env.example`; unprivileged 41xx for campus):
-App `https://localhost:4443`, Grafana `https://localhost:4150` (admin/admin),
-Prometheus `:4160`, Tempo `:4161`, Loki `:4165`. HTTP redirect `:4180`.
+Default URLs (unprivileged ports for campus): App `https://localhost:4443`, Grafana
+`https://localhost:4150` (user/password in `.env`, printed by `make urls`), HTTP redirect `:4180`.
+Prometheus, Tempo and Loki are **not** published — use Grafana.
 Dev-without-compose: frontend `5173`, backend `3000`.
 
 ## 7. Code conventions
@@ -159,11 +162,10 @@ Dev-without-compose: frontend `5173`, backend `3000`.
 - TypeScript end to end. Match existing style; no reformat-only diffs.
 - Backend: **`import './telemetry/otel-sdk'` MUST stay the first line of `main.ts`** (before any
   other import) or instrumentation breaks.
-- Frontend talks to the API via `/api` (Vite proxy in dev, nginx proxy in the image).
+- Frontend talks to the API via `/api` (Vite proxy in dev, Caddy in the deployed stack).
 - Validate every input in **both** layers (class-validator/DTOs on Nest; form validation on React).
-- No secrets in code or gitignored `.env` files. The committed contract is
-  `infra/docker/.env.example` (non-secret dev defaults: ports, URLs, placeholder
-  credentials). Real secrets go in gitignored `infra/docker/.env` (`make env`).
+- No secrets in code. The committed contract is `.env.example` (placeholders only);
+  real values live in the gitignored `.env` (`make env` generates them).
 - Conventional-style commit prefixes already in use (`infra:`, `init:`); keep them.
 
 ## 8. Definition of Done (per feature)
@@ -189,10 +191,11 @@ Also done: ✅ Nest foundation — global `PrismaModule`/`PrismaService`, `Confi
 in `app.module.ts` so owners don't fight over it.
 
 Still open:
-- ❌ Not scaffolded yet: auth logic, Valkey, Garage (S3), Caddy/HTTPS, Privacy/ToS pages, Socket.io.
+- ❌ Not scaffolded yet: Valkey.
+- 🔧 `STORAGE_DRIVER=s3` uploads to Garage, but presigned download URLs point at the internal
+  `http://garage:3900` and are unusable from a browser. Keep `local` until the driver gets a
+  public endpoint (plan in `docs/planning/vtrofyme.md`).
 - 🔧 CI does not yet run ESLint (no eslint config in the repo). The **build** (tsc/nest/vite) is
   the code gate for now. Adding a shared eslint flat config is a separate tooling task.
-- 🔧 Dev compose bootstraps the DB with `prisma db push` (no migration history yet). Once the
-  schema stabilizes, switch to `prisma migrate` and commit migrations.
-- 📝 K8s manifests exist but the graded path is Docker Compose; don't let k8s block the "single
-  command" requirement.
+- 📝 The root `README.md` is still a template: the subject's mandatory sections (team roles,
+  modules, features, contributions…) must be written before evaluation.

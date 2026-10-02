@@ -25,10 +25,10 @@ AGENTS.md wins.
 - **Jorge** `@SrJorgeG` → [`docs/planning/Jorge.md`](./docs/planning/Jorge.md) · Identity & Access · branch `jorge`
 - **Aloiki** `@illia` → [`docs/planning/Aloiki.md`](./docs/planning/Aloiki.md) · Content & UX · branch `aloiki`
 - **David** `@dacs-dev` → [`docs/planning/David.md`](./docs/planning/David.md) · Interaction · branch `david`
-- **Ale Pinto** → [`docs/planning/Ale.md`](./docs/planning/Ale.md) · **DevOps/Infra** · branch `ale`
+- **Viacheslav** `@ViacheslavTrofymenko` → [`docs/planning/vtrofyme.md`](./docs/planning/vtrofyme.md) · **DevOps/Infra** · branch `vtrofyme`
 
 If you're working as one of them, that file is your brief. **App devs never touch `infra/`,
-`.github/`, `scripts/`, `Makefile`, `flake.nix` — that's Ale's.** Trunk is `master`; work on your
+`.github/`, `scripts/`, `Makefile`, `compose.yaml`, `flake.nix` — that's Viacheslav's.** Trunk is `master`; work on your
 branch and merge **personal → `staging` → `master`** (never straight to `master`). Combined plan +
 directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
@@ -41,14 +41,15 @@ directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
 ## Working here
 
-- Prefer the **Makefile** (`make up`, `make down`, `make logs`). Full dev stack +
-  observability comes up with `make up`. Ports/URLs live in `infra/docker/.env.example`.
-  Local Nix is **nix-portable** (`make dev` / `make ci`), not a system Nix install.
+- Prefer the **Makefile** (`make`, `make down`, `make logs`, `make smoke`). The full stack +
+  observability comes up with `make`; `compose.yaml` and `.env` sit in the repo root, so plain
+  `docker compose …` works too. How it all fits: `docs/infra/README.md`.
+  Local Nix is optional **nix-portable** (`make dev` / `make ci`), not a system Nix install.
 - **Every tenant-scoped DB query must filter by `organizationId`** — a missing filter is a
   security bug, not a style nit.
 - Keep `import './telemetry/otel-sdk'` as the **first line of `apps/backend/src/main.ts`**.
 - Validate inputs in **both** frontend and backend — it's a mandatory requirement.
-- Don't commit secrets. `infra/docker/.env.example` is the committed contract; real values go in gitignored `infra/docker/.env`.
+- Don't commit secrets. `.env.example` is the committed contract; real values go in the gitignored `.env` (`make env`).
 - When you touch modules/points or the schema, re-check the real rules in `en.subject.pdf`, not
   MVP_DESIGN.
 
