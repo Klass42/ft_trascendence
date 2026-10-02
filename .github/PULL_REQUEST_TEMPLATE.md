@@ -24,21 +24,18 @@ Issues que cierra: #
 
 ## Testeo
 
-Antes de abrir esta PR, confirma que has ejecutado el pipeline de Dagger en local.
+Antes de abrir esta PR:
 
-- [ ] **Dagger Local:** He ejecutado `make check` (o `go run ./ci`) y todos los pasos han terminado en verde.
-- [ ] **Linting:** El código sigue las normas de estilo (no hay errores de ESLint ni golangci-lint).
+- [ ] **CI local:** `make ci` termina en verde (linters, build, tests del backend).
+- [ ] **Despliegue:** `make && make smoke` pasa desde cero si la PR toca `compose.yaml`, `infra/`, Dockerfiles o variables de entorno.
 - [ ] **Tests:** Los tests unitarios de la lógica afectada han sido creados y pasan correctamente.
-
-> [!IMPORTANT]
-> No se aceptarán PRs que no hayan pasado la validación local de Dagger. Si el CI de GitHub falla por algo que podrías haber visto en local, la PR será cerrada automáticamente.
 
 <!-- Descripción sobre como se testea este cambio (Ayuda para el revisor) -->
 
 
 ## Checklist
 
-- [ ] He hecho fetch y rebase de la rama `main` antes de pushear
+- [ ] He hecho fetch y merge/rebase de `staging` antes de pushear
 - [ ] He actualizado la documentación.
 - [ ] No secretos o credenciales en el código
 - [ ] My PR cumple con: [Conventional Commits](https://www.conventionalcommits.org/)

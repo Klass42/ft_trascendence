@@ -4,7 +4,10 @@
 #  Run locally with:  make ci   (nix-portable + flake `ci` devShell)
 #  Run in GitHub Actions via .github/workflows/ci.yaml
 #
-#  Blocking checks (fail CI): infra linters + build + schema validation.
+#  Blocking checks (fail CI): infra linters + schema validation + build +
+#  backend unit/integration tests.
+#  The compose deployment itself is tested by the `deploy` job in ci.yaml
+#  (locally: make && make smoke).
 #  Informational checks (never fail CI): semgrep / trivy — they need network
 #  or vuln DBs and shouldn't red-gate day-to-day work. Read their output.
 # ============================================================================
@@ -74,7 +77,11 @@ run "prisma validate + generate" bash -c "$PNPM --filter @ft-trascendence/backen
 # ─── 4. Build (the real code gate: typecheck + compile) ──────────────────────
 run "build (frontend + backend)" $PNPM -r run build
 
-# ─── 5. Security scanners (informational) ────────────────────────────────────
+# ─── 5. Tests (no database needed: Prisma is mocked) ─────────────────────────
+run "backend unit tests"        $PNPM --filter @ft-trascendence/backend run test
+run "backend integration tests" $PNPM --filter @ft-trascendence/backend run test:integration
+
+# ─── 6. Security scanners (informational) ────────────────────────────────────
 soft "semgrep SAST" semgrep scan --config auto --error --quiet --exclude .pnpm-store --exclude node_modules --exclude dist .
 soft "trivy filesystem" trivy fs --quiet --scanners vuln,secret,misconfig --exit-code 0 --skip-dirs .pnpm-store --skip-dirs node_modules .
 

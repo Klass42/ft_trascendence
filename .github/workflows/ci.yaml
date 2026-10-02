@@ -1,16 +1,58 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [master, staging]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  lint:
+  # Linters, Prisma schema, build and unit tests — the same script as `make ci`.
+  checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: cachix/install-nix-action@v27
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: Linter
+      - name: Lint, build and test
         run: nix develop .#ci --command bash scripts/ci.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The mandatory gate: the stack must come up from a clean clone with one
+  # command and serve the app over HTTPS.
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate compose, Caddyfile and Prometheus rules
+        run: make check
+
+      - name: Deploy with a single command
+        run: make
+
+      - name: Smoke test through the HTTPS proxy
+        run: bash scripts/smoke.sh
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Browser smoke test (Playwright, zero console errors)
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --filter @ft-trascendence/frontend
+          pnpm --filter @ft-trascendence/frontend exec playwright install --with-deps chromium
+          pnpm --filter @ft-trascendence/frontend run test:e2e:compose
+
+      - name: Service state and logs on failure
+        if: failure()
+        run: |
+          docker compose ps --all
+          docker compose logs --tail 200
