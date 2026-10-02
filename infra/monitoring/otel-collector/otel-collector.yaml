@@ -1,21 +1,21 @@
-# Endpoints and listen ports come from .env.example via ${env:VAR}
-# (OpenTelemetry Collector env expansion). Hostnames stay as compose service names.
+# OpenTelemetry Collector: receives OTLP from the backend and fans it out.
+#   traces  → Tempo        metrics → Prometheus (remote write)        logs → Loki
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:${env:OTEL_GRPC_PORT}
+        endpoint: 0.0.0.0:4317
       http:
-        endpoint: 0.0.0.0:${env:OTEL_HTTP_PORT}
+        endpoint: 0.0.0.0:4318
 
 processors:
-  batch:
-    timeout: ${env:OTEL_BATCH_TIMEOUT}
-    send_batch_size: ${env:OTEL_BATCH_SIZE}
   memory_limiter:
     check_interval: 1s
-    limit_mib: ${env:OTEL_MEMORY_LIMIT_MIB}
-    spike_limit_mib: ${env:OTEL_MEMORY_SPIKE_MIB}
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
   resource:
     attributes:
       - key: service.instance.id
@@ -24,42 +24,40 @@ processors:
 
 exporters:
   prometheusremotewrite:
-    endpoint: ${env:PROMETHEUS_REMOTE_WRITE_URL}
+    endpoint: http://prometheus:9090/api/v1/write
     resource_to_telemetry_conversion:
       enabled: true
 
   otlp/tempo:
-    endpoint: ${env:TEMPO_OTLP_ENDPOINT}
+    endpoint: tempo:4317
     tls:
       insecure: true
 
   otlphttp/loki:
-    endpoint: ${env:LOKI_OTLP_ENDPOINT}
+    endpoint: http://loki:3100/otlp
     tls:
       insecure: true
-
-  debug:
-    verbosity: basic
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch, resource]
-      exporters: [otlp/tempo, debug]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/tempo]
 
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch, resource]
-      exporters: [prometheusremotewrite, debug]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheusremotewrite]
 
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch, resource]
-      exporters: [otlphttp/loki, debug]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlphttp/loki]
 
   telemetry:
     logs:
       level: info
     metrics:
-      address: 0.0.0.0:${env:OTEL_METRICS_PORT}
+      # Scraped by Prometheus (job "otel-collector").
+      address: 0.0.0.0:8888
