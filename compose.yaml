@@ -1,0 +1,275 @@
+# ft_trascendence — the whole stack.
+#
+#   make                      first run: creates .env, builds, starts, seeds
+#   docker compose up -d      everything after that (.env is read from here)
+#
+# Only Caddy publishes ports. Everything else talks over the compose network:
+#
+#   browser ──HTTPS──► caddy ─┬─► frontend (nginx, static SPA)
+#                             ├─► backend  (NestJS) ─► postgres / garage
+#                             └─► grafana ─► prometheus / tempo / loki
+#
+# Configuration: .env (from .env.example). Service names, internal ports and
+# image tags are fixed here — they are not deployment settings.
+
+name: ft-trascendence
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+# backend and migrate run the same image.
+x-backend-image: &backend-image
+  image: ft-trascendence-backend
+  build:
+    context: .
+    dockerfile: apps/backend/Dockerfile
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: "3000"
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?missing in .env — run make env}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?missing in .env — run make env}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  # Caddy strips /api before proxying, so the public callback lives under /api.
+  GOOGLE_CALLBACK_URL: https://${CADDY_DOMAIN}:${CADDY_HTTPS_PORT}/api/auth/google/callback
+  FRONTEND_URL: https://${CADDY_DOMAIN}:${CADDY_HTTPS_PORT}
+  PLATFORM_SUPERADMIN_EMAIL: ${PLATFORM_SUPERADMIN_EMAIL:-}
+  PLATFORM_SUPERADMIN_PASSWORD: ${PLATFORM_SUPERADMIN_PASSWORD:-}
+  PLATFORM_SUPERADMIN_NAME: ${PLATFORM_SUPERADMIN_NAME:-}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  S3_ENDPOINT: http://garage:3900
+  S3_REGION: garage
+  S3_BUCKET: ${S3_BUCKET}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  OTEL_SERVICE_NAME: ft-backend
+
+services:
+  # ─── Edge ────────────────────────────────────────────────
+  caddy:
+    <<: *service
+    image: caddy:2.11-alpine
+    ports:
+      - "${CADDY_HTTP_PORT}:80"
+      - "${CADDY_HTTPS_PORT}:443"
+      - "${GRAFANA_HOST_PORT}:3443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
+      CADDY_TLS: ${CADDY_TLS:-internal}
+      CADDY_HTTPS_PORT: ${CADDY_HTTPS_PORT}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      grafana:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9180/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── Application ─────────────────────────────────────────
+  frontend:
+    <<: *service
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    <<: [*service, *backend-image]
+    init: true
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      garage:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # One-shot: applies committed Prisma migrations, then exits. Same image as
+  # the backend; `make db-seed*` reuses this service for seeding.
+  migrate:
+    <<: *backend-image
+    restart: "no"
+    environment: *backend-env
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    <<: *service
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing in .env — run make env}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    <<: *service
+    image: dxflrs/garage:v2.3.0
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?missing in .env — run make env}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ─── Observability ───────────────────────────────────────
+  otel-collector:
+    <<: *service
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./infra/monitoring/otel-collector/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
+  prometheus:
+    <<: *service
+    image: prom/prometheus:v2.54.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+    volumes:
+      - ./infra/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  tempo:
+    <<: *service
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./infra/monitoring/tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+
+  loki:
+    <<: *service
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./infra/monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+
+  grafana:
+    <<: *service
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SERVER_ROOT_URL: https://${CADDY_DOMAIN}:${GRAFANA_HOST_PORT}
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?missing in .env — run make env}
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: strict
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_FEATURE_TOGGLES_ENABLE: traceQLStreaming,metricsSummary
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # ─── Exporters (Prometheus scrape targets) ───────────────
+  postgres-exporter:
+    <<: *service
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # No host mounts or privileges: /proc inside a container already reports
+  # host-wide CPU, memory and load, which is all the dashboards/alerts use.
+  node-exporter:
+    <<: *service
+    image: prom/node-exporter:v1.8.2
+
+  # Probes backend/frontend/caddy over HTTP from inside the network.
+  blackbox-exporter:
+    <<: *service
+    image: prom/blackbox-exporter:v0.25.0
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./infra/monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+volumes:
+  postgres_data:
+  uploads:
+  garage_meta:
+  garage_data:
+  caddy_data:
+  caddy_config:
+  prometheus_data:
+  tempo_data:
+  loki_data:
+  grafana_data:
