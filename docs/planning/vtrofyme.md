@@ -1,12 +1,12 @@
 # Viacheslav (vtrofyme) — DevOps / Infrastructure
 
 > Working brief. Shared conventions: `../../AGENTS.md`. How the deployment works day to day:
-> [`../infra/README.md`](../infra/README.md). Branch **`vtrofyme`** (based on `staging`), merged
-> through `staging` like everyone else.
+> [`../infra/README.md`](../infra/README.md). Work on branch **`vtrofyme`** (based on `master`);
+> merge to `staging` before `master`.
 >
 > GitHub `@ViacheslavTrofymenko`, 42 login `vtrofyme`. Took over the DevOps role from Ale Pinto.
 
-**Theme:** everything that is not application code — containers, HTTPS, storage backend, CI/CD,
+**Theme:** everything that is not application code: containers, HTTPS, storage backend, CI/CD,
 observability, secrets, deployment, backups.
 
 **Directories I own:**
@@ -22,7 +22,7 @@ observability, secrets, deployment, backups.
 
 ---
 
-## 1. The infra rework (this branch)
+## 1. The infra rework
 
 The stack Ale left came up and served the app, but the Monitoring module did not meet the
 subject, monitoring was exposed without a password, and half of the documented `make` targets
@@ -55,23 +55,7 @@ backend` and resolves 12 s after it is started again.
 **Migration for teammates:** after pulling, run `make re` once (drops the local database and
 re-seeds it). The old `infra/docker/.env` is no longer read.
 
-## 2. Open questions for the team
-
-1. Compose and `.env` in the repo root — agreed? It changes the paths everyone is used to.
-2. The two app-code touches above: keep them in my PR, or should the owners make them?
-3. Loki and Tempo (~280 MB of RAM together) are not required by the module. Keep, or drop?
-4. Garage: `STORAGE_DRIVER=s3` uploads fine, but presigned URLs point at `http://garage:3900`,
-   which a browser cannot reach. Fix it (public HTTPS endpoint in Caddy + `S3_PUBLIC_ENDPOINT`
-   in Aloiki's driver) or remove the container and keep the local volume?
-5. `make` no longer re-seeds. E2E runs that need a pristine database call `make db-seed`
-   (or `make db-seed-e2e`) explicitly — fine?
-6. Nix devShell stays as an optional developer tool. Does anyone use it?
-7. CI runs on pull requests and on pushes to `staging` / `master` only — fine?
-8. Google OAuth (Jorge): the redirect URI to register is
-   `https://localhost:4443/api/auth/google/callback`; the backend then redirects to `/#accessToken=…`
-   while the page that reads the tokens is `/auth/callback`.
-
-## 3. Next steps
+## 2. Next steps
 
 - [ ] Run `make` + `make smoke` on a campus machine (rootless Docker) — only tested on a laptop.
 - [ ] First green run of the new workflow on GitHub.
