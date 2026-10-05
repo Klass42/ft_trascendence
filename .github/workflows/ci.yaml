@@ -43,6 +43,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # pnpm is enabled through corepack in the next step; the built-in
+          # cache would look for it before it exists.
+          package-manager-cache: false
 
       - name: Browser smoke test (Playwright, zero console errors)
         run: |
