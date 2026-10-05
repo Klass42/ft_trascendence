@@ -1,6 +1,5 @@
 # Alerting rules. State is visible in Grafana → Alerting → Alert rules and on
 # the "Platform Overview" dashboard (panel "Firing alerts").
-#
 # Check syntax:  make check-monitoring
 groups:
   - name: availability

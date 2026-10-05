@@ -1,5 +1,4 @@
 # ft_trascendence — task runner. `make` deploys everything; `make help` lists targets.
-#
 # The stack itself is plain Docker Compose (compose.yaml + .env in this
 # directory), so `docker compose ps|logs|exec …` also works without make.
 
