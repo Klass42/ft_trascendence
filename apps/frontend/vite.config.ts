@@ -28,19 +28,12 @@ function loadPrefixedEnv(envFile: string, prefixes: string[]): Record<string, st
 }
 
 export default defineConfig(({ mode }) => {
-  // Do not use Vite's loadEnv for Compose's .env. Even with a prefix filter,
-  // Vite warns when it encounters Compose's production NODE_ENV setting.
+  // Dev-server settings only (the deployed SPA is static and uses /api).
+  // Read apps/frontend/.env.<mode> by hand: Vite's loadEnv would also pick up
+  // unrelated variables such as NODE_ENV and warn about them.
   const envPrefixes = ['FRONTEND_', 'BACKEND_', 'VITE_'];
-  const dockerEnv = loadPrefixedEnv(
-    path.resolve(__dirname, '../../infra/docker/.env'),
-    envPrefixes,
-  );
-  const dockerExampleEnv = loadPrefixedEnv(
-    path.resolve(__dirname, '../../infra/docker/.env.example'),
-    envPrefixes,
-  );
   const localEnv = loadPrefixedEnv(path.resolve(__dirname, `.env.${mode}`), envPrefixes);
-  const env = { ...dockerExampleEnv, ...dockerEnv, ...localEnv, ...process.env };
+  const env = { ...localEnv, ...process.env };
 
   const port = parsePort(env.FRONTEND_PORT || env.FRONTEND_DEV_PORT, 5173);
   const backendHost =

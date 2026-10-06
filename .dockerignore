@@ -1,0 +1,36 @@
+# Build context is the repo root (pnpm workspace). Keep it small and keep
+# secrets / host artefacts out of image layers.
+.git
+.github
+.direnv
+.cache
+.engram
+.superpowers
+.pnpm-store
+nix-portable
+
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+**/uploads
+
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+docs
+infra
+scripts
+test
+*.md
+*.pdf
+flake.nix
+flake.lock
+Makefile
+compose*.yaml

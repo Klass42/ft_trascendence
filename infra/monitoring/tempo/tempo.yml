@@ -1,4 +1,4 @@
-# Listen / remote-write ports MUST match .env.example (TEMPO_PORT, PROMETHEUS_PORT).
+# Ports 3200 (HTTP) and 4317 (OTLP) are referenced by the collector and Grafana.
 stream_over_http_enabled: true
 
 server:

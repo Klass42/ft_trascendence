@@ -1,10 +1,12 @@
 apiVersion: 1
 
+# Fixed uids: dashboards and the cross-links below refer to them.
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
-    url: $PROMETHEUS_URL
+    url: http://prometheus:9090
     isDefault: true
     jsonData:
       httpMethod: POST
@@ -16,9 +18,9 @@ datasources:
 
   - name: Tempo
     type: tempo
-    access: proxy
     uid: tempo
-    url: $TEMPO_URL
+    access: proxy
+    url: http://tempo:3200
     jsonData:
       httpMethod: GET
       tracesToMetrics:
@@ -29,15 +31,13 @@ datasources:
           - key: service.name
             value: service
           - key: job
-      tracesToLogs:
+      # Span → its log lines (logs arrive over OTLP, trace_id is metadata).
+      tracesToLogsV2:
         datasourceUid: loki
-        tags: ['job', 'instance', 'pod', 'namespace']
-        mappedTags: [{ key: 'service.name', value: 'service' }]
-        mapTagNamesEnabled: true
-        spanStartTimeShift: '-1h'
-        spanEndTimeShift: '1h'
-        filterByTraceID: false
-        filterBySpanID: false
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        customQuery: true
+        query: '{service_name="ft-backend"} | trace_id="$${__trace.traceId}"'
       serviceMap:
         datasourceUid: prometheus
       nodeGraph:
@@ -47,12 +47,15 @@ datasources:
 
   - name: Loki
     type: loki
-    access: proxy
     uid: loki
-    url: $LOKI_URL
+    access: proxy
+    url: http://loki:3100
     jsonData:
+      # Log line → its trace.
       derivedFields:
-        - datasourceUid: tempo
-          matcherRegex: '"traceId":"(\w+)"'
-          name: TraceID
+        - name: Trace
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: tempo
           url: '$${__value.raw}'
+          urlDisplayLabel: View trace
