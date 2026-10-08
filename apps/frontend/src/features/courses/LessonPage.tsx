@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useCourseDetail, useLessonById, useCompletedLessons, useCompleteLesson } from '@/lib/api';
+import styles from './LessonPage.module.css';
 
 export function LessonPage() {
   const { courseId, subjectId, lessonId } = useParams<{ courseId: string; subjectId: string; lessonId: string }>();
@@ -35,7 +36,7 @@ export function LessonPage() {
 
   if (lessonLoading) {
     return (
-      <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
+      <div className={styles.page} style={{ color: 'var(--color-text-secondary)' }}>
         Cargando lección...
       </div>
     );
@@ -43,7 +44,7 @@ export function LessonPage() {
 
   if (lessonErr || !lesson) {
     return (
-      <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
+      <div className={styles.page} style={{ color: 'var(--color-text-secondary)' }}>
         Lección no encontrada
       </div>
     );
@@ -52,7 +53,7 @@ export function LessonPage() {
   const pct = completedLessons && lessonId ? (isDone ? 100 : 0) : 0;
 
   return (
-    <div style={{ padding: '26px 40px', maxWidth: 760 }}>
+    <div className={styles.page}>
       <button
         onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}`)}
         style={{
