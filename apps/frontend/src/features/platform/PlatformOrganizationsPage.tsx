@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Plus, Search, Users } from 'lucide-react';
-import { apiClient } from '@/lib/api';
-import { Badge, Button, EmptyState, Spinner } from '@/components/ui';
+import { Building2, ChevronRight, Plus, Search, Trash2, Users } from 'lucide-react';
+import { apiClient, ApiError } from '@/lib/api';
+import { Badge, Button, ConfirmDialog, EmptyState, Spinner, useToast } from '@/components/ui';
 import styles from './PlatformOrganizationsPage.module.css';
 
 type Organization = {
@@ -19,10 +19,13 @@ function statusVariant(status: Organization['status']) {
 }
 
 export function PlatformOrganizationsPage() {
+  const { toast } = useToast();
   const [items, setItems] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [query, setQuery] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<Organization | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     apiClient.get<Organization[]>('/platform/organizations')
@@ -41,6 +44,24 @@ export function PlatformOrganizationsPage() {
 
   const activeCount = items.filter((org) => org.status === 'ACTIVE').length;
   const pendingCount = items.reduce((total, org) => total + (org._count?.invitations ?? 0), 0);
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      await apiClient.delete(`/platform/organizations/${pendingDelete.id}`);
+      setItems((current) => current.filter((org) => org.id !== pendingDelete.id));
+      toast({ message: `«${pendingDelete.name}» eliminada`, variant: 'success' });
+      setPendingDelete(null);
+    } catch (error) {
+      toast({
+        message: error instanceof ApiError ? error.message : 'No se pudo eliminar la organización.',
+        variant: 'error',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -97,25 +118,51 @@ export function PlatformOrganizationsPage() {
         ) : (
           <div className={styles.list}>
             {visibleItems.map((org) => (
-              <Link key={org.id} to={`/platform/organizations/${org.id}`} className={styles.organization}>
-                <div className={styles.avatar} aria-hidden="true">
-                  {org.logoUrl ? <img src={org.logoUrl} alt="" /> : org.name.slice(0, 1).toUpperCase()}
-                </div>
-                <div className={styles.orgInfo}>
-                  <strong>{org.name}</strong>
-                  <span>klass.app/{org.slug}</span>
-                </div>
-                <div className={styles.orgMeta}>
-                  <Badge variant={statusVariant(org.status)} dot>{org.status === 'ACTIVE' ? 'Activa' : 'Suspendida'}</Badge>
-                  <span>{org._count?.users ?? 0} usuarios</span>
-                  {(org._count?.invitations ?? 0) > 0 && <span>{org._count!.invitations} invitación{org._count!.invitations === 1 ? '' : 'es'}</span>}
-                </div>
-                <ChevronRight className={styles.chevron} size={20} aria-hidden="true" />
-              </Link>
+              <div key={org.id} className={styles.organization}>
+                <Link to={`/platform/organizations/${org.id}`} className={styles.orgMain}>
+                  <div className={styles.avatar} aria-hidden="true">
+                    {org.logoUrl ? <img src={org.logoUrl} alt="" /> : org.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className={styles.orgInfo}>
+                    <strong>{org.name}</strong>
+                    <span>klass.app/{org.slug}</span>
+                  </div>
+                  <div className={styles.orgMeta}>
+                    <Badge variant={statusVariant(org.status)} dot>{org.status === 'ACTIVE' ? 'Activa' : 'Suspendida'}</Badge>
+                    <span>{org._count?.users ?? 0} usuarios</span>
+                    {(org._count?.invitations ?? 0) > 0 && <span>{org._count!.invitations} invitación{org._count!.invitations === 1 ? '' : 'es'}</span>}
+                  </div>
+                  <ChevronRight className={styles.chevron} size={20} aria-hidden="true" />
+                </Link>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={styles.deleteButton}
+                  aria-label={`Eliminar ${org.name}`}
+                  onClick={() => setPendingDelete(org)}
+                  leftIcon={<Trash2 size={16} />}
+                />
+              </div>
             ))}
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Eliminar organización"
+        message={
+          pendingDelete
+            ? `¿Eliminar «${pendingDelete.name}»? Se borrarán sus usuarios, cursos y archivos. Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Eliminar"
+        variant="danger"
+        loading={isDeleting}
+        onConfirm={confirmDelete}
+        onCancel={() => { if (!isDeleting) setPendingDelete(null); }}
+      />
     </div>
   );
 }

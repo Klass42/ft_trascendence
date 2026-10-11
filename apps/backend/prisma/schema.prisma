@@ -28,7 +28,7 @@ datasource db {
 //  Tenancy
 // ============================================================================
 
-/// The tenant. Maps to the "Organization system" module (create/read/update,
+/// The tenant. Maps to the "Organization system" module (create/read/update/delete,
 /// add/remove members). NOT a SaaS institution with billing/subdomains (Phase 2).
 model Organization {
   id        String   @id @default(cuid())
