@@ -1,17 +1,20 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AppAuthGuard } from '../app-auth.guard';
 import { IS_PUBLIC_KEY } from '../public.decorator';
 import { JwtAuthGuard } from '../jwt-auth.guard';
 import { DevAuthGuard } from '../dev-auth.guard';
 
-const mkCtx = (headers: Record<string, string | undefined> = {}) => {
+const mkCtx = (
+  headers: Record<string, string | undefined> = {},
+  overrides: { path?: string; organizationId?: string } = {},
+) => {
   const req = {
     headers,
-    path: '/api/courses',
+    path: overrides.path ?? '/api/courses',
     // Successful JWT/dev guards populate this field. Keeping it in the context
     // lets this unit test exercise the composite guard's tenant assertion.
-    user: { organizationId: 'org-klass-0001' },
+    user: { organizationId: overrides.organizationId ?? 'org-klass-0001' },
   };
   return {
     switchToHttp: () => ({ getRequest: () => req }),
@@ -63,5 +66,21 @@ describe('AppAuthGuard', () => {
     await expect(guard.canActivate(mkCtx({ 'x-dev-user': 'user-student-0001' }))).rejects.toThrow(UnauthorizedException);
     expect(devOk.canActivate).not.toHaveBeenCalled();
     process.env.NODE_ENV = 'development';
+  });
+
+  it('lets a platform account read its own notifications', async () => {
+    const guard = new AppAuthGuard(mkReflector(false), jwtOk, devFail);
+    await expect(guard.canActivate(mkCtx(
+      { authorization: 'Bearer valid' },
+      { path: '/notifications', organizationId: '' },
+    ))).resolves.toBe(true);
+  });
+
+  it('rejects a platform account on a tenant route', async () => {
+    const guard = new AppAuthGuard(mkReflector(false), jwtOk, devFail);
+    await expect(guard.canActivate(mkCtx(
+      { authorization: 'Bearer valid' },
+      { path: '/courses', organizationId: '' },
+    ))).rejects.toThrow(ForbiddenException);
   });
 });

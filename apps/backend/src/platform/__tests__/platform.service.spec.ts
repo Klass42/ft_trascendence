@@ -22,6 +22,10 @@ function buildFake() {
     findMany: jest.fn(),
     findUnique: jest.fn(async () => mockOrg),
     update: jest.fn(async ({ where, data }: any) => ({ ...mockOrg, id: where.id, ...data })),
+    delete: jest.fn(async () => mockOrg),
+  };
+  const learningResource = {
+    deleteMany: jest.fn(async () => ({ count: 0 })),
   };
   const organizationInvitation = {
     create: jest.fn(async ({ data }: any) => ({ id: 'invite-1', expiresAt: data.expiresAt, ...data })),
@@ -31,7 +35,7 @@ function buildFake() {
   const user = { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) };
   const session = { deleteMany: jest.fn() };
   const transaction = jest.fn(async (callback: any) =>
-    callback({ organization, organizationInvitation, auditLog, user, session }),
+    callback({ organization, organizationInvitation, auditLog, user, session, learningResource }),
   );
   const prisma = {
     organization,
@@ -39,10 +43,11 @@ function buildFake() {
     auditLog,
     user,
     session,
+    learningResource,
     $transaction: transaction,
   } as unknown as PrismaService;
 
-  return { prisma, organization, organizationInvitation, auditLog, user, session };
+  return { prisma, organization, organizationInvitation, auditLog, user, session, learningResource };
 }
 
 describe('PlatformService', () => {
@@ -159,6 +164,46 @@ describe('PlatformService', () => {
       );
       expect(result.invitationToken).toEqual(expect.any(String));
       expect(result.role).toBe('ADMIN');
+    });
+  });
+
+  describe('deleteOrganization', () => {
+    it('hard-deletes the organization and writes ORGANIZATION_DELETED', async () => {
+      const { prisma, organization, auditLog, learningResource } = buildFake();
+      const service = new PlatformService(prisma);
+
+      await service.deleteOrganization(ORG_ID, ACTOR_ID);
+
+      expect(organization.findUnique).toHaveBeenCalledWith({ where: { id: ORG_ID } });
+      expect(auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorId: ACTOR_ID,
+          action: 'ORGANIZATION_DELETED',
+          organizationId: ORG_ID,
+          metadata: { name: mockOrg.name, slug: mockOrg.slug },
+        }),
+      });
+      expect(learningResource.deleteMany).toHaveBeenCalledWith({
+        where: { organizationId: ORG_ID },
+      });
+      expect(organization.delete).toHaveBeenCalledWith({ where: { id: ORG_ID } });
+      expect(auditLog.create.mock.invocationCallOrder[0]).toBeLessThan(
+        learningResource.deleteMany.mock.invocationCallOrder[0],
+      );
+      expect(learningResource.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+        organization.delete.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('throws NotFoundException when the organization does not exist', async () => {
+      const { prisma, organization, auditLog, learningResource } = buildFake();
+      (organization.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new PlatformService(prisma);
+
+      await expect(service.deleteOrganization('ghost', ACTOR_ID)).rejects.toThrow(NotFoundException);
+      expect(organization.delete).not.toHaveBeenCalled();
+      expect(learningResource.deleteMany).not.toHaveBeenCalled();
+      expect(auditLog.create).not.toHaveBeenCalled();
     });
   });
 });

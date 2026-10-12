@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Users } from 'lucide-react';
+import { Pencil, Trash2, Users } from 'lucide-react';
 import { apiClient, useIsAdmin } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
-import { Button, Input, Spinner } from '@/components/ui';
+import { Button, ConfirmDialog, Input, Spinner, useToast } from '@/components/ui';
 import { useOrg } from '@/lib/api/hooks';
 import type { OrgDTO } from './types';
 import styles from './OrgSettingsPage.module.css';
@@ -11,6 +11,7 @@ import styles from './OrgSettingsPage.module.css';
 export function OrgSettingsPage() {
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
+  const { toast } = useToast();
   const { data, isLoading, error } = useOrg();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -20,6 +21,9 @@ export function OrgSettingsPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [localData, setLocalData] = useState<OrgDTO | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isRequestingDelete, setIsRequestingDelete] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
 
   if (isLoading) {
     return (
@@ -98,6 +102,30 @@ export function OrgSettingsPage() {
       }
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleRequestDeletion() {
+    setIsRequestingDelete(true);
+    try {
+      const result = await apiClient.post<{ notified: number; alreadyPending: boolean }>(
+        '/organizations/me/deletion-request',
+      );
+      setConfirmDelete(false);
+      setDeleteRequested(true);
+      toast({
+        message: result.alreadyPending
+          ? 'El superadmin ya tiene una solicitud pendiente.'
+          : 'Solicitud enviada al superadmin.',
+        variant: 'success',
+      });
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError ? err.message : 'No se pudo enviar la solicitud.',
+        variant: 'error',
+      });
+    } finally {
+      setIsRequestingDelete(false);
     }
   }
 
@@ -201,6 +229,35 @@ export function OrgSettingsPage() {
           </Button>
         </div>
       )}
+
+      {isAdmin && (
+        <section className={styles.dangerZone} aria-labelledby="org-deletion-request">
+          <h2 id="org-deletion-request" className={styles.dangerTitle}>Borrar organización</h2>
+          <p className={styles.dangerText}>
+            Un administrador no puede borrar la organización. La solicitud llega al superadmin,
+            que es quien puede eliminarla.
+          </p>
+          <Button
+            variant="danger"
+            leftIcon={<Trash2 size={16} />}
+            disabled={deleteRequested}
+            onClick={() => setConfirmDelete(true)}
+          >
+            {deleteRequested ? 'Solicitud enviada' : 'Solicitar borrado'}
+          </Button>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Solicitar borrado"
+        message={`Esto no borra «${displayData.name}». Se avisará al superadmin para que decida si eliminarla.`}
+        confirmLabel="Enviar solicitud"
+        variant="danger"
+        loading={isRequestingDelete}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleRequestDeletion}
+      />
     </div>
   );
 }

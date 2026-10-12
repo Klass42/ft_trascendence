@@ -23,6 +23,17 @@ export class PlatformService {
  async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: true } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
  async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) { const org = await this.prisma.organization.update({ where: { id }, data: dto }); await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } }); return org; }
  async suspend(id: string, actorId: string) { const org = await this.prisma.$transaction(async tx => { const updated = await tx.organization.update({ where: { id }, data: { status: 'SUSPENDED' } }); const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } }); await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } }); await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } }); return updated; }); return org; }
+ async deleteOrganization(id: string, actorId: string) {
+  const org = await this.prisma.organization.findUnique({ where: { id } });
+  if (!org) throw new NotFoundException('Organization not found');
+  await this.prisma.$transaction(async tx => {
+   await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_DELETED', organizationId: id, metadata: { name: org.name, slug: org.slug } } });
+   // LearningResource.createdBy and .file are ON DELETE RESTRICT. Remove the
+   // catalog rows before the organization cascade deletes users and files.
+   await tx.learningResource.deleteMany({ where: { organizationId: id } });
+   await tx.organization.delete({ where: { id } });
+  });
+ }
 
  // Support/recovery flow (issue #18): an org that lost access to its own
  // ADMIN can't self-invite one (that route requires @Roles('ADMIN') within
