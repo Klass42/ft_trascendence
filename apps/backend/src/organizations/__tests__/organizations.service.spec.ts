@@ -2,9 +2,12 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { OrganizationsService } from '../organizations.service';
 import type { PrismaService } from '@/prisma/prisma.service';
+import type { NotificationsService } from '@/notifications/notifications.service';
 
 const ORG_ID = 'org-klass-0001';
 const OTHER_ORG = 'org-other-0001';
@@ -56,16 +59,33 @@ const mkPrisma = () =>
       findUnique: jest.fn(),
       delete: jest.fn(),
     },
+    notification: {
+      findFirst: jest.fn(),
+    },
+    auditLog: {
+      create: jest.fn(),
+    },
   }) as unknown as PrismaService;
+
+const actor = {
+  userId: 'user-admin-0001',
+  name: 'Ada Admin',
+  email: 'admin@demo',
+};
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
   let prisma: ReturnType<typeof mkPrisma>;
+  let notifications: { emit: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = mkPrisma();
-    service = new OrganizationsService(prisma);
+    notifications = { emit: jest.fn(async () => ({ id: 'notif-1' })) };
+    service = new OrganizationsService(
+      prisma,
+      notifications as unknown as NotificationsService,
+    );
   });
 
   describe('findMyOrganization', () => {
@@ -159,6 +179,88 @@ describe('OrganizationsService', () => {
         service.removeMember(ORG_ID, 'user-admin-0001', ORG_ID, 'user-admin-0001'),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('requestDeletion', () => {
+    const title = 'Solicitud de borrado: Klass Academy';
+    const link = `/platform/organizations/${ORG_ID}`;
+
+    it('notifies every superadmin and writes an audit log', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'sa-1' }, { id: 'sa-2' }]);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.requestDeletion(ORG_ID, actor);
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { platformRole: 'SUPERADMIN' },
+        select: { id: true },
+      });
+      expect(notifications.emit).toHaveBeenCalledTimes(2);
+      expect(notifications.emit).toHaveBeenCalledWith('sa-1', NotificationType.SYSTEM, {
+        title,
+        body: 'Ada Admin (admin@demo) pide borrar la organización «Klass Academy» (klass).',
+        link,
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorId: actor.userId,
+          action: 'ORGANIZATION_DELETION_REQUESTED',
+          organizationId: ORG_ID,
+          metadata: { notified: 2 },
+        }),
+      });
+      expect(result).toEqual({ notified: 2, alreadyPending: false });
+    });
+
+    it('skips superadmins who already have an unread request', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'sa-1' }, { id: 'sa-2' }]);
+      (prisma.notification.findFirst as jest.Mock).mockImplementation(
+        async ({ where }: { where: { userId: string } }) =>
+          where.userId === 'sa-1' ? { id: 'existing' } : null,
+      );
+
+      const result = await service.requestDeletion(ORG_ID, actor);
+
+      expect(notifications.emit).toHaveBeenCalledTimes(1);
+      expect(notifications.emit).toHaveBeenCalledWith(
+        'sa-2',
+        NotificationType.SYSTEM,
+        expect.objectContaining({ link }),
+      );
+      expect(result).toEqual({ notified: 1, alreadyPending: false });
+    });
+
+    it('returns alreadyPending without a second audit log when every request is unread', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'sa-1' }]);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue({ id: 'existing' });
+
+      const result = await service.requestDeletion(ORG_ID, actor);
+
+      expect(notifications.emit).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ notified: 0, alreadyPending: true });
+    });
+
+    it('throws NotFoundException when the organization does not exist', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.requestDeletion(ORG_ID, actor)).rejects.toThrow(NotFoundException);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(notifications.emit).not.toHaveBeenCalled();
+    });
+
+    it('throws ServiceUnavailableException when there is no superadmin', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      await expect(service.requestDeletion(ORG_ID, actor)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(notifications.emit).not.toHaveBeenCalled();
     });
   });
 });

@@ -32,6 +32,17 @@ export class OrganizationsController {
   @Post('me/invitations/:id/revoke') @UseGuards(RolesGuard) @Roles('ADMIN')
   revokeInvitation(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
 
+  @Post('me/deletion-request')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  requestDeletion(@CurrentUser() user: AuthUser) {
+    return this.organizationsService.requestDeletion(tenantId(user), {
+      userId: user.userId,
+      name: user.name,
+      email: user.email,
+    });
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

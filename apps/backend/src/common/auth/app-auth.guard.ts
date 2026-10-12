@@ -35,22 +35,35 @@ export class AppAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
+    let allowed = false;
     try {
-      const allowed = await (this.jwtAuthGuard.canActivate(ctx) as Promise<boolean>);
-      this.assertTenantRoute(ctx); return allowed;
+      allowed = await (this.jwtAuthGuard.canActivate(ctx) as Promise<boolean>);
     } catch {
-      if (process.env.NODE_ENV !== 'production') {
-        try {
-          const allowed = await this.devAuthGuard.canActivate(ctx); this.assertTenantRoute(ctx); return allowed;
-        } catch {
-          throw new UnauthorizedException();
-        }
+      if (process.env.NODE_ENV === 'production') {
+        throw new UnauthorizedException();
       }
-      throw new UnauthorizedException();
+      try {
+        allowed = await this.devAuthGuard.canActivate(ctx);
+      } catch {
+        throw new UnauthorizedException();
+      }
     }
+
+    // Kept outside the auth catch: a missing tenant is 403, not a failed login.
+    this.assertTenantRoute(ctx);
+    return allowed;
   }
   private assertTenantRoute(ctx: ExecutionContext) {
     const req = ctx.switchToHttp().getRequest<{ path?: string; user?: { organizationId: string } }>();
-    if (!req.path?.startsWith('/platform') && !req.path?.startsWith('/auth') && !req.user?.organizationId) throw new ForbiddenException('Organization membership required');
+    const path = req.path ?? '';
+    // Notifications belong to the user, not a tenant. Platform accounts
+    // (no organizationId) must be able to read the deletion requests sent to them.
+    const openToPlatformAccount =
+      path.startsWith('/platform') ||
+      path.startsWith('/auth') ||
+      path.startsWith('/notifications');
+    if (!openToPlatformAccount && !req.user?.organizationId) {
+      throw new ForbiddenException('Organization membership required');
+    }
   }
 }
