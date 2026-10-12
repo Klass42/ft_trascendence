@@ -1,25 +1,17 @@
 import {
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
-  Course,
-  CourseRole,
-  Enrollment,
   ForumThread,
   NotificationType,
+  SubjectStaffRole,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CourseAccessService } from '../courses/course-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { CreatePostDto } from './dto/create-post.dto';
-
-/** Course roles allowed to perform staff-only actions (e.g. pinning). */
-export const STAFF_ROLES: CourseRole[] = [
-  CourseRole.TEACHER,
-  CourseRole.ASSISTANT,
-];
 
 /** Minimal author projection embedded in thread/post responses. */
 const AUTHOR_SELECT = {
@@ -33,6 +25,7 @@ export class ForumsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly access: CourseAccessService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -43,69 +36,29 @@ export class ForumsService {
   // decoupled from AssignmentsModule. Consolidate once the auth pass lands.
   // ---------------------------------------------------------------------------
 
-  /**
-   * Resolve a course together with the acting user's enrollment, deriving the
-   * tenant `organizationId` from the course itself (never from the client).
-   *
-   * The enrollment lookup doubles as the tenant/membership gate: a user from
-   * another org (or a stranger to the course) has no enrollment and is treated
-   * as if the course does not exist.
-   */
-  private async requireMembership(
-    courseId: string,
+  private async requireSubject(
+    subjectId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ course: Course; enrollment: Enrollment }> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId: actingUserId } },
-    });
-    if (!enrollment) {
-      // Don't leak the course's existence to non-members.
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    if (roles && !roles.includes(enrollment.role)) {
-      throw new ForbiddenException('Only course staff can perform this action');
-    }
-
-    return { course, enrollment };
+    staffOnly = false,
+  ) {
+    return staffOnly
+      ? this.access.assertSubjectStaffForUser(subjectId, actingUserId)
+      : this.access.assertSubjectReadableForUser(subjectId, actingUserId);
   }
 
-  /**
-   * Load a thread and enforce that `actingUserId` is a member of its course.
-   * Returns the thread plus the parent course (for its org) and the actor's
-   * enrollment (for role checks).
-   */
   private async requireThreadMembership(
     threadId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{
-    thread: ForumThread;
-    course: Course;
-    enrollment: Enrollment;
-  }> {
+    staffOnly = false,
+  ): Promise<{ thread: ForumThread }> {
     const thread = await this.prisma.forumThread.findUnique({
       where: { id: threadId },
     });
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
-
-    const { course, enrollment } = await this.requireMembership(
-      thread.courseId,
-      actingUserId,
-      roles,
-    );
-
-    return { thread, course, enrollment };
+    await this.requireSubject(thread.subjectId, actingUserId, staffOnly);
+    return { thread };
   }
 
   // ---------------------------------------------------------------------------
@@ -113,11 +66,11 @@ export class ForumsService {
   // ---------------------------------------------------------------------------
 
   /** List a course's threads, pinned first then newest, for any member. */
-  async listThreads(courseId: string, actingUserId: string) {
-    await this.requireMembership(courseId, actingUserId);
+  async listThreads(subjectId: string, actingUserId: string) {
+    await this.requireSubject(subjectId, actingUserId);
 
     return this.prisma.forumThread.findMany({
-      where: { courseId },
+      where: { subjectId },
       orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
       include: {
         author: { select: AUTHOR_SELECT },
@@ -131,17 +84,17 @@ export class ForumsService {
    * thread's opening root post authored by the creator.
    */
   async createThread(
-    courseId: string,
+    subjectId: string,
     actingUserId: string,
     dto: CreateThreadDto,
   ) {
-    await this.requireMembership(courseId, actingUserId);
+    await this.requireSubject(subjectId, actingUserId);
 
     const body = dto.body?.trim();
 
     return this.prisma.forumThread.create({
       data: {
-        courseId,
+        subjectId,
         authorId: actingUserId,
         title: dto.title,
         ...(body && {
@@ -161,12 +114,12 @@ export class ForumsService {
 
   /** A thread with its posts nested into a reply tree, scoped to a member. */
   async getThread(threadId: string, actingUserId: string) {
-    const { course } = await this.requireThreadMembership(
+    const { thread: known } = await this.requireThreadMembership(
       threadId,
       actingUserId,
     );
 
-    const [thread, posts, enrollments] = await Promise.all([
+    const [thread, posts, staff] = await Promise.all([
       this.prisma.forumThread.findUnique({
         where: { id: threadId },
         include: { author: { select: AUTHOR_SELECT } },
@@ -176,15 +129,13 @@ export class ForumsService {
         orderBy: { createdAt: 'asc' },
         include: { author: { select: AUTHOR_SELECT } },
       }),
-      // Map author -> course role so the UI can badge staff (TEACHER/ASSISTANT).
-      // One cheap query rather than a join per post.
-      this.prisma.enrollment.findMany({
-        where: { courseId: course.id },
+      this.prisma.subjectStaff.findMany({
+        where: { subjectId: known.subjectId },
         select: { userId: true, role: true },
       }),
     ]);
 
-    const roleByUser = new Map(enrollments.map((e) => [e.userId, e.role]));
+    const roleByUser = new Map(staff.map((member) => [member.userId, member.role]));
 
     return {
       ...thread,
@@ -201,7 +152,7 @@ export class ForumsService {
     const { thread } = await this.requireThreadMembership(
       threadId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     return this.prisma.forumThread.update({
@@ -268,13 +219,13 @@ export class ForumsService {
    * Search a course's forum: threads whose title matches, or that contain a
    * post whose body matches (case-insensitive). Scoped to course members.
    */
-  async search(courseId: string, actingUserId: string, q: string) {
-    await this.requireMembership(courseId, actingUserId);
+  async search(subjectId: string, actingUserId: string, q: string) {
+    await this.requireSubject(subjectId, actingUserId);
 
     const term = q.trim();
     return this.prisma.forumThread.findMany({
       where: {
-        courseId,
+        subjectId,
         OR: [
           { title: { contains: term, mode: 'insensitive' } },
           { posts: { some: { body: { contains: term, mode: 'insensitive' } } } },
@@ -338,10 +289,10 @@ export class ForumsService {
       author: { id: string; name: string; avatarUrl: string | null } | null;
       [key: string]: unknown;
     }>,
-    roleByUser: Map<string, CourseRole>,
+    roleByUser: Map<string, SubjectStaffRole>,
   ) {
     type Node = (typeof posts)[number] & {
-      authorRole: CourseRole | null;
+      authorRole: SubjectStaffRole | null;
       replies: Node[];
     };
 

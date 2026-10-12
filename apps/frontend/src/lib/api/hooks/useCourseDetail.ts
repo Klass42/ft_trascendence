@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
-import type { CourseDTO } from '../types';
+import type { SubjectDTO } from '../types';
 
 interface UseCourseDetailResult {
-  data: CourseDTO | null;
+  data: SubjectDTO | null;
   isLoading: boolean;
   error: Error | null;
 }
 
 export function useCourseDetail(courseId: string | undefined): UseCourseDetailResult {
-  const [data, setData] = useState<CourseDTO | null>(null);
+  const [data, setData] = useState<SubjectDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
@@ -26,7 +26,7 @@ export function useCourseDetail(courseId: string | undefined): UseCourseDetailRe
     setIsLoading(true);
     setError(null);
 
-    apiClient.get<CourseDTO>(`/courses/${courseId}?organizationId=${orgId}`)
+    apiClient.get<SubjectDTO>(`/subjects/${courseId}?organizationId=${orgId}`)
       .then((result) => {
         if (!cancelled) setData(result);
       })

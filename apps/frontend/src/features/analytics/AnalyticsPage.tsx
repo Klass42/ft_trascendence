@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Spinner } from '@/components/ui';
 import {
-  useCourses,
+  useMySubjects,
   useAnalyticsOverview,
   useSubmissionsOverTime,
   useGradeDistribution,
@@ -20,7 +20,7 @@ import styles from './analytics.module.css';
  * and see an error card.
  */
 export function AnalyticsPage() {
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -95,7 +95,7 @@ export function AnalyticsPage() {
             >
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.title}
+                  {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
                 </option>
               ))}
             </select>

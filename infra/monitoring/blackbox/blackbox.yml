@@ -1,0 +1,16 @@
+# Blackbox exporter probe modules (selected per target in prometheus.yml).
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+
+  # Caddy's plain-HTTP listener must answer with the HTTPS redirect.
+  http_redirect:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: false
+      valid_status_codes: [302]

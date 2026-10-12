@@ -47,6 +47,16 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
+  /**
+   * Session hashes are unique. A refresh token needs the newly-created session
+   * ID in its `jti`, so the final hash cannot be calculated until after the
+   * row exists. Use a cryptographically random, unique bootstrap value for
+   * that short interval; a shared literal made concurrent logins fail.
+   */
+  private sessionBootstrapHash(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
   private async activeOrganization(slug: string) {
     const organization = await this.prisma.organization.findUnique({ where: { slug } });
     if (!organization || organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid organization or credentials');
@@ -63,7 +73,7 @@ export class AuthService {
     const session = await this.prisma.session.create({
       data: {
         userId,
-        refreshTokenHash: 'placeholder',
+        refreshTokenHash: this.sessionBootstrapHash(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -196,7 +206,7 @@ export class AuthService {
     const newSession = await this.prisma.session.create({
       data: {
         userId: session.userId,
-        refreshTokenHash: 'placeholder',
+        refreshTokenHash: this.sessionBootstrapHash(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });

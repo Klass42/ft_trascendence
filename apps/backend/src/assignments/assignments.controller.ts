@@ -1,36 +1,33 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
+  GoneException,
   Param,
   Patch,
   Post,
 } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { AssignmentsService } from './assignments.service';
-import { CreateAssignmentDto } from './dto/create-assignment.dto';
-import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+
+const GONE =
+  'Las tareas se gestionan como actividades; este endpoint ya no acepta escrituras.';
 
 @Controller()
 export class AssignmentsController {
   constructor(private readonly assignments: AssignmentsService) {}
 
-  @Post('courses/:courseId/assignments')
-  async create(
-    @Param('courseId') courseId: string,
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateAssignmentDto,
-  ) {
-    return this.assignments.create(courseId, user.userId, dto);
+  @Post('subjects/:subjectId/assignments')
+  create() {
+    throw new GoneException(GONE);
   }
 
-  @Get('courses/:courseId/assignments')
+  @Get('subjects/:subjectId/assignments')
   async findAll(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.assignments.findAll(courseId, user.userId);
+    return this.assignments.findAll(subjectId, user.userId);
   }
 
   @Get('assignments/:id')
@@ -39,27 +36,18 @@ export class AssignmentsController {
   }
 
   @Patch('assignments/:id')
-  async update(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthUser,
-    @Body() dto: UpdateAssignmentDto,
-  ) {
-    return this.assignments.update(id, user.userId, dto);
+  update() {
+    throw new GoneException(GONE);
   }
 
   @Delete('assignments/:id')
-  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    await this.assignments.remove(id, user.userId);
-    return { deleted: true };
+  remove() {
+    throw new GoneException(GONE);
   }
 
   /** Detach one of the teacher's prompt attachments (staff only). */
   @Delete('assignments/:id/files/:fileId')
-  async removeFile(
-    @Param('id') id: string,
-    @Param('fileId') fileId: string,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.assignments.removeFile(id, fileId, user.userId);
+  removeFile() {
+    throw new GoneException(GONE);
   }
 }

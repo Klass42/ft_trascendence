@@ -3,5 +3,6 @@ import { IsOptional, IsString } from 'class-validator';
 export class EnrollCourseDto {
   @IsString()
   @IsOptional()
-  accessCode?: string;
+  /** Removed with self-enrolment. Field kept absent on purpose. */
+  note?: never;
 }

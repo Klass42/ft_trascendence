@@ -1,98 +1,64 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Course, CourseRole, Enrollment } from '@prisma/client';
+import { Subject } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CourseAccessService, SubjectAccess } from '../courses/course-access.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 
-/** Course roles allowed to author/grade — teacher or teaching assistant. */
-export const STAFF_ROLES: CourseRole[] = [
-  CourseRole.TEACHER,
-  CourseRole.ASSISTANT,
-];
-
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: CourseAccessService,
+  ) {}
 
-  /**
-   * Resolve a course together with the acting user's enrollment, deriving the
-   * tenant `organizationId` from the course itself (never from the client).
-   *
-   * The enrollment lookup doubles as the tenant/membership gate: a user from
-   * another org (or a stranger to the course) has no enrollment and is treated
-   * as if the course does not exist.
-   */
-  private async requireMembership(
-    courseId: string,
+  private async requireSubject(
+    subjectId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ course: Course; enrollment: Enrollment }> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId: actingUserId } },
-    });
-    if (!enrollment) {
-      // Don't leak the course's existence to non-members.
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    if (roles && !roles.includes(enrollment.role)) {
-      throw new ForbiddenException(
-        'Only course staff can perform this action',
-      );
-    }
-
-    return { course, enrollment };
+    staffOnly = false,
+  ): Promise<SubjectAccess> {
+    return staffOnly
+      ? this.access.assertSubjectStaffForUser(subjectId, actingUserId)
+      : this.access.assertSubjectReadableForUser(subjectId, actingUserId);
   }
 
   /**
-   * Public course-membership gate for course-level resources that don't hang
-   * off a single assignment (e.g. the gradebook). Delegates to the private
-   * {@link requireMembership} so tenant/role enforcement stays in one place.
+   * Public subject gate for resources that don't hang off a single assignment
+   * (gradebook, analytics). Authorization lives in CourseAccessService.
    */
   async requireCourseMembership(
-    courseId: string,
+    subjectId: string,
     actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ course: Course; enrollment: Enrollment }> {
-    return this.requireMembership(courseId, actingUserId, roles);
+    staffOnly = false,
+  ): Promise<{ subject: Subject; access: SubjectAccess }> {
+    const access = await this.requireSubject(subjectId, actingUserId, staffOnly);
+    return { subject: access.subject, access };
   }
 
-  /**
-   * Load an assignment and enforce that `actingUserId` is a member of its
-   * course. Returns the assignment plus the parent course (for its org).
-   */
   async requireAssignmentMembership(
     assignmentId: string,
     actingUserId: string,
-    roles?: CourseRole[],
+    staffOnly = false,
   ) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: { course: true },
+      include: { subject: true },
     });
     if (!assignment) {
       throw new NotFoundException(`Assignment ${assignmentId} not found`);
     }
 
-    const { enrollment } = await this.requireMembership(
-      assignment.courseId,
+    const access = await this.requireSubject(
+      assignment.subjectId,
       actingUserId,
-      roles,
+      staffOnly,
     );
 
-    return { assignment, course: assignment.course, enrollment };
+    return { assignment, subject: assignment.subject, access };
   }
 
   /** Include shape shared by every read: the teacher's prompt attachments. */
@@ -123,23 +89,23 @@ export class AssignmentsService {
   }
 
   async create(
-    courseId: string,
+    subjectId: string,
     actingUserId: string,
     dto: CreateAssignmentDto,
   ) {
-    const { course } = await this.requireMembership(
-      courseId,
+    const { subject } = await this.requireSubject(
+      subjectId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     this.assertWindow(dto.openAt, dto.dueAt, dto.closeAt);
     const fileIds = dto.fileIds ?? [];
-    await this.assertOwnedFiles(fileIds, course.organizationId, actingUserId);
+    await this.assertOwnedFiles(fileIds, subject.organizationId, actingUserId);
 
     return this.prisma.assignment.create({
       data: {
-        courseId,
+        subjectId,
         title: dto.title,
         description: dto.description,
         openAt: dto.openAt ? new Date(dto.openAt) : null,
@@ -154,11 +120,11 @@ export class AssignmentsService {
   }
 
   /** List every assignment of a course (any member), with attachments. */
-  async findAll(courseId: string, actingUserId: string) {
-    await this.requireMembership(courseId, actingUserId);
+  async findAll(subjectId: string, actingUserId: string) {
+    await this.requireSubject(subjectId, actingUserId);
 
     return this.prisma.assignment.findMany({
-      where: { courseId },
+      where: { subjectId },
       orderBy: { createdAt: 'desc' },
       include: AssignmentsService.WITH_FILES,
     });
@@ -178,10 +144,10 @@ export class AssignmentsService {
     actingUserId: string,
     dto: UpdateAssignmentDto,
   ) {
-    const { assignment, course } = await this.requireAssignmentMembership(
+    const { assignment, subject } = await this.requireAssignmentMembership(
       assignmentId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     // Validate the resulting window against the merged (existing + patch) values
@@ -211,7 +177,7 @@ export class AssignmentsService {
     if (dto.fileIds !== undefined) {
       await this.assertOwnedFiles(
         dto.fileIds,
-        course.organizationId,
+        subject.organizationId,
         actingUserId,
       );
     }
@@ -241,7 +207,7 @@ export class AssignmentsService {
     await this.requireAssignmentMembership(
       assignmentId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     await this.prisma.assignment.delete({ where: { id: assignmentId } });
@@ -256,7 +222,7 @@ export class AssignmentsService {
     await this.requireAssignmentMembership(
       assignmentId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     await this.prisma.assignmentFile.deleteMany({

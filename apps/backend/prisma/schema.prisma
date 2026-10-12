@@ -5,13 +5,16 @@
 //   - English identifiers only.
 //   - `organizationId` scopes tenant data. Isolation is enforced in the APP
 //     layer (Nest guards/services), NOT Postgres RLS. Every tenant-scoped query
-//     MUST filter by organizationId (directly, or via its parent Course).
+//     MUST filter by organizationId (directly, or via its parent Subject/Course).
+//   - A Course is a cohort (level + group + academic year). A Subject is one
+//     taught offering of that cohort. Subject.organizationId must equal
+//     Course.organizationId (enforced in the service).
 //   - Binary content lives in object storage (Garage/S3); `File` holds only the
 //     reference (bucket + objectKey). No blobs in the DB.
 //
 //  DEFERRED to Phase 2 (do NOT add until the feature is in scope):
 //   billing (plans/subscriptions/payments), attendance, certificates, calendar
-//   events, full quiz/exam engine, tutor–guardian relations, academic periods,
+//   events, full quiz/exam engine, tutor–guardian relations,
 //   nested course categories, per-tenant subdomains, RLS policies.
 // ============================================================================
 
@@ -39,14 +42,24 @@ model Organization {
   primaryColor String?
   defaultLanguage String @default("es")
   timezone String @default("Europe/Madrid")
+  // SUPERADMIN-configurable plan/limits (issue #18). `null` on a limit means
+  // "unlimited"; enforcing it (e.g. blocking sign-ups past maxUsers) is the
+  // owning feature's job (users/courses/files) — this model only stores it.
+  plan OrganizationPlan @default(STARTER)
+  maxUsers Int?
+  maxCourses Int?
+  maxStorageMb Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users   User[]
-  courses Course[]
-  files   File[]
+  users    User[]
+  courses  Course[]
+  subjects Subject[]
+  files    File[]
+  learningResources LearningResource[]
   invitations OrganizationInvitation[]
   auditLogs AuditLog[]
+  taskTemplates TaskTemplate[]
 }
 
 // ============================================================================
@@ -73,8 +86,8 @@ model User {
 
   sessions          Session[]
   oauthAccounts     OAuthAccount[]
-  enrollments       Enrollment[]
-  ownedCourses      Course[]           @relation("CourseOwner")
+  courseMemberships CourseMembership[]
+  subjectStaff      SubjectStaff[]
   submissions       Submission[]       @relation("SubmissionAuthor")
   gradedSubmissions Submission[]       @relation("SubmissionGrader")
   attempts          Attempt[]          @relation("AttemptUser")
@@ -83,11 +96,13 @@ model User {
   forumPosts        ForumPost[]
   notifications     Notification[]
   uploadedFiles     File[]             @relation("FileUploader")
+  createdLearningResources LearningResource[] @relation("LearningResourceCreator")
   lessonCompletions LessonCompletion[]
   friendsInitiated  Friendship[]       @relation("FriendRequester")
   friendsReceived   Friendship[]       @relation("FriendAddressee")
   invitationsSent  OrganizationInvitation[] @relation("InvitationInviter")
   auditLogs        AuditLog[] @relation("AuditActor")
+  taskTemplates    TaskTemplate[] @relation("TaskTemplateAuthor")
 
   // Email is unique WITHIN an organization (tenant-scoped), not globally.
   @@unique([organizationId, email])
@@ -186,64 +201,104 @@ model File {
   lessonAttachments LessonAttachment[]
   submissionFiles   SubmissionFile[]
   assignmentFiles   AssignmentFile[]
+  activityFiles     ActivityFile[]
+  learningResources LearningResource[] @relation("LearningResourceFile")
 
   @@unique([bucket, objectKey])
   @@index([organizationId])
 }
 
 // ============================================================================
-//  Courses & content
+//  Cohorts, subjects & content
 // ============================================================================
 
+/// Academic cohort: level + group + year (e.g. name `1º A`, academicYear `2025-2026`).
 model Course {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  ownerId        String?
-  owner          User?        @relation("CourseOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  title          String
-  description    String?
-  category       String? // simple free-text tag for the MVP (no category tree)
-  imageUrl       String?
-  accessCode     String?      @unique // self-enrolment by code
-  status         CourseStatus @default(DRAFT)
+  name           String
+  academicYear   String
+  startsOn       DateTime
+  endsOn         DateTime
+  status         CohortStatus @default(PLANNED)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  sections     Section[]
-  enrollments  Enrollment[]
-  assignments  Assignment[]
-  activities   Activity[]
-  forumThreads ForumThread[]
+  subjects    Subject[]
+  memberships CourseMembership[]
 
+  @@unique([organizationId, name, academicYear])
   @@index([organizationId])
 }
 
-model Enrollment {
-  id        String     @id @default(cuid())
+/// One taught offering inside a single cohort. Not a reusable catalog:
+/// the same title in two cohorts is two rows.
+model Subject {
+  id             String            @id @default(cuid())
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  category       String?
+  imageUrl       String?
+  status         PublicationStatus @default(DRAFT)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  sections     Section[]
+  staff        SubjectStaff[]
+  assignments  Assignment[]
+  activities   Activity[]
+  forumThreads ForumThread[]
+  resources    SubjectResource[]
+
+  @@index([organizationId])
+  @@index([courseId])
+}
+
+/// Student membership in a cohort. A user may have at most one membership
+/// whose course is ACTIVE inside their organization (enforced in the service;
+/// Prisma cannot express a partial unique index). Archiving the course keeps
+/// the row as history.
+model CourseMembership {
+  id        String   @id @default(cuid())
   courseId  String
-  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      CourseRole @default(STUDENT)
-  progress  Float      @default(0) // 0..100, % of lessons completed
-  createdAt DateTime   @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@unique([courseId, userId])
   @@index([userId])
 }
 
+model SubjectStaff {
+  id        String           @id @default(cuid())
+  subjectId String
+  subject   Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      SubjectStaffRole
+  createdAt DateTime         @default(now())
+
+  @@unique([subjectId, userId])
+  @@index([userId])
+}
+
 model Section {
   id        String   @id @default(cuid())
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   title     String
   order     Int      @default(0)
   createdAt DateTime @default(now())
 
   lessons Lesson[]
 
-  @@index([courseId])
+  @@index([subjectId])
 }
 
 model Lesson {
@@ -284,13 +339,65 @@ model LessonCompletion {
 }
 
 // ============================================================================
+//  Learning-resource library
+// ============================================================================
+
+/// Reusable academic material owned by an organization. The object bytes stay
+/// in File/object storage; this model supplies catalog metadata and publication
+/// to one or more courses. `fileId` XOR `externalUrl` is enforced by ResourcesService.
+model LearningResource {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User                   @relation("LearningResourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  title          String
+  description    String?
+  type           LearningResourceType
+  authors        String[]               @default([])
+  publisher      String?
+  isbn           String?
+  language       String?
+  license        String?
+  tags           String[]               @default([])
+  fileId         String?
+  file           File?                  @relation("LearningResourceFile", fields: [fileId], references: [id], onDelete: Restrict)
+  externalUrl    String?
+  status         LearningResourceStatus @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  subjects SubjectResource[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, type])
+  @@index([createdById])
+  @@index([fileId])
+}
+
+/// A resource can be published once and reused by multiple subjects. It stays
+/// subject-level; use LessonAttachment for material tied to a specific lesson.
+model SubjectResource {
+  resourceId String
+  resource   LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  subjectId  String
+  subject    Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  order      Int              @default(0)
+  required   Boolean          @default(false)
+
+  @@id([resourceId, subjectId])
+  @@index([subjectId, order])
+}
+
+// ============================================================================
 //  Assignments, submissions & grading
 // ============================================================================
 
 model Assignment {
   id          String    @id @default(cuid())
-  courseId    String
-  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subjectId   String
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   title       String
   description String?
   openAt      DateTime? // submissions accepted from this moment (null = open now)
@@ -303,7 +410,7 @@ model Assignment {
   submissions Submission[]
   files       AssignmentFile[] // teacher's prompt attachments
 
-  @@index([courseId])
+  @@index([subjectId])
 }
 
 /// Files a teacher attaches to an assignment (the prompt/resources), as opposed
@@ -356,8 +463,8 @@ model SubmissionFile {
 
 model ForumThread {
   id        String   @id @default(cuid())
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   authorId  String?
   author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   title     String
@@ -366,7 +473,7 @@ model ForumThread {
 
   posts ForumPost[]
 
-  @@index([courseId])
+  @@index([subjectId])
 }
 
 model ForumPost {
@@ -424,6 +531,13 @@ enum OrganizationStatus {
   ARCHIVED
 }
 
+enum OrganizationPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+  CUSTOM
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -431,13 +545,32 @@ enum InvitationStatus {
   EXPIRED
 }
 
-enum CourseRole {
-  TEACHER
-  ASSISTANT
-  STUDENT
+enum CohortStatus {
+  PLANNED
+  ACTIVE
+  ARCHIVED
 }
 
-enum CourseStatus {
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubjectStaffRole {
+  TEACHER
+  ASSISTANT
+}
+
+enum LearningResourceType {
+  BOOK
+  DOCUMENT
+  LINK
+  VIDEO
+  AUDIO
+}
+
+enum LearningResourceStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
@@ -471,9 +604,9 @@ enum NotificationType {
 // as the MANUAL activity type. See docs/planning/David-B1-design.md.
 
 model Activity {
-  id              String       @id @default(cuid())
-  courseId        String
-  course          Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  subjectId       String
+  subject         Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   type            ActivityType @default(QUIZ)
   title           String
   description     String?
@@ -483,15 +616,18 @@ model Activity {
   maxScore        Float        @default(100)
   attemptsAllowed Int          @default(1) // 0 = unlimited
   timeLimitSec    Int? // null = untimed
-  config          Json         @default("{}") // { shuffleQuestions, shuffleOptions, showSolutions } (DTO-validated)
-  status          CourseStatus @default(DRAFT) // DRAFT / PUBLISHED / ARCHIVED
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  config            Json         @default("{}") // { shuffleQuestions, shuffleOptions, showSolutions } (DTO-validated)
+  status            PublicationStatus @default(DRAFT) // DRAFT / PUBLISHED / ARCHIVED
+  countsTowardFinal Boolean      @default(true)
+  templateId        String? // TaskTemplate.id of origin; no live FK (the recipe can be deleted)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   questions Question[]
   attempts  Attempt[]
+  files     ActivityFile[]
 
-  @@index([courseId])
+  @@index([subjectId])
 }
 
 model Question {
@@ -525,6 +661,7 @@ model Attempt {
   gradedById  String?
   gradedBy    User?         @relation("AttemptGrader", fields: [gradedById], references: [id], onDelete: SetNull)
   gradedAt    DateTime?
+  feedback    String?
 
   answers Answer[]
 
@@ -560,6 +697,38 @@ enum QuestionKind {
   MATCHING
   ORDERING
   SHORT_ANSWER
+  ESSAY
+  FILE_UPLOAD
+}
+
+/// Reusable recipe (JSON snapshot of Question blocks). Instantiating copies
+/// blocks onto a new Activity; deleting the template does not touch instances.
+model TaskTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  blocks         Json // TaskTemplateBlock[]
+  createdFromId  String? // Activity.id of origin; no live FK (the activity may be archived)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+/// Teacher prompt attachments on an Activity (not student FILE_UPLOAD answers).
+model ActivityFile {
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  fileId     String
+  file       File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, fileId])
+  @@index([fileId])
 }
 
 enum AttemptStatus {

@@ -36,7 +36,7 @@ export function useAssignments(courseId: string | null): UseAssignmentsResult {
     setError(null);
 
     apiClient
-      .get<AssignmentDTO[]>(`/courses/${courseId}/assignments`)
+      .get<AssignmentDTO[]>(`/subjects/${courseId}/assignments`)
       .then((result) => {
         if (!cancelled) setData(result);
       })

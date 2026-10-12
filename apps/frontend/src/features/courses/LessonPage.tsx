@@ -5,12 +5,12 @@ import remarkGfm from 'remark-gfm';
 import { useCourseDetail, useLessonById, useCompletedLessons, useCompleteLesson } from '@/lib/api';
 
 export function LessonPage() {
-  const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
+  const { courseId, subjectId, lessonId } = useParams<{ courseId: string; subjectId: string; lessonId: string }>();
   const navigate = useNavigate();
 
-  const { data: course } = useCourseDetail(courseId);
+  const { data: course } = useCourseDetail(subjectId);
   const { data: lesson, isLoading: lessonLoading, error: lessonErr } = useLessonById(lessonId);
-  const { data: completedLessons } = useCompletedLessons(courseId);
+  const { data: completedLessons } = useCompletedLessons(subjectId);
   const { completeLesson, isLoading: completing } = useCompleteLesson();
 
   const [isDone, setIsDone] = useState(false);
@@ -54,7 +54,7 @@ export function LessonPage() {
   return (
     <div style={{ padding: '26px 40px', maxWidth: 760 }}>
       <button
-        onClick={() => navigate(`/courses/${courseId}`)}
+        onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}`)}
         style={{
           background: 'var(--color-bg-secondary)',
           border: '1px solid var(--color-border-secondary)',

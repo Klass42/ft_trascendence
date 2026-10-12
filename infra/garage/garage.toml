@@ -1,0 +1,20 @@
+# Single-node Garage (S3-compatible) for the compose stack. Data and metadata
+# live in Docker volumes. The RPC secret comes from GARAGE_RPC_SECRET (.env);
+# the bucket and key pair are provisioned from GARAGE_DEFAULT_* on first start.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "garage:3901"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+root_domain = ".s3.garage.localhost"
+
+# Admin API: only /metrics is usable (no admin_token is configured), and the
+# port is not published — Prometheus scrapes it over the compose network.
+[admin]
+api_bind_addr = "[::]:3903"

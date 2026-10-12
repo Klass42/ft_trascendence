@@ -1,7 +1,7 @@
 import { IsEnum } from 'class-validator';
-import { CourseRole } from '@prisma/client';
+import { SubjectStaffRole } from '@prisma/client';
 
 export class UpdateRoleDto {
-  @IsEnum(CourseRole)
-  role: CourseRole;
+  @IsEnum(SubjectStaffRole)
+  role: SubjectStaffRole;
 }

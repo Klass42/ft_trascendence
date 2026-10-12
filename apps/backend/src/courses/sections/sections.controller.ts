@@ -6,78 +6,79 @@ import {
   Delete,
   Param,
   Body,
-  UseGuards,
 } from '@nestjs/common';
 import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
-import { AuthUser, CurrentUser, Roles, RolesGuard } from '@/common/auth';
+import { AuthUser, CurrentUser } from '@/common/auth';
+import { CourseAccessService } from '../course-access.service';
 
-@Controller('courses/:courseId/sections')
+@Controller('subjects/:subjectId/sections')
 export class SectionsController {
-  constructor(private readonly sectionsService: SectionsService) {}
+  constructor(
+    private readonly sectionsService: SectionsService,
+    private readonly courseAccess: CourseAccessService,
+  ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
   async create(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSectionDto,
   ) {
-    return this.sectionsService.create(courseId, user.organizationId, dto);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    return this.sectionsService.create(subjectId, user.organizationId, dto);
   }
 
   @Get()
   async findAll(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.sectionsService.findAll(courseId, user.organizationId);
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
+    return this.sectionsService.findAll(subjectId, user.organizationId);
   }
 
   @Patch('reorder')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
   async reorder(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body('orderedIds') orderedIds: string[],
   ) {
-    await this.sectionsService.reorder(courseId, user.organizationId, orderedIds);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    await this.sectionsService.reorder(subjectId, user.organizationId, orderedIds);
     return { reordered: true };
   }
 
   @Get(':id')
   async findOne(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.sectionsService.findOne(courseId, id, user.organizationId);
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
+    return this.sectionsService.findOne(subjectId, id, user.organizationId);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
   async update(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateSectionDto,
   ) {
-    return this.sectionsService.update(courseId, id, user.organizationId, dto);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    return this.sectionsService.update(subjectId, id, user.organizationId, dto);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
   async delete(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.sectionsService.delete(courseId, id, user.organizationId);
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    await this.sectionsService.delete(subjectId, id, user.organizationId);
     return { deleted: true };
   }
 }

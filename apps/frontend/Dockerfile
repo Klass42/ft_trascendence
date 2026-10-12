@@ -1,31 +1,26 @@
-FROM node:24-slim AS base
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+# syntax=docker/dockerfile:1
+#
+# Static SPA: built with Vite, served by unprivileged nginx on :8080.
+# TLS, compression and /api routing live in Caddy (infra/caddy/Caddyfile).
 
-FROM base AS deps
+# ─── build ───
+FROM node:22-alpine AS build
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate \
+ && pnpm config set store-dir /pnpm/store
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
-# changed: filter needs the workspace package or pnpm matches 0 projects and skips node_modules
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/frontend/package.json apps/frontend/
-RUN pnpm install --frozen-lockfile --filter @ft-trascendence/frontend
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter @ft-trascendence/frontend
 
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-ARG VITE_BACKEND_URL=/api
-ENV VITE_BACKEND_URL=${VITE_BACKEND_URL}
-
+COPY apps/frontend/ apps/frontend/
 RUN pnpm --filter @ft-trascendence/frontend run build
 
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN pnpm add -g serve
-COPY --from=builder --chown=node:node /app/apps/frontend/dist ./dist
-EXPOSE 5173
-USER node
-# same listen port as vite.config.ts (FRONTEND_PORT, default 5173 — USER node cannot bind 80)
-CMD ["sh", "-c", "serve -s dist -l ${FRONTEND_PORT:-5173}"]
+# ─── runtime ───
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/frontend/dist /usr/share/nginx/html
+EXPOSE 8080

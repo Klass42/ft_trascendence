@@ -1,22 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Button, Spinner } from '@/components/ui';
 import {
-  useCourses,
-  useGradebook,
+  Badge,
+  Button,
+  EmptyState,
+  Select,
+  Spinner,
+  Table,
+  useToast,
+} from '@/components/ui';
+import {
   downloadGradebookCsv,
+  formatFinalPercent,
+  useMySubjects,
+  useGradebook,
 } from '@/lib/api';
-import type { GradebookCellDTO } from '@/lib/api';
-import { STATUS_CHIP } from '@/features/assignments/helpers';
+import type { GradebookCellDTO, GradebookItemDTO, GradebookRowDTO } from '@/lib/api';
+import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
 import { GradePanel, type GradeTarget } from './GradePanel';
 
 /**
- * Staff gradebook: a students × assignments matrix of scores for a course, a
- * CSV export, and a grading modal opened by clicking a submitted cell. The
- * tenant is derived server-side from identity, so nothing here trusts a
- * client-supplied org.
+ * Staff gradebook: students × activities, CSV export, grading modal on a
+ * submitted cell. Tenant is derived server-side.
  */
 export function GradebookPage() {
-  const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { toast } = useToast();
+  const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [target, setTarget] = useState<GradeTarget | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -40,25 +48,19 @@ export function GradebookPage() {
     try {
       await downloadGradebookCsv(courseId);
     } catch {
-      alert('No se pudo descargar el CSV.');
+      toast({ variant: 'error', message: 'No se pudo descargar el CSV.' });
     } finally {
       setDownloading(false);
     }
   }
 
-  function openCell(
-    cell: GradebookCellDTO,
-    studentName: string,
-    assignmentTitle: string,
-    maxScore: number,
-  ) {
-    if (!cell.submissionId) return; // nothing to grade yet
+  function openCell(cell: GradebookCellDTO, studentName: string, item: GradebookItemDTO) {
+    if (!cell.attemptId) return;
     setTarget({
-      submissionId: cell.submissionId,
+      attemptId: cell.attemptId,
+      activityId: item.id,
       studentName,
-      assignmentTitle,
-      maxScore,
-      initialScore: cell.score,
+      title: item.title,
     });
   }
 
@@ -75,10 +77,9 @@ export function GradebookPage() {
       >
         <h1
           style={{
-            fontSize: 26,
-            fontWeight: 800,
+            fontSize: 'var(--text-2xl)',
+            fontWeight: 'var(--font-bold)',
             margin: 0,
-            letterSpacing: '-0.02em',
           }}
         >
           Calificaciones
@@ -86,25 +87,12 @@ export function GradebookPage() {
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {courses && courses.length > 0 && (
-            <select
+            <Select
+              aria-label="Curso"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 9,
-                border: '1px solid var(--color-border-primary)',
-                background: 'var(--color-bg-primary)',
-                color: 'var(--color-text-primary)',
-                fontSize: 14,
-                fontFamily: 'inherit',
-              }}
-            >
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
+              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
+            />
           )}
           <Button
             variant="secondary"
@@ -120,12 +108,13 @@ export function GradebookPage() {
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
-        <p style={{ color: 'var(--color-text-muted)' }}>
-          No hay cursos disponibles.
-        </p>
+        <EmptyState
+          title="No hay cursos disponibles"
+          description="Cuando impartas un curso, su libro de notas aparecerá aquí."
+        />
       )}
 
-      {isLoading && <Spinner size="md" label="Cargando gradebook…" />}
+      {isLoading && <Spinner size="md" label="Cargando calificaciones…" />}
 
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
@@ -135,119 +124,67 @@ export function GradebookPage() {
 
       {gradebook && !isLoading && (
         <>
-          {gradebook.assignments.length === 0 ? (
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-              Este curso no tiene tareas todavía.
-            </p>
+          {gradebook.items.length === 0 ? (
+            <EmptyState
+              title="Este curso no tiene tareas todavía"
+              description="Publica una tarea para ver columnas de notas."
+            />
           ) : gradebook.students.length === 0 ? (
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-              No hay alumnos inscritos en este curso.
-            </p>
+            <EmptyState
+              title="No hay alumnos inscritos"
+              description="Cuando se matriculen, verás una fila por alumno."
+            />
           ) : (
-            <div
-              style={{
-                overflowX: 'auto',
-                border: '1px solid var(--color-border-primary)',
-                borderRadius: 13,
-                background: 'var(--color-bg-secondary)',
-              }}
-            >
-              <table
-                style={{
-                  borderCollapse: 'collapse',
-                  width: '100%',
-                  fontSize: 13.5,
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={thStyle('left')}>Alumno</th>
-                    {gradebook.assignments.map((a) => (
-                      <th key={a.id} style={thStyle('center')} title={a.title}>
-                        <div style={{ fontWeight: 700 }}>{a.title}</div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: 'var(--color-text-muted)',
-                            fontWeight: 500,
-                          }}
-                        >
-                          / {a.maxScore}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {gradebook.students.map((row) => (
-                    <tr key={row.user.id}>
-                      <td style={tdStyle('left')}>
-                        <div style={{ fontWeight: 600 }}>{row.user.name}</div>
-                        <div
-                          style={{
-                            fontSize: 11.5,
-                            color: 'var(--color-text-muted)',
-                          }}
-                        >
-                          {row.user.email}
-                        </div>
-                      </td>
-                      {row.cells.map((cell) => {
-                        const assignment = gradebook.assignments.find(
-                          (a) => a.id === cell.assignmentId,
-                        )!;
-                        const gradable = !!cell.submissionId;
-                        const chip = cell.status
-                          ? STATUS_CHIP[cell.status]
-                          : STATUS_CHIP.NONE;
-                        return (
-                          <td
-                            key={cell.assignmentId}
-                            style={{
-                              ...tdStyle('center'),
-                              cursor: gradable ? 'pointer' : 'default',
-                            }}
-                            onClick={() =>
-                              openCell(
-                                cell,
-                                row.user.name,
-                                assignment.title,
-                                assignment.maxScore,
-                              )
-                            }
-                            title={
-                              gradable
-                                ? 'Clic para calificar'
-                                : 'Sin entrega'
-                            }
-                          >
-                            {cell.score != null ? (
-                              <span style={{ fontWeight: 800, fontSize: 15 }}>
-                                {cell.score}
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  color: chip.fg,
-                                  background: chip.bg,
-                                  padding: '3px 8px',
-                                  borderRadius: 20,
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {chip.label}
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              columns={[
+                {
+                  key: 'student',
+                  header: 'Alumno',
+                  render: (row: GradebookRowDTO) => (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{row.user.name}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+                        {row.user.email}
+                      </div>
+                    </div>
+                  ),
+                },
+                ...gradebook.items.map((item) => ({
+                  key: item.id,
+                  header: (
+                    <div>
+                      <div>{item.title}</div>
+                      <div style={{ fontWeight: 500, fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        / {item.maxScore}
+                        {item.countsTowardFinal === false ? ' · práctica' : ''}
+                      </div>
+                    </div>
+                  ),
+                  align: 'center' as const,
+                  render: (row: GradebookRowDTO) => {
+                    const cell = row.cells.find((c) => c.activityId === item.id);
+                    if (!cell) return '—';
+                    return (
+                      <Cell
+                        cell={cell}
+                        item={item}
+                        onClick={() => openCell(cell, row.user.name, item)}
+                      />
+                    );
+                  },
+                })),
+                {
+                  key: 'final',
+                  header: 'Nota final',
+                  align: 'center' as const,
+                  render: (row: GradebookRowDTO) => (
+                    <strong>{formatFinalPercent(row.final)}</strong>
+                  ),
+                },
+              ]}
+              data={gradebook.students}
+              rowKey={(row) => row.user.id}
+            />
           )}
         </>
       )}
@@ -266,26 +203,43 @@ export function GradebookPage() {
   );
 }
 
-function thStyle(align: 'left' | 'center'): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '12px 14px',
-    background: 'var(--color-bg-primary)',
-    borderBottom: '1px solid var(--color-border-primary)',
-    fontSize: 12.5,
-    fontWeight: 700,
-    color: 'var(--color-text-secondary)',
-    position: 'sticky',
-    top: 0,
-    whiteSpace: 'nowrap',
-  };
-}
-
-function tdStyle(align: 'left' | 'center'): React.CSSProperties {
-  return {
-    textAlign: align,
-    padding: '12px 14px',
-    borderBottom: '1px solid var(--color-border-primary)',
-    verticalAlign: 'middle',
-  };
+function Cell({
+  cell,
+  item,
+  onClick,
+}: {
+  cell: GradebookCellDTO;
+  item: GradebookItemDTO;
+  onClick: () => void;
+}) {
+  const gradable = !!cell.attemptId;
+  const badge = cell.status ? ATTEMPT_STATUS_BADGE[cell.status] : null;
+  return (
+    <button
+      type="button"
+      onClick={gradable ? onClick : undefined}
+      disabled={!gradable}
+      title={gradable ? 'Clic para calificar' : 'Sin intento'}
+      style={{
+        background: 'none',
+        border: 0,
+        cursor: gradable ? 'pointer' : 'default',
+        fontFamily: 'inherit',
+        padding: 0,
+      }}
+    >
+      {cell.score != null ? (
+        <span style={{ fontWeight: 800, fontSize: 15 }}>{cell.score}</span>
+      ) : badge ? (
+        <Badge variant={badge.variant}>{badge.label}</Badge>
+      ) : (
+        <Badge variant="neutral">Sin entregar</Badge>
+      )}
+      {item.countsTowardFinal === false && cell.score != null && (
+        <div>
+          <Badge variant="neutral">Práctica</Badge>
+        </div>
+      )}
+    </button>
+  );
 }

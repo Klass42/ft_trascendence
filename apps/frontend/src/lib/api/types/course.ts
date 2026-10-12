@@ -1,50 +1,67 @@
 /**
- * Course API DTOs
+ * Cohort and subject API DTOs.
  *
- * Exact shapes of the backend API responses (Prisma models).
+ * A Course is a cohort (level + group + academic year). A Subject is one
+ * taught offering inside that cohort.
  */
 
-// =============================================================================
-// Enums
-// =============================================================================
-
-export type CourseStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-export type CourseRole = 'TEACHER' | 'ASSISTANT' | 'STUDENT';
-
-// =============================================================================
-// Course
-// =============================================================================
+export type CohortStatus = 'PLANNED' | 'ACTIVE' | 'ARCHIVED';
+export type PublicationStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type SubjectStaffRole = 'TEACHER' | 'ASSISTANT';
 
 export interface CourseDTO {
   id: string;
   organizationId: string;
-  ownerId: string | null;
-  title: string;
-  description: string | null;
-  category: string | null;
-  imageUrl: string | null;
-  accessCode: string | null;
-  status: CourseStatus;
+  name: string;
+  academicYear: string;
+  startsOn: string;
+  endsOn: string;
+  status: CohortStatus;
   createdAt: string;
   updatedAt: string;
 }
 
-// =============================================================================
-// Section
-// =============================================================================
+export interface SubjectCourseRef {
+  id: string;
+  name: string;
+  academicYear: string;
+  status?: CohortStatus;
+}
+
+export interface SubjectDTO {
+  id: string;
+  organizationId: string;
+  courseId: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  imageUrl: string | null;
+  status: PublicationStatus;
+  createdAt: string;
+  updatedAt: string;
+  course?: SubjectCourseRef;
+}
+
+/** Row from GET /me/subjects. The option value is the subject id. */
+export interface MeSubjectDTO {
+  id: string;
+  title: string;
+  status: PublicationStatus;
+  course: { id: string; name: string; academicYear: string };
+}
+
+export function subjectSelectorLabel(subject: Pick<MeSubjectDTO, 'title' | 'course'>): string {
+  return `${subject.title} · ${subject.course.name} · ${subject.course.academicYear}`;
+}
 
 export interface SectionDTO {
   id: string;
-  courseId: string;
+  subjectId: string;
   title: string;
   order: number;
   createdAt: string;
   lessons?: LessonDTO[];
 }
-
-// =============================================================================
-// Lesson
-// =============================================================================
 
 export interface LessonDTO {
   id: string;
@@ -57,10 +74,6 @@ export interface LessonDTO {
   attachments?: LessonAttachmentDTO[];
 }
 
-// =============================================================================
-// File
-// =============================================================================
-
 export interface FileDTO {
   id: string;
   organizationId: string;
@@ -69,13 +82,9 @@ export interface FileDTO {
   objectKey: string;
   originalName: string;
   contentType: string | null;
-  sizeBytes: string; // BigInt serialized as string
+  sizeBytes: string;
   createdAt: string;
 }
-
-// =============================================================================
-// Lesson Attachment
-// =============================================================================
 
 export interface LessonAttachmentDTO {
   lessonId: string;
@@ -83,22 +92,21 @@ export interface LessonAttachmentDTO {
   file: FileDTO;
 }
 
-// =============================================================================
-// Enrollment
-// =============================================================================
-
-export interface EnrollmentDTO {
+export interface CourseMembershipDTO {
   id: string;
   courseId: string;
   userId: string;
-  role: CourseRole;
-  progress: number;
   createdAt: string;
+  progress?: number;
 }
 
-// =============================================================================
-// Progress
-// =============================================================================
+export interface SubjectStaffDTO {
+  id: string;
+  subjectId: string;
+  userId: string;
+  role: SubjectStaffRole;
+  createdAt: string;
+}
 
 export interface ProgressDTO {
   progress: number;
@@ -111,35 +119,42 @@ export interface CompleteLessonDTO {
   progress: number;
 }
 
-// =============================================================================
-// My Progress (batch)
-// =============================================================================
-
 export interface MyProgressItem {
+  subjectId: string;
   courseId: string;
   percentage: number;
 }
 
-// =============================================================================
-// Request payloads
-// =============================================================================
-
 export interface CreateCourseInput {
+  name: string;
+  academicYear: string;
+  startsOn: string;
+  endsOn: string;
+  status?: CohortStatus;
+}
+
+export interface UpdateCourseInput {
+  name?: string;
+  academicYear?: string;
+  startsOn?: string;
+  endsOn?: string;
+  status?: CohortStatus;
+}
+
+export interface CreateSubjectInput {
   title: string;
   description?: string;
   category?: string;
   imageUrl?: string;
-  accessCode?: string;
-  status?: CourseStatus;
+  status?: PublicationStatus;
 }
 
-export interface UpdateCourseInput {
+export interface UpdateSubjectInput {
   title?: string;
   description?: string;
   category?: string;
   imageUrl?: string;
-  accessCode?: string;
-  status?: CourseStatus;
+  status?: PublicationStatus;
 }
 
 export interface CreateSectionInput {

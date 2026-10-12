@@ -1,279 +1,93 @@
-import { NotFoundException } from '@nestjs/common';
 import { CoursesService } from '../courses.service';
+import type { AuthUser } from '@/common/auth';
 import type { PrismaService } from '@/prisma/prisma.service';
 
 const ORG_ID = 'org-klass-0001';
-const OTHER_ORG = 'org-other-0001';
-const COURSE_ID = 'course-web-101';
-const COURSE_ID_2 = 'course-web-102';
+const TEACHER: AuthUser = {
+  userId: 'teacher-1', email: 'teacher@example.test', name: 'Teacher',
+  avatarUrl: null, organizationId: ORG_ID, role: 'TEACHER',
+  emailNotificationsEnabled: true, preferredLanguage: 'es',
+};
+const STUDENT: AuthUser = { ...TEACHER, userId: 'student-1', role: 'STUDENT' };
+const ADMIN: AuthUser = { ...TEACHER, userId: 'admin-1', role: 'ADMIN' };
 
-function buildFake() {
-  const courses: Record<string, any> = {
-    [COURSE_ID]: {
-      id: COURSE_ID, organizationId: ORG_ID, ownerId: null,
-      title: 'Introducción al Desarrollo Web', description: 'Curso inicial',
-      category: 'web', imageUrl: null, accessCode: 'WEB101',
-      status: 'PUBLISHED', createdAt: new Date(), updatedAt: new Date(),
-    },
-    [COURSE_ID_2]: {
-      id: COURSE_ID_2, organizationId: ORG_ID, ownerId: null,
-      title: 'Diseño de Interfaces', description: null,
-      category: 'design', imageUrl: null, accessCode: null,
-      status: 'DRAFT', createdAt: new Date(), updatedAt: new Date(),
-    },
-  };
+describe('CoursesService visibility', () => {
+  it('does not list every published subject for a teacher who does not staff it', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = { subject: { findMany } } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
 
-  const prisma = {
-    course: {
-      create: async ({ data }: any) => {
-        const course = { ...data, id: `course-${Date.now()}`, createdAt: new Date(), updatedAt: new Date() };
-        courses[course.id] = course;
-        return course;
-      },
-      findMany: async ({ where }: any) => {
-        let result = Object.values(courses);
-        if (where?.organizationId) result = result.filter((c: any) => c.organizationId === where.organizationId);
-        if (where?.status) {
-          const statusVal = typeof where.status === 'object' ? where.status.equals : where.status;
-          result = result.filter((c: any) => c.status === statusVal);
-        }
-        if (where?.title?.contains) {
-          result = result.filter((c: any) =>
-            c.title.toLowerCase().includes(where.title.contains.toLowerCase()),
-          );
-        }
-        return result.sort((a: any, b: any) => b.createdAt - a.createdAt);
-      },
-      findUnique: async ({ where }: any) => courses[where.id] ?? null,
-      update: async ({ where, data }: any) => {
-        if (!courses[where.id]) throw new NotFoundException();
-        Object.assign(courses[where.id], data);
-        return courses[where.id];
-      },
-      delete: async ({ where }: any) => {
-        if (!courses[where.id]) throw new NotFoundException();
-        const c = courses[where.id];
-        delete courses[where.id];
-        return c;
-      },
-    },
-  } as unknown as PrismaService;
+    await service.listMySubjects(TEACHER);
 
-  return { prisma, courses };
-}
-
-function buildService(prisma: PrismaService) {
-  return new CoursesService(prisma);
-}
-
-describe('CoursesService', () => {
-  describe('create', () => {
-    it('creates a course with minimal fields', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.create({ title: 'Nuevo curso' }, ORG_ID);
-
-      expect(result.id).toBeTruthy();
-      expect(result.title).toBe('Nuevo curso');
-      expect(result.organizationId).toBe(ORG_ID);
-      expect(result.status).toBeUndefined();
-    });
-
-    it('creates a course with all optional fields', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.create({
-        title: 'Curso completo',
-        description: 'Descripción completa',
-        category: 'backend',
-        imageUrl: 'https://example.com/img.png',
-        accessCode: 'SECRET',
-        status: 'DRAFT',
-      }, ORG_ID);
-
-      expect(result.title).toBe('Curso completo');
-      expect(result.description).toBe('Descripción completa');
-      expect(result.category).toBe('backend');
-      expect(result.imageUrl).toBe('https://example.com/img.png');
-      expect(result.accessCode).toBe('SECRET');
-      expect(result.status).toBe('DRAFT');
-    });
-
-    it('stores the organizationId on the course', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.create({ title: 'Org scoped' }, ORG_ID);
-      expect(result.organizationId).toBe(ORG_ID);
-    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId: ORG_ID,
+        staff: { some: { userId: TEACHER.userId } },
+      }),
+    }));
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.status).toBeUndefined();
+    expect(JSON.stringify(where)).not.toContain('PUBLISHED');
   });
 
-  describe('findAll', () => {
-    it('returns all courses for an org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('lists only published subjects of cohorts the student belongs to', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = { subject: { findMany } } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
 
-      const result = await service.findAll(ORG_ID);
+    await service.listMySubjects(STUDENT);
 
-      expect(result).toHaveLength(2);
-      expect(result.map((c: any) => c.id)).toContain(COURSE_ID);
-      expect(result.map((c: any) => c.id)).toContain(COURSE_ID_2);
-    });
-
-    it('filters by status', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const published = await service.findAll(ORG_ID, 'PUBLISHED');
-      expect(published).toHaveLength(1);
-      expect(published[0].id).toBe(COURSE_ID);
-
-      const drafts = await service.findAll(ORG_ID, 'DRAFT');
-      expect(drafts).toHaveLength(1);
-      expect(drafts[0].id).toBe(COURSE_ID_2);
-    });
-
-    it('filters by search (case-insensitive)', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(ORG_ID, undefined, 'Desarrollo');
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(COURSE_ID);
-    });
-
-    it('returns empty array for different org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(OTHER_ORG);
-      expect(result).toHaveLength(0);
-    });
-
-    it('returns empty array when status matches nothing', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.findAll(ORG_ID, 'ARCHIVED');
-      expect(result).toHaveLength(0);
-    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId: ORG_ID,
+        status: 'PUBLISHED',
+        course: expect.objectContaining({
+          memberships: { some: { userId: STUDENT.userId } },
+        }),
+      }),
+    }));
   });
 
-  describe('findOne', () => {
-    it('returns a course by id within the org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('lets an admin list every subject in their organization', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = { subject: { findMany } } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
 
-      const result = await service.findOne(COURSE_ID, ORG_ID);
-      expect(result.id).toBe(COURSE_ID);
-      expect(result.title).toBe('Introducción al Desarrollo Web');
-    });
+    await service.listMySubjects(ADMIN);
 
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.findOne('ghost', ORG_ID)).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.findOne(COURSE_ID, OTHER_ORG)).rejects.toThrow(NotFoundException);
-    });
+    const where = findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ organizationId: ORG_ID });
   });
 
-  describe('update', () => {
-    it('updates the course title', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
+  it('limits cohort listings the same way', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = { course: { findMany } } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
 
-      const result = await service.update(COURSE_ID, ORG_ID, { title: 'Título nuevo' });
-      expect(result.title).toBe('Título nuevo');
-    });
+    await service.findAll(STUDENT);
 
-    it('updates description', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { description: 'Nueva descripción' });
-      expect(result.description).toBe('Nueva descripción');
-    });
-
-    it('updates status', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { status: 'ARCHIVED' });
-      expect(result.status).toBe('ARCHIVED');
-    });
-
-    it('updates accessCode', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      const result = await service.update(COURSE_ID, ORG_ID, { accessCode: 'NEWCODE' });
-      expect(result.accessCode).toBe('NEWCODE');
-    });
-
-    it('persists update across findOne', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await service.update(COURSE_ID, ORG_ID, { title: 'Persistido' });
-      const result = await service.findOne(COURSE_ID, ORG_ID);
-      expect(result.title).toBe('Persistido');
-    });
-
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.update('ghost', ORG_ID, { title: 'x' })).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.update(COURSE_ID, OTHER_ORG, { title: 'x' })).rejects.toThrow(NotFoundException);
-    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        organizationId: ORG_ID,
+        memberships: { some: { userId: STUDENT.userId } },
+      }),
+    }));
   });
 
-  describe('delete', () => {
-    it('deletes an existing course', async () => {
-      const { prisma, courses } = buildFake();
-      const service = buildService(prisma);
+  it('creates a cohort without making the admin staff or owner', async () => {
+    const create = jest.fn(async ({ data }: any) => ({ id: 'course-1', ...data }));
+    const prisma = { course: { create } } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
 
-      await service.delete(COURSE_ID, ORG_ID);
-      expect(courses[COURSE_ID]).toBeUndefined();
-    });
+    const result = await service.create({
+      name: '1º A',
+      academicYear: '2025-2026',
+      startsOn: '2025-09-01',
+      endsOn: '2026-06-30',
+    }, ADMIN);
 
-    it('removes course from findAll after delete', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await service.delete(COURSE_ID, ORG_ID);
-      const result = await service.findAll(ORG_ID);
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(COURSE_ID_2);
-    });
-
-    it('throws NotFoundException when course does not exist', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.delete('ghost', ORG_ID)).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when course belongs to another org', async () => {
-      const { prisma } = buildFake();
-      const service = buildService(prisma);
-
-      await expect(service.delete(COURSE_ID, OTHER_ORG)).rejects.toThrow(NotFoundException);
-    });
+    expect(result).toMatchObject({ organizationId: ORG_ID, name: '1º A' });
+    expect(result).not.toHaveProperty('ownerId');
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });

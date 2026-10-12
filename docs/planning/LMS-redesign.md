@@ -4,6 +4,11 @@
 > Playwright. El objetivo: pasar de "el backend existe pero la UI de profesor está casi vacía" a un
 > LMS que **se sienta completo**, y dejarlo planificado con guardarraíles para que se construya con
 > calidad (incluidos compañeros con modelos pequeños en OpenCode).
+>
+> **Actualización 2026-09-19:** Fase B plantillas **landed**. Un solo ciclo de Tareas sobre
+> `Activity` (bloques + plantillas + gradebook de intentos). El diagnóstico §1 («un solo tipo de
+> tarea», gradebook solo assignments) es histórico. Guía: [`task-templates.md`](./task-templates.md).
+> Spec: [`../superpowers/specs/2026-09-19-task-templates-design.md`](../superpowers/specs/2026-09-19-task-templates-design.md).
 
 ## 1. Diagnóstico (por qué se siente pobre)
 

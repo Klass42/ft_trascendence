@@ -1,5 +1,7 @@
-import { ActivityType, CourseStatus } from '@prisma/client';
+import { ActivityType, PublicationStatus } from '@prisma/client';
 import {
+  IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -42,10 +44,20 @@ export class UpdateActivityDto {
   @IsOptional()
   closeAt?: string | null;
 
+  // Ignored: maxScore is derived from question points.
   @IsNumber()
-  @Min(1)
+  @Min(0)
   @IsOptional()
   maxScore?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  countsTowardFinal?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  fileIds?: string[];
 
   @IsInt()
   @Min(0)
@@ -61,7 +73,7 @@ export class UpdateActivityDto {
   @IsOptional()
   config?: Record<string, unknown>;
 
-  @IsEnum(CourseStatus)
+  @IsEnum(PublicationStatus)
   @IsOptional()
-  status?: CourseStatus;
+  status?: PublicationStatus;
 }

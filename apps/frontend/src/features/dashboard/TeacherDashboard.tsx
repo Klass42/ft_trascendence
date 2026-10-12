@@ -1,13 +1,13 @@
 /**
  * TeacherDashboard — OWNER: David (Plan 2, A4-teacher).
  * Real data via GET /me/teaching/summary: courses taught, distinct students and
- * ungraded submissions. Clicking "Por calificar" (card or a row) opens the
+ * ungraded attempts. Clicking "Por calificar" (card or a row) opens the
  * gradebook. No mock data.
  */
 import { useNavigate } from 'react-router-dom';
-import { Badge, EmptyState, Spinner } from '@/components/ui';
+import { EmptyState, Spinner } from '@/components/ui';
 import { useAuth, useTeachingSummary } from '@/lib/api';
-import type { PendingSubmissionDTO } from '@/lib/api';
+import type { PendingAttemptDTO } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
 
 function initials(name: string): string {
@@ -184,9 +184,9 @@ export function TeacherDashboard() {
                 maxWidth: 720,
               }}
             >
-              {data.pending.map((s: PendingSubmissionDTO) => (
+              {data.pending.map((s: PendingAttemptDTO) => (
                 <div
-                  key={s.submissionId}
+                  key={s.attemptId}
                   role="button"
                   tabIndex={0}
                   onClick={goToGradebook}
@@ -232,7 +232,7 @@ export function TeacherDashboard() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {s.assignmentTitle}
+                      {s.activityTitle}
                     </div>
                     <div
                       style={{
@@ -243,9 +243,6 @@ export function TeacherDashboard() {
                       {s.student.name} · {s.courseTitle}
                     </div>
                   </div>
-                  {s.status === 'LATE' && (
-                    <Badge variant="error">Tarde</Badge>
-                  )}
                   <span
                     style={{
                       fontSize: 'var(--text-xs)',
@@ -253,7 +250,7 @@ export function TeacherDashboard() {
                       flex: 'none',
                     }}
                   >
-                    {relativeTime(s.submittedAt)}
+                    {s.submittedAt ? relativeTime(s.submittedAt) : '—'}
                   </span>
                 </div>
               ))}

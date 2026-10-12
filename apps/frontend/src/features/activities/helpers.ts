@@ -1,5 +1,6 @@
 import type {
   ActivityStatus,
+  AttemptStatus,
   QuestionKind,
 } from '@/lib/api';
 
@@ -11,6 +12,8 @@ export const KIND_LABELS: Record<QuestionKind, string> = {
   MATCHING: 'Emparejar',
   ORDERING: 'Ordenar',
   SHORT_ANSWER: 'Respuesta corta',
+  ESSAY: 'Desarrollar',
+  FILE_UPLOAD: 'Fichero',
 };
 
 /** The kinds offered in the authoring picker, in a sensible teaching order. */
@@ -21,7 +24,32 @@ export const KIND_ORDER: QuestionKind[] = [
   'SHORT_ANSWER',
   'MATCHING',
   'ORDERING',
+  'ESSAY',
+  'FILE_UPLOAD',
 ];
+
+/** Kinds without an auto-grader (or SHORT_ANSWER with empty accepted). */
+export function isSubjective(
+  kind: QuestionKind,
+  content?: Record<string, unknown>,
+): boolean {
+  if (kind === 'ESSAY' || kind === 'FILE_UPLOAD') return true;
+  if (kind === 'SHORT_ANSWER') {
+    const accepted = content?.accepted;
+    return !Array.isArray(accepted) || accepted.length === 0;
+  }
+  return false;
+}
+
+/** Badge styling for an attempt's status (design-system Badge). */
+export const ATTEMPT_STATUS_BADGE: Record<
+  AttemptStatus,
+  { variant: 'success' | 'warning' | 'info' | 'neutral'; label: string }
+> = {
+  IN_PROGRESS: { variant: 'warning', label: 'Borrador' },
+  SUBMITTED: { variant: 'info', label: 'Por calificar' },
+  GRADED: { variant: 'success', label: 'Calificado' },
+};
 
 /** Badge styling for an activity's publish status (design-system Badge). */
 export const STATUS_BADGE: Record<
@@ -49,15 +77,11 @@ export function emptyContent(kind: QuestionKind): Record<string, unknown> {
       return { items: ['', ''], correctOrder: [0, 1] };
     case 'SHORT_ANSWER':
       return { accepted: [] };
+    case 'ESSAY':
+      return {};
+    case 'FILE_UPLOAD':
+      return { maxFiles: 1 };
     default:
       return {};
   }
-}
-
-/** Split a comma/newline separated string into a trimmed, non-empty list. */
-export function parseList(value: string): string[] {
-  return value
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
 }

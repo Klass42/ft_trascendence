@@ -1,0 +1,70 @@
+import { ExternalLink, FileText, Link as LinkIcon } from 'lucide-react';
+import { apiClient, type LearningResourceDTO } from '@/lib/api';
+import { resourceStatusLabel, resourceTypeLabel } from './resource-helpers';
+
+interface ResourceCardProps {
+  resource: LearningResourceDTO;
+  showStatus?: boolean;
+  required?: boolean;
+}
+
+/** Read-only resource presentation shared by the library and a course tab. */
+export function ResourceCard({ resource, showStatus = false, required = false }: ResourceCardProps) {
+  const openExternal = () => {
+    if (resource.externalUrl) window.open(resource.externalUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const openFile = async () => {
+    if (!resource.fileId) return;
+    try {
+      // Do not derive an object-storage URL in the browser. This endpoint checks
+      // resource/course access before returning a short-lived storage URL.
+      const { url } = await apiClient.get<{ url: string }>(`/files/${resource.fileId}/url`);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.alert('No se pudo abrir el archivo. Comprueba que tienes acceso al recurso.');
+    }
+  };
+
+  return (
+    <article style={{
+      border: '1px solid var(--color-border-primary)', borderRadius: 12,
+      padding: 16, background: 'var(--color-bg-secondary)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-primary)' }}>
+              {resourceTypeLabel(resource.type)}
+            </span>
+            {showStatus && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{resourceStatusLabel(resource.status)}</span>}
+            {required && <span style={{ fontSize: 11, color: '#b45309', fontWeight: 700 }}>Obligatorio</span>}
+          </div>
+          <h3 style={{ margin: '5px 0 4px', fontSize: 16 }}>{resource.title}</h3>
+          {resource.authors.length > 0 && <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{resource.authors.join(', ')}</div>}
+        </div>
+      </div>
+      {resource.description && <p style={{ margin: '10px 0', fontSize: 14, lineHeight: 1.45, color: 'var(--color-text-secondary)' }}>{resource.description}</p>}
+      {resource.tags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+          {resource.tags.map((tag) => <span key={tag} style={{ fontSize: 11, background: 'var(--color-bg-tertiary)', padding: '3px 7px', borderRadius: 6 }}>{tag}</span>)}
+        </div>
+      )}
+      {resource.externalUrl ? (
+        <button type="button" onClick={openExternal} style={linkButtonStyle}>
+          <LinkIcon size={15} /> Abrir recurso <ExternalLink size={13} />
+        </button>
+      ) : resource.file ? (
+        <button type="button" onClick={() => void openFile()} style={linkButtonStyle}>
+          <FileText size={15} /> Abrir {resource.file.originalName} <ExternalLink size={13} />
+        </button>
+      ) : null}
+    </article>
+  );
+}
+
+const linkButtonStyle = {
+  border: 'none', background: 'none', padding: 0, color: 'var(--color-accent-primary)',
+  cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700,
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+} as const;

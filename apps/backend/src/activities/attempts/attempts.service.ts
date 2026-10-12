@@ -12,7 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { ActivitiesService, STAFF_ROLES } from '../activities.service';
+import { ActivitiesService } from '../activities.service';
 import { gradeQuestion, isAutoGradable } from '../grading/graders';
 import { SaveAnswersDto } from './dto/save-answers.dto';
 import { GradeAttemptDto } from './dto/grade-attempt.dto';
@@ -214,7 +214,7 @@ export class AttemptsService {
 
   /** Every attempt for an activity (course staff only), with student + answers. */
   async listForActivity(activityId: string, actingUserId: string) {
-    await this.activities.requireActivity(activityId, actingUserId, STAFF_ROLES);
+    await this.activities.requireActivity(activityId, actingUserId, true);
     return this.prisma.attempt.findMany({
       where: { activityId },
       orderBy: [{ userId: 'asc' }, { attemptNo: 'asc' }],
@@ -225,38 +225,100 @@ export class AttemptsService {
     });
   }
 
-  /** Staff sets the final score of an attempt that needs manual grading. */
+  /** Staff awards points on subjective answers. GRADED only when every
+   * question has awarded != null; otherwise stays SUBMITTED. */
   async grade(attemptId: string, actingUserId: string, dto: GradeAttemptDto) {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
-      include: { activity: true },
+      include: {
+        answers: true,
+        activity: { include: { questions: { orderBy: { order: 'asc' } } } },
+      },
     });
     if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
     await this.activities.requireActivity(
       attempt.activityId,
       actingUserId,
-      STAFF_ROLES,
+      true,
     );
 
     if (attempt.status === AttemptStatus.IN_PROGRESS) {
       throw new BadRequestException('El intento aún no se ha enviado');
     }
-    if (dto.score > attempt.activity.maxScore) {
-      throw new BadRequestException(
-        `La nota no puede superar ${attempt.activity.maxScore}`,
-      );
+
+    const questions = new Map(
+      attempt.activity.questions.map((q) => [q.id, q]),
+    );
+    for (const item of dto.answers) {
+      const question = questions.get(item.questionId);
+      if (!question) {
+        throw new BadRequestException(
+          `La pregunta ${item.questionId} no pertenece a esta actividad`,
+        );
+      }
+      if (item.awarded > question.points) {
+        throw new BadRequestException(
+          `La nota no puede superar ${question.points}`,
+        );
+      }
     }
 
+    for (const item of dto.answers) {
+      await this.prisma.answer.upsert({
+        where: {
+          attemptId_questionId: {
+            attemptId,
+            questionId: item.questionId,
+          },
+        },
+        create: {
+          attemptId,
+          questionId: item.questionId,
+          response: {} as Prisma.InputJsonValue,
+          awarded: item.awarded,
+        },
+        update: { awarded: item.awarded },
+      });
+    }
+
+    const answers = await this.prisma.answer.findMany({
+      where: { attemptId },
+    });
+    const awardedByQ = new Map(answers.map((a) => [a.questionId, a.awarded]));
+    let allAwarded = true;
+    let sum = 0;
+    for (const q of attempt.activity.questions) {
+      const awarded = awardedByQ.get(q.id);
+      if (awarded == null) {
+        allAwarded = false;
+      } else {
+        sum += awarded;
+      }
+    }
+
+    const now = new Date();
     const graded = await this.prisma.attempt.update({
       where: { id: attemptId },
       data: {
-        status: AttemptStatus.GRADED,
-        score: round2(dto.score),
-        gradedById: actingUserId,
-        gradedAt: new Date(),
+        score: round2(sum),
+        ...(dto.feedback !== undefined && { feedback: dto.feedback }),
+        ...(allAwarded
+          ? {
+              status: AttemptStatus.GRADED,
+              gradedById: actingUserId,
+              gradedAt: now,
+            }
+          : { status: AttemptStatus.SUBMITTED }),
       },
     });
-    await this.notifyGraded(attempt.userId, attempt.activity, graded.score ?? 0);
+
+    if (allAwarded) {
+      await this.notifyGraded(
+        attempt.userId,
+        attempt.activity,
+        graded.score ?? 0,
+      );
+    }
     return graded;
   }
 

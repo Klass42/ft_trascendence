@@ -1,20 +1,20 @@
 /**
  * Reproducible data sets for local demos and manual QA.
  *
- * Set SEED_SCENARIO to standard, small, large, or platform. Every scenario
+ * Set SEED_SCENARIO to standard, small, large, e2e, or platform. Every scenario
  * replaces application data, then creates the configured platform superadmin.
  */
 import {
   ActivityType,
-  CourseRole,
-  CourseStatus,
+  CohortStatus,
   FriendStatus,
+  PublicationStatus,
+  SubjectStaffRole,
   GlobalRole,
   NotificationType,
   PlatformRole,
   PrismaClient,
   QuestionKind,
-  SubmissionStatus,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 const DEMO_PASSWORD = 'demo1234';
 const DAY = 24 * 60 * 60 * 1000;
 
-type Scenario = 'standard' | 'small' | 'large' | 'platform';
+type Scenario = 'standard' | 'small' | 'large' | 'e2e' | 'platform';
 
 interface InstitutionOptions {
   id: string;
@@ -42,10 +42,68 @@ function scenarioFromEnvironment(): Scenario {
   const argument = process.argv.find((value) => value.startsWith('--scenario='))?.slice('--scenario='.length)
     ?? (positionalIndex >= 0 ? process.argv[positionalIndex + 1] : undefined);
   const scenario = (process.env.SEED_SCENARIO ?? argument ?? 'standard').toLowerCase();
-  if (scenario === 'standard' || scenario === 'small' || scenario === 'large' || scenario === 'platform') {
+  if (scenario === 'standard' || scenario === 'small' || scenario === 'large' || scenario === 'e2e' || scenario === 'platform') {
     return scenario;
   }
   throw new Error('Unknown seed scenario: ' + scenario);
+}
+
+function quizQuestions(activityId: string) {
+  return [
+    {
+      id: activityId + '-question-01', activityId, kind: QuestionKind.MULTIPLE_CHOICE,
+      prompt: '¿Cuál es la opción correcta?', points: 5, order: 0,
+      content: { options: ['Opción correcta', 'Distractor'], correct: [0] },
+    },
+    {
+      id: activityId + '-question-02', activityId, kind: QuestionKind.TRUE_FALSE,
+      prompt: 'El contenido está disponible para el alumnado matriculado.', points: 5, order: 1,
+      content: { answer: true },
+    },
+  ];
+}
+
+function essayFileQuestions(activityId: string) {
+  return [
+    {
+      id: activityId + '-question-01', activityId, kind: QuestionKind.ESSAY,
+      prompt: 'Desarrolla el tema con tus palabras.', points: 10, order: 0,
+      content: {},
+    },
+    {
+      id: activityId + '-question-02', activityId, kind: QuestionKind.FILE_UPLOAD,
+      prompt: 'Adjunta un fichero de evidencia.', points: 0, order: 1,
+      content: { maxFiles: 3 },
+    },
+  ];
+}
+
+function mixedExamBlocks() {
+  return [
+    {
+      kind: QuestionKind.MULTIPLE_CHOICE, prompt: '¿Qué protocolo sirve la web?',
+      points: 1, order: 0,
+      content: { options: ['HTTP', 'SMTP', 'FTP'], correct: [0] },
+    },
+    {
+      kind: QuestionKind.MULTIPLE_CHOICE, prompt: '¿Cuál es un lenguaje de estilos?',
+      points: 1, order: 1,
+      content: { options: ['CSS', 'SQL', 'Bash'], correct: [0] },
+    },
+    {
+      kind: QuestionKind.MATCHING, prompt: 'Empareja cada término con su definición.',
+      points: 1, order: 2,
+      content: {
+        left: ['HTML', 'CSS'],
+        right: ['Estructura', 'Presentación'],
+        pairs: [[0, 0], [1, 1]],
+      },
+    },
+    {
+      kind: QuestionKind.ESSAY, prompt: 'Explica brevemente cómo se relaciona HTML y CSS.',
+      points: 2, order: 3, content: {},
+    },
+  ];
 }
 
 function requiredEnvironment(name: string): string {
@@ -60,7 +118,11 @@ async function clearApplicationData(): Promise<void> {
     await tx.answer.deleteMany();
     await tx.attempt.deleteMany();
     await tx.question.deleteMany();
+    await tx.activityFile.deleteMany();
+    await tx.taskTemplate.deleteMany();
     await tx.activity.deleteMany();
+    await tx.subjectResource.deleteMany();
+    await tx.learningResource.deleteMany();
     await tx.submissionFile.deleteMany();
     await tx.submission.deleteMany();
     await tx.assignmentFile.deleteMany();
@@ -71,10 +133,12 @@ async function clearApplicationData(): Promise<void> {
     await tx.section.deleteMany();
     await tx.forumPost.deleteMany();
     await tx.forumThread.deleteMany();
-    await tx.enrollment.deleteMany();
+    await tx.subjectStaff.deleteMany();
+    await tx.courseMembership.deleteMany();
     await tx.notification.deleteMany();
     await tx.friendship.deleteMany();
     await tx.file.deleteMany();
+    await tx.subject.deleteMany();
     await tx.course.deleteMany();
     await tx.organizationInvitation.deleteMany();
     await tx.auditLog.deleteMany();
@@ -139,23 +203,38 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
     ['Competencias Digitales', 'Tecnología'],
     ['Comunicación y Proyecto', 'Habilidades'],
   ];
-  const courseIds = Array.from({ length: options.courses }, (_, index) => options.slug + '-course-' + String(index + 1).padStart(2, '0'));
-  await prisma.course.createMany({
-    data: courseIds.map((id, index) => {
+  const subjectIds = Array.from({ length: options.courses }, (_, index) => options.slug + '-subject-' + String(index + 1).padStart(2, '0'));
+  // One active cohort, plus archived history when there is more than one subject.
+  const cohortCount = options.courses <= 1 ? 1 : Math.min(3, options.courses);
+  const cohorts = Array.from({ length: cohortCount }, (_, index) => {
+    const startYear = 2025 - index;
+    return {
+      id: options.slug + '-cohort-' + String(index + 1).padStart(2, '0'),
+      organizationId: org.id,
+      name: '1º A',
+      academicYear: startYear + '-' + (startYear + 1),
+      startsOn: new Date(Date.UTC(startYear, 8, 1)),
+      endsOn: new Date(Date.UTC(startYear + 1, 5, 30)),
+      status: index === 0 ? CohortStatus.ACTIVE : CohortStatus.ARCHIVED,
+    };
+  });
+  await prisma.course.createMany({ data: cohorts });
+  await prisma.subject.createMany({
+    data: subjectIds.map((id, index) => {
       const template = templates[index % templates.length];
+      const cohort = cohorts[index % cohorts.length];
       return {
-        id, organizationId: org.id, ownerId: teacherIds[index % teacherIds.length],
+        id, organizationId: org.id, courseId: cohort.id,
         title: template[0], category: template[1],
         description: 'Itinerario práctico para ' + options.name + '.',
-        accessCode: options.slug.replaceAll('-', '').slice(0, 8).toUpperCase() + String(index + 1).padStart(2, '0'),
-        status: CourseStatus.PUBLISHED,
+        status: PublicationStatus.PUBLISHED,
       };
     }),
   });
 
-  const sections = courseIds.flatMap((courseId) => [
-    { id: courseId + '-section-01', courseId, title: 'Libro 1 · Fundamentos', order: 0 },
-    { id: courseId + '-section-02', courseId, title: 'Libro 2 · Aplicación', order: 1 },
+  const sections = subjectIds.flatMap((subjectId) => [
+    { id: subjectId + '-section-01', subjectId, title: 'Libro 1 · Fundamentos', order: 0 },
+    { id: subjectId + '-section-02', subjectId, title: 'Libro 2 · Aplicación', order: 1 },
   ]);
   await prisma.section.createMany({ data: sections });
   const lessons = sections.flatMap((section) => [0, 1].map((order) => ({
@@ -167,79 +246,86 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
   })));
   await prisma.lesson.createMany({ data: lessons });
 
-  const assignments = courseIds.flatMap((courseId, courseIndex) => [0, 1].map((index) => ({
-    id: courseId + '-assignment-' + String(index + 1).padStart(2, '0'),
-    courseId,
-    title: index === 0 ? 'Tarea · Entrega inicial' : 'Tarea · Proyecto aplicado',
-    description: 'Entrega de demostración con instrucciones y rúbrica.',
-    openAt: new Date(now.getTime() - DAY),
-    dueAt: new Date(now.getTime() + (courseIndex + index + 3) * DAY),
-    maxScore: 100,
-  })));
-  await prisma.assignment.createMany({ data: assignments });
-
-  const activities = courseIds.map((courseId) => ({
-    id: courseId + '-activity-01', courseId, type: ActivityType.QUIZ,
+  // No new Assignment rows — unified tasks live on Activity (quiz + ESSAY/FILE).
+  const quizActivities = subjectIds.map((subjectId) => ({
+    id: subjectId + '-activity-01', subjectId, type: ActivityType.QUIZ,
     title: 'Autoevaluación de la unidad', description: 'Cuestionario de práctica con corrección automática.',
     dueAt: new Date(now.getTime() + 5 * DAY), maxScore: 10, attemptsAllowed: 2,
+    countsTowardFinal: true,
     config: { showSolutions: true, shuffleQuestions: false, shuffleOptions: false },
-    status: CourseStatus.PUBLISHED,
+    status: PublicationStatus.PUBLISHED,
   }));
-  await prisma.activity.createMany({ data: activities });
+  const essayActivities = subjectIds.map((subjectId, subjectIndex) => ({
+    id: subjectId + '-activity-02', subjectId, type: ActivityType.QUIZ,
+    title: 'Tarea · Ensayo y fichero',
+    description: 'Desarrolla la respuesta y adjunta un fichero de evidencia.',
+    openAt: new Date(now.getTime() - DAY),
+    dueAt: new Date(now.getTime() + (subjectIndex + 4) * DAY),
+    maxScore: 10, attemptsAllowed: 1, countsTowardFinal: true,
+    config: { showSolutions: false },
+    status: PublicationStatus.PUBLISHED,
+  }));
+  await prisma.activity.createMany({ data: [...quizActivities, ...essayActivities] });
   await prisma.question.createMany({
-    data: activities.flatMap((activity) => [
-      {
-        id: activity.id + '-question-01', activityId: activity.id, kind: QuestionKind.MULTIPLE_CHOICE,
-        prompt: '¿Cuál es la opción correcta?', points: 5, order: 0,
-        content: { options: [{ id: 'a', text: 'Opción correcta', correct: true }, { id: 'b', text: 'Distractor', correct: false }] },
-      },
-      {
-        id: activity.id + '-question-02', activityId: activity.id, kind: QuestionKind.TRUE_FALSE,
-        prompt: 'El contenido está disponible para el alumnado matriculado.', points: 5, order: 1,
-        content: { correct: true },
-      },
-    ]),
+    data: [
+      ...quizActivities.flatMap((activity) => quizQuestions(activity.id)),
+      ...essayActivities.flatMap((activity) => essayFileQuestions(activity.id)),
+    ],
+  });
+  await prisma.taskTemplate.create({
+    data: {
+      id: options.id + '-template-mixto',
+      organizationId: org.id,
+      createdById: teacherIds[0],
+      title: 'Examen mixto',
+      description: 'Dos opción múltiple, emparejar y un desarrollo.',
+      blocks: mixedExamBlocks(),
+    },
   });
 
-  const enrollments = [
-    ...teacherIds.map((userId, index) => ({
-      courseId: courseIds[index % courseIds.length], userId, role: CourseRole.TEACHER, progress: 100,
-    })),
-    ...studentIds.flatMap((userId, index) => {
-      const primary = {
-        courseId: courseIds[index % courseIds.length], userId, role: CourseRole.STUDENT, progress: (index * 7) % 101,
-      };
-      const additional = index % 4 === 0 ? [{
-        courseId: courseIds[(index + 1) % courseIds.length], userId, role: CourseRole.STUDENT, progress: (index * 11) % 101,
-      }] : [];
-      return [primary, ...additional];
+  const staffRows = teacherIds.map((userId, index) => ({
+    subjectId: subjectIds[index % subjectIds.length],
+    userId,
+    role: SubjectStaffRole.TEACHER,
+  }));
+  const staffKeys = new Set<string>();
+  await prisma.subjectStaff.createMany({
+    data: staffRows.filter((row) => {
+      const key = row.subjectId + ':' + row.userId;
+      if (staffKeys.has(key)) return false;
+      staffKeys.add(key);
+      return true;
     }),
-  ];
-  await prisma.enrollment.createMany({ data: enrollments });
-
-  const submissions = assignments.flatMap((assignment, assignmentIndex) => {
-    const courseIndex = courseIds.indexOf(assignment.courseId);
-    return studentIds.filter((_, index) => index % courseIds.length === courseIndex).slice(0, 12).map((userId, index) => ({
-      id: assignment.id + '-submission-' + String(index + 1).padStart(2, '0'),
-      assignmentId: assignment.id, userId, text: 'Entrega de demostración preparada para la evaluación.',
-      status: index % 3 === 0 ? SubmissionStatus.GRADED : SubmissionStatus.SUBMITTED,
-      score: index % 3 === 0 ? 70 + (index % 4) * 5 : null,
-      feedback: index % 3 === 0 ? 'Buen trabajo. Revisa el último apartado.' : null,
-      gradedById: index % 3 === 0 ? teacherIds[assignmentIndex % teacherIds.length] : null,
-      gradedAt: index % 3 === 0 ? now : null,
-    }));
   });
-  await prisma.submission.createMany({ data: submissions });
+
+  const activeCohort = cohorts[0];
+  const archivedCohort = cohorts.length > 1 ? cohorts[1] : undefined;
+  const membershipCandidates = studentIds.flatMap((userId, index) => {
+    const primary = { courseId: activeCohort.id, userId };
+    const history = archivedCohort && index % 4 === 0
+      ? [{ courseId: archivedCohort.id, userId }]
+      : [];
+    return [primary, ...history];
+  });
+  const membershipKeys = new Set<string>();
+  await prisma.courseMembership.createMany({
+    data: membershipCandidates.filter((membership) => {
+      const key = membership.courseId + ':' + membership.userId;
+      if (membershipKeys.has(key)) return false;
+      membershipKeys.add(key);
+      return true;
+    }),
+  });
 
   await prisma.lessonCompletion.createMany({
     data: studentIds.slice(0, Math.min(30, studentIds.length)).flatMap((userId, index) => {
-      const courseId = courseIds[index % courseIds.length];
-      return lessons.filter((lesson) => lesson.sectionId.startsWith(courseId + '-')).slice(0, 2)
+      const subjectId = subjectIds[index % subjectIds.length];
+      return lessons.filter((lesson) => lesson.sectionId.startsWith(subjectId + '-')).slice(0, 2)
         .map((lesson) => ({ lessonId: lesson.id, userId }));
     }),
   });
-  const threads = courseIds.map((courseId, index) => ({
-    id: courseId + '-thread-01', courseId, authorId: teacherIds[index % teacherIds.length],
+  const threads = subjectIds.map((subjectId, index) => ({
+    id: subjectId + '-thread-01', subjectId, authorId: teacherIds[index % teacherIds.length],
     title: 'Bienvenida y dudas de la unidad', pinned: true,
   }));
   await prisma.forumThread.createMany({ data: threads });
@@ -254,7 +340,7 @@ async function createInstitution(options: InstitutionOptions, passwordHash: stri
       userId, type: index % 2 === 0 ? NotificationType.NEW_ASSIGNMENT : NotificationType.DEADLINE_REMINDER,
       title: index % 2 === 0 ? 'Nueva tarea disponible' : 'Recordatorio de entrega',
       body: 'Consulta el curso para ver el material y las fechas de la actividad.',
-      link: '/courses/' + courseIds[index % courseIds.length], read: index % 3 === 0,
+      link: '/courses/' + cohorts[index % cohorts.length].id + '/subjects/' + subjectIds[index % subjectIds.length], read: index % 3 === 0,
     })),
   });
 }
@@ -277,18 +363,47 @@ async function seedStandard(passwordHash: string): Promise<void> {
       id, email, name, role, passwordHash, emailVerifiedAt: now, organizationId: org.id,
     })),
   });
-  await prisma.course.create({
-    data: {
-      id: 'course-web-101', organizationId: org.id, ownerId: 'user-diego-001',
-      title: 'Introducción al Desarrollo Web', description: 'HTML, CSS, JavaScript y fundamentos de la web.',
-      category: 'Programación', status: CourseStatus.PUBLISHED, accessCode: 'WEB101',
-    },
-  });
-  await prisma.enrollment.createMany({
+  await prisma.course.createMany({
     data: [
-      { courseId: 'course-web-101', userId: 'user-diego-001', role: CourseRole.TEACHER, progress: 100 },
-      { courseId: 'course-web-101', userId: 'user-lucia-001', role: CourseRole.STUDENT, progress: 50 },
-      { courseId: 'course-web-101', userId: 'user-student-0001', role: CourseRole.STUDENT, progress: 25 },
+      {
+        id: 'course-klass-2025', organizationId: org.id, name: '1º A', academicYear: '2025-2026',
+        startsOn: new Date('2026-09-01T00:00:00.000Z'), endsOn: new Date('2027-06-30T00:00:00.000Z'),
+        status: CohortStatus.ACTIVE,
+      },
+      {
+        id: 'course-klass-2024', organizationId: org.id, name: '1º A', academicYear: '2024-2025',
+        startsOn: new Date('2024-09-01T00:00:00.000Z'), endsOn: new Date('2025-06-30T00:00:00.000Z'),
+        status: CohortStatus.ARCHIVED,
+      },
+    ],
+  });
+  await prisma.subject.createMany({
+    data: [
+      {
+        id: 'course-web-101', organizationId: org.id, courseId: 'course-klass-2025',
+        title: 'Introducción al Desarrollo Web', description: 'HTML, CSS, JavaScript y fundamentos de la web.',
+        category: 'Programación', status: PublicationStatus.PUBLISHED,
+      },
+      {
+        id: 'subject-web-100', organizationId: org.id, courseId: 'course-klass-2024',
+        title: 'Introducción al Desarrollo Web (2024-2025)',
+        description: 'Edición anterior del mismo itinerario.',
+        category: 'Programación', status: PublicationStatus.PUBLISHED,
+      },
+    ],
+  });
+  await prisma.courseMembership.createMany({
+    data: [
+      { courseId: 'course-klass-2025', userId: 'user-lucia-001' },
+      { courseId: 'course-klass-2024', userId: 'user-lucia-001' },
+      { courseId: 'course-klass-2025', userId: 'user-student-0001' },
+      { courseId: 'course-klass-2024', userId: 'user-student-0001' },
+    ],
+  });
+  await prisma.subjectStaff.createMany({
+    data: [
+      { subjectId: 'course-web-101', userId: 'user-diego-001', role: SubjectStaffRole.TEACHER },
+      { subjectId: 'course-web-101', userId: 'user-teacher-0001', role: SubjectStaffRole.TEACHER },
     ],
   });
   await prisma.friendship.create({
@@ -300,8 +415,9 @@ async function seedStandard(passwordHash: string): Promise<void> {
   });
   await prisma.section.createMany({
     data: [
-      { id: 'section-web-101-1', courseId: 'course-web-101', title: 'Libro 1 · Fundamentos', order: 0 },
-      { id: 'section-web-101-2', courseId: 'course-web-101', title: 'Libro 2 · Proyecto', order: 1 },
+      { id: 'section-web-101-1', subjectId: 'course-web-101', title: 'Libro 1 · Fundamentos', order: 0 },
+      { id: 'section-web-101-2', subjectId: 'course-web-101', title: 'Libro 2 · Proyecto', order: 1 },
+      { id: 'section-web-100-1', subjectId: 'subject-web-100', title: 'Libro 1 · Fundamentos (2024)', order: 0 },
     ],
   });
   await prisma.lesson.createMany({
@@ -311,22 +427,46 @@ async function seedStandard(passwordHash: string): Promise<void> {
       { id: 'lesson-web-101-3', sectionId: 'section-web-101-2', title: 'CSS responsive', contentMd: '# CSS\nDiseño adaptable.', order: 0 },
     ],
   });
-  await prisma.assignment.createMany({
+  await prisma.activity.createMany({
     data: [
-      { id: 'assignment-web-101-1', courseId: 'course-web-101', title: 'Práctica 1 · Tu primera página HTML', description: 'Crea una página con encabezado, párrafo e imagen.', dueAt: new Date(now.getTime() + 7 * DAY), maxScore: 100 },
-      { id: 'assignment-web-101-2', courseId: 'course-web-101', title: 'Práctica 2 · Landing responsive', description: 'Construye una landing adaptable.', dueAt: new Date(now.getTime() + 14 * DAY), maxScore: 100 },
+      {
+        id: 'activity-web-101-quiz', subjectId: 'course-web-101', type: ActivityType.QUIZ,
+        title: 'Autoevaluación de la unidad', description: 'Cuestionario de práctica con corrección automática.',
+        dueAt: new Date(now.getTime() + 7 * DAY), maxScore: 10, attemptsAllowed: 2,
+        countsTowardFinal: true,
+        config: { showSolutions: true, shuffleQuestions: false, shuffleOptions: false },
+        status: PublicationStatus.PUBLISHED,
+      },
+      {
+        id: 'activity-web-101-essay', subjectId: 'course-web-101', type: ActivityType.QUIZ,
+        title: 'Tarea · Ensayo y fichero',
+        description: 'Desarrolla la respuesta y adjunta un fichero de evidencia.',
+        dueAt: new Date(now.getTime() + 14 * DAY), maxScore: 10, attemptsAllowed: 1,
+        countsTowardFinal: true,
+        config: { showSolutions: false },
+        status: PublicationStatus.PUBLISHED,
+      },
     ],
   });
-  await prisma.submission.create({
+  await prisma.question.createMany({
+    data: [
+      ...quizQuestions('activity-web-101-quiz'),
+      ...essayFileQuestions('activity-web-101-essay'),
+    ],
+  });
+  await prisma.taskTemplate.create({
     data: {
-      id: 'submission-web-101-1', assignmentId: 'assignment-web-101-1', userId: 'user-lucia-001',
-      text: 'Entrega de ejemplo.', status: SubmissionStatus.GRADED, score: 85,
-      feedback: 'Muy buen comienzo.', gradedById: 'user-diego-001', gradedAt: now,
+      id: 'template-klass-mixto',
+      organizationId: org.id,
+      createdById: 'user-diego-001',
+      title: 'Examen mixto',
+      description: 'Dos opción múltiple, emparejar y un desarrollo.',
+      blocks: mixedExamBlocks(),
     },
   });
   await prisma.lessonCompletion.create({ data: { lessonId: 'lesson-web-101-1', userId: 'user-lucia-001' } });
   await prisma.forumThread.create({
-    data: { id: 'thread-web-101-1', courseId: 'course-web-101', authorId: 'user-diego-001', title: 'Presentaciones', pinned: true },
+    data: { id: 'thread-web-101-1', subjectId: 'course-web-101', authorId: 'user-diego-001', title: 'Presentaciones', pinned: true },
   });
   await prisma.forumPost.createMany({
     data: [
@@ -337,9 +477,24 @@ async function seedStandard(passwordHash: string): Promise<void> {
   await prisma.notification.create({
     data: {
       userId: 'user-lucia-001', type: NotificationType.GRADE_PUBLISHED, title: 'Nota publicada',
-      body: 'Tu primera entrega ya tiene nota.', link: '/assignments/assignment-web-101-1',
+      body: 'Tu primera entrega ya tiene nota.', link: '/activities?activityId=activity-web-101-quiz',
     },
   });
+}
+
+/**
+ * Small, deterministic fixture for acceptance tests which need to prove that
+ * IDs from one tenant are rejected by another tenant. Keep the explicit IDs:
+ * they make a failing HTTP trace immediately understandable. Generic demo
+ * seeds intentionally contain richer data and are not a substitute for this.
+ */
+async function seedE2e(passwordHash: string): Promise<void> {
+  await createInstitution({
+    id: 'org-e2e-a', slug: 'e2e-a', name: 'E2E Academy A', students: 2, teachers: 1, courses: 1,
+  }, passwordHash);
+  await createInstitution({
+    id: 'org-e2e-b', slug: 'e2e-b', name: 'E2E Academy B', students: 2, teachers: 1, courses: 1,
+  }, passwordHash);
 }
 
 async function main(): Promise<void> {
@@ -352,6 +507,8 @@ async function main(): Promise<void> {
       await seedStandard(passwordHash);
     } else if (scenario === 'small') {
       await createInstitution({ id: 'org-demo-small', slug: 'demo-small', name: 'Academia Demo', students: 8, teachers: 3, courses: 3 }, passwordHash);
+    } else if (scenario === 'e2e') {
+      await seedE2e(passwordHash);
     } else {
       await createInstitution({ id: 'org-demo-large', slug: 'demo-large', name: 'Academia Horizonte', students: 160, teachers: 30, courses: 6 }, passwordHash);
       await createInstitution({ id: 'org-demo-medium', slug: 'demo-medium', name: 'Instituto Atlas', students: 120, teachers: 24, courses: 5 }, passwordHash);
@@ -363,6 +520,7 @@ async function main(): Promise<void> {
   if (scenario === 'standard') console.log('   organization          klass\n   demo users            student@demo / teacher@demo / admin@demo  ·  password: demo1234');
   if (scenario === 'small') console.log('   organization          demo-small\n   users                 8 students, 3 teachers, 1 admin  ·  password: demo1234');
   if (scenario === 'large') console.log('   organizations         demo-large, demo-medium, demo-compact\n   users per organization 100+ students, 20+ teachers  ·  password: demo1234');
+  if (scenario === 'e2e') console.log('   organizations         e2e-a, e2e-b\n   users per organization 2 students, 1 teacher, 1 admin  ·  password: demo1234');
   if (scenario === 'platform') console.log('   application data      removed (only the platform superadmin remains)');
 }
 

@@ -1,5 +1,6 @@
-import { CourseRole, NotificationType } from '@prisma/client';
+import { NotificationType } from '@prisma/client';
 import { ForumsService } from './forums.service';
+import { accessFromPrisma } from '../test/access-from-prisma';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { NotificationsService } from '../notifications/notifications.service';
 
@@ -32,14 +33,14 @@ describe('ForumsService', () => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE_ID) return null;
           if (userId === STUDENT)
-            return { courseId, userId, role: CourseRole.STUDENT };
+            return { courseId, userId, role: 'STUDENT' as never };
           if (userId === TEACHER)
-            return { courseId, userId, role: CourseRole.TEACHER };
+            return { courseId, userId, role: 'TEACHER' as never };
           return null;
         },
         findMany: async () => [
-          { userId: STUDENT, role: CourseRole.STUDENT },
-          { userId: TEACHER, role: CourseRole.TEACHER },
+          { userId: STUDENT, role: 'STUDENT' as never },
+          { userId: TEACHER, role: 'TEACHER' as never },
         ],
       },
       user: {
@@ -55,7 +56,7 @@ describe('ForumsService', () => {
           seq += 1;
           const thread = {
             id: `thread-${seq}`,
-            courseId: data.courseId,
+            subjectId: data.subjectId,
             authorId: data.authorId,
             title: data.title,
             pinned: false,
@@ -111,7 +112,7 @@ describe('ForumsService', () => {
       },
     } as unknown as NotificationsService;
 
-    const service = new ForumsService(prisma, notifications);
+    const service = new ForumsService(prisma, notifications, accessFromPrisma(prisma));
 
     // Student opens a thread with an opening post.
     const thread = await service.createThread(COURSE_ID, STUDENT, {

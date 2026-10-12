@@ -1,23 +1,75 @@
-# Scrape targets use docker service names. Ports MUST match .env.example:
-#   PROMETHEUS_PORT, OTEL_METRICS_PORT, BACKEND_PORT
+# Prometheus — scrape targets are compose service names on fixed ports.
+#
+# Backend application metrics do NOT appear below: the NestJS process pushes
+# them over OTLP to the collector, which remote-writes them here (job
+# "ft-backend"). Its liveness is covered by the blackbox probe instead.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
-  # Self-monitoring
-  - job_name: 'prometheus'
+  # ─── Monitoring stack itself ───
+  - job_name: prometheus
     static_configs:
       - targets: ['localhost:9090']
 
-  # OTel Collector internal metrics
-  - job_name: 'otel-collector'
+  - job_name: otel-collector
     static_configs:
       - targets: ['otel-collector:8888']
 
-  # Backend app (fallback direct scrape if needed)
-  - job_name: 'backend'
+  - job_name: grafana
     static_configs:
-      - targets: ['backend:3000']
-    metrics_path: '/metrics'
-    scrape_interval: 10s
+      - targets: ['grafana:3000']
+
+  - job_name: loki
+    static_configs:
+      - targets: ['loki:3100']
+
+  - job_name: tempo
+    static_configs:
+      - targets: ['tempo:3200']
+
+  # ─── Exporters ───
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: postgres
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # ─── Built-in metrics endpoints ───
+  - job_name: caddy
+    static_configs:
+      - targets: ['caddy:9180']
+
+  - job_name: garage
+    static_configs:
+      - targets: ['garage:3903']
+
+  # ─── HTTP probes (blackbox exporter) ───
+  # `instance` becomes the probed service; the exporter does the request.
+  - job_name: probe
+    metrics_path: /probe
+    static_configs:
+      - targets: ['http://backend:3000/health']
+        labels: { service: backend, module: http_2xx }
+      - targets: ['http://frontend:8080/healthz']
+        labels: { service: frontend, module: http_2xx }
+      # Caddy answers plain HTTP with a redirect to HTTPS.
+      - targets: ['http://caddy:80/']
+        labels: { service: caddy, module: http_redirect }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [service]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - regex: module
+        action: labeldrop

@@ -26,6 +26,7 @@ const mockUser = {
   name: 'Sam Student',
   avatarUrl: null,
   role: 'STUDENT' as const,
+  platformRole: 'NONE' as const,
   onlineAt: null,
   emailVerifiedAt: new Date(),
   createdAt: new Date(),
@@ -33,6 +34,9 @@ const mockUser = {
 };
 
 const prismaMock = {
+  organization: {
+    findUnique: jest.fn(),
+  },
   user: {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
@@ -77,6 +81,7 @@ class TestAuthGuard implements CanActivate {
           avatarUrl: user.avatarUrl,
           organizationId: user.organizationId ?? '',
           role: user.role,
+          platformRole: user.platformRole,
           emailNotificationsEnabled: user.emailNotificationsEnabled,
           preferredLanguage: user.preferredLanguage,
         };
@@ -128,6 +133,11 @@ describe('Auth E2E', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prismaMock.organization.findUnique.mockResolvedValue({
+      id: 'org-klass-0001',
+      slug: 'klass',
+      status: 'ACTIVE',
+    });
   });
 
   it('POST /auth/login returns user + tokens on valid credentials', async () => {
@@ -137,7 +147,7 @@ describe('Auth E2E', () => {
 
     const res = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'student@demo.com', password: 'demo1234' });
+      .send({ organizationSlug: 'klass', email: 'student@demo.com', password: 'demo1234' });
 
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty('user');
@@ -154,7 +164,7 @@ describe('Auth E2E', () => {
 
     const res = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: 'student@demo.com', password: 'wrongpassword' });
+      .send({ organizationSlug: 'klass', email: 'student@demo.com', password: 'wrongpassword' });
 
     expect(res.status).toBe(401);
   });
@@ -177,7 +187,7 @@ describe('Auth E2E', () => {
   it('POST /auth/register rejects weak passwords', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email: 'new@demo.com', password: 'weak', name: 'New User' });
+      .send({ organizationSlug: 'klass', email: 'new@demo.com', password: 'weak', name: 'New User' });
 
     expect(res.status).toBe(400);
   });

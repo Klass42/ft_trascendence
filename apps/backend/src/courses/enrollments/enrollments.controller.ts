@@ -2,83 +2,35 @@ import {
   Controller,
   Get,
   Post,
-  Patch,
-  Delete,
   Param,
-  Body,
   Query,
   HttpCode,
-  ForbiddenException,
 } from '@nestjs/common';
 import { EnrollmentsService } from './enrollments.service';
-import { EnrollCourseDto } from './dto/enroll-course.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
-import { AuthUser, CurrentUser, Roles, RolesGuard } from '@/common/auth';
-import { UseGuards } from '@nestjs/common';
+import { AuthUser, CurrentUser } from '@/common/auth';
+import { CourseAccessService } from '../course-access.service';
 
 @Controller()
 export class EnrollmentsController {
   constructor(
     private readonly enrollmentsService: EnrollmentsService,
+    private readonly courseAccess: CourseAccessService,
   ) {}
 
-  /** Students may only act on their own enrollment/progress. */
-  private targetUserId(user: AuthUser, requestedId?: string): string {
+  /**
+   * Staff may read another learner's progress. Everyone else is limited to
+   * their own user id.
+   */
+  private async targetUserId(
+    subjectId: string,
+    user: AuthUser,
+    requestedId?: string,
+  ): Promise<string> {
     const targetId = requestedId || user.userId;
-    if (targetId !== user.userId && user.role !== 'ADMIN' && user.role !== 'TEACHER') {
-      throw new ForbiddenException('You cannot act on another user');
+    if (targetId !== user.userId) {
+      await this.courseAccess.assertSubjectStaff(subjectId, user);
     }
     return targetId;
-  }
-
-  @Post('courses/:courseId/enroll')
-  async enroll(
-    @Param('courseId') courseId: string,
-    @Query('userId') userId: string,
-    @Body() dto: EnrollCourseDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.enrollmentsService.enroll(
-      courseId,
-      user.organizationId,
-      this.targetUserId(user, userId),
-      dto,
-    );
-  }
-
-  @Delete('courses/:courseId/enroll')
-  async unenroll(
-    @Param('courseId') courseId: string,
-    @Query('userId') userId: string,
-    @CurrentUser() user: AuthUser,
-  ) {
-    await this.enrollmentsService.unenroll(
-      courseId,
-      user.organizationId,
-      this.targetUserId(user, userId),
-    );
-    return { deleted: true };
-  }
-
-  @Get('courses/:courseId/enrollments')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
-  async findAll(
-    @Param('courseId') courseId: string,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.enrollmentsService.findAll(courseId, user.organizationId);
-  }
-
-  @Patch('enrollments/:id/role')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'TEACHER')
-  async updateRole(
-    @Param('id') id: string,
-    @Body() dto: UpdateRoleDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.enrollmentsService.updateRole(id, user.organizationId, dto);
   }
 
   @Post('lessons/:lessonId/complete')
@@ -87,6 +39,11 @@ export class EnrollmentsController {
     @Param('lessonId') lessonId: string,
     @CurrentUser() user: AuthUser,
   ) {
+    const lesson = await this.enrollmentsService.findLessonSubjectId(
+      lessonId,
+      user.organizationId,
+    );
+    await this.courseAccess.assertSubjectReadable(lesson.subjectId, user);
     return this.enrollmentsService.completeLesson(
       lessonId,
       user.organizationId,
@@ -94,36 +51,36 @@ export class EnrollmentsController {
     );
   }
 
-  @Get('courses/:courseId/completed-lessons')
+  @Get('subjects/:subjectId/completed-lessons')
   async getCompletedLessons(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Query('userId') userId: string,
     @CurrentUser() user: AuthUser,
   ) {
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
     return this.enrollmentsService.getCompletedLessonIds(
-      courseId,
+      subjectId,
       user.organizationId,
-      this.targetUserId(user, userId),
+      await this.targetUserId(subjectId, user, userId),
     );
   }
 
-  @Get('courses/:courseId/progress')
+  @Get('subjects/:subjectId/progress')
   async getProgress(
-    @Param('courseId') courseId: string,
+    @Param('subjectId') subjectId: string,
     @Query('userId') userId: string,
     @CurrentUser() user: AuthUser,
   ) {
+    await this.courseAccess.assertSubjectReadable(subjectId, user);
     return this.enrollmentsService.getProgress(
-      courseId,
+      subjectId,
       user.organizationId,
-      this.targetUserId(user, userId),
+      await this.targetUserId(subjectId, user, userId),
     );
   }
 
-  @Get('enrollments/my-progress')
-  async getMyProgress(
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.enrollmentsService.getMyProgress(user.organizationId, user.userId);
+  @Get('me/progress')
+  getMyProgress(@CurrentUser() user: AuthUser) {
+    return this.enrollmentsService.getMyProgress(user);
   }
 }

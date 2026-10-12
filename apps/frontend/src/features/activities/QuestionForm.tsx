@@ -181,6 +181,36 @@ function validateContent(
     }
     case 'SHORT_ANSWER':
       return null; // accepted[] optional (empty = manual grading)
+    case 'ESSAY': {
+      const min =
+        content.minChars === undefined ? undefined : Number(content.minChars);
+      const max =
+        content.maxChars === undefined ? undefined : Number(content.maxChars);
+      if (min !== undefined && (!Number.isInteger(min) || min < 0)) {
+        return 'El mínimo de caracteres debe ser un entero ≥ 0.';
+      }
+      if (max !== undefined && (!Number.isInteger(max) || max < 0)) {
+        return 'El máximo de caracteres debe ser un entero ≥ 0.';
+      }
+      if (min !== undefined && max !== undefined && min > max) {
+        return 'El mínimo no puede superar el máximo de caracteres.';
+      }
+      return null;
+    }
+    case 'FILE_UPLOAD': {
+      const maxFiles = Number(content.maxFiles);
+      if (!Number.isInteger(maxFiles) || maxFiles < 1) {
+        return 'Indica un número máximo de ficheros ≥ 1.';
+      }
+      if (
+        content.accept !== undefined &&
+        (!Array.isArray(content.accept) ||
+          content.accept.some((x) => typeof x !== 'string'))
+      ) {
+        return 'Los tipos aceptados deben ser una lista de textos.';
+      }
+      return null;
+    }
     default:
       return null;
   }

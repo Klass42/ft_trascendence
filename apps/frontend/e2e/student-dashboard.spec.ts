@@ -1,9 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { actAs, STUDENT } from './dev-user';
 
-const BASE_URL = 'http://localhost:3000';
-const COURSE_ID = 'course-web-101';
-
 test.describe('StudentDashboard (real data)', () => {
   test.beforeEach(async ({ page }) => {
     await actAs(page, STUDENT);
@@ -38,10 +35,12 @@ test.describe('StudentDashboard (real data)', () => {
     await expect(page.getByText('25%').first()).toBeVisible();
   });
 
-  test('shows PRÓXIMA ENTREGA card with assignment info', async ({ page }) => {
+  test('shows PRÓXIMA ENTREGA card with upcoming activity', async ({ page }) => {
     await page.goto('/dashboard');
     await expect(page.getByText('PRÓXIMA ENTREGA')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText('Práctica 1').first()).toBeVisible();
+    await expect(
+      page.getByText(/Autoevaluación de la unidad|Tarea · Ensayo y fichero/).first(),
+    ).toBeVisible();
   });
 
   // TODO(aloiki): flaky selector — getByText('…').first() matches the non-clickable
@@ -53,7 +52,7 @@ test.describe('StudentDashboard (real data)', () => {
     await expect(card).toBeVisible({ timeout: 8000 });
     // Click navigates to course detail
     await card.click();
-    await expect(page).toHaveURL(/\/courses\/course-web-101/);
+    await expect(page).toHaveURL(/\/courses\/course-klass-2025\/subjects\/course-web-101/);
   });
 
   test('zero console errors', async ({ page }) => {

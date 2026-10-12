@@ -27,7 +27,7 @@ export function useCompletedLessons(courseId: string | undefined): UseCompletedL
     setError(null);
 
     apiClient.get<string[]>(
-      `/courses/${courseId}/completed-lessons?organizationId=${orgId}&userId=${userId}`
+      `/subjects/${courseId}/completed-lessons?organizationId=${orgId}&userId=${userId}`
     )
       .then((result) => {
         if (!cancelled) setData(result);

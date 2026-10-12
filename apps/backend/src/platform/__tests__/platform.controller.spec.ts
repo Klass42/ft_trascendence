@@ -4,6 +4,7 @@ import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 import { PLATFORM_ROLES_KEY } from '@/common/auth/platform-roles.decorator';
 import { PlatformController } from '../platform.controller';
 import { PlatformService } from '../platform.service';
+import type { AuthUser } from '@/common/auth';
 
 const mkService = () =>
   ({
@@ -12,30 +13,54 @@ const mkService = () =>
     getOrganization: jest.fn(),
     updateOrganization: jest.fn(),
     suspend: jest.fn(),
+    inviteAdmin: jest.fn(),
     deleteOrganization: jest.fn(),
   }) as unknown as PlatformService;
 
-const superadmin = {
+const superadmin: AuthUser = {
   userId: 'user-superadmin-0001',
-  email: 'platform@klass',
-  name: 'Platform Admin',
+  email: 'superadmin@klass.demo',
+  name: 'Super Admin',
   avatarUrl: null,
   organizationId: '',
-  role: 'STUDENT' as const,
-  platformRole: 'SUPERADMIN' as const,
+  role: 'STUDENT',
+  platformRole: 'SUPERADMIN',
   emailNotificationsEnabled: true,
   preferredLanguage: 'es',
 };
 
 describe('PlatformController', () => {
-  let reflector: Reflector;
+  it('requires the SUPERADMIN platform role on the whole controller', () => {
+    const reflector = new Reflector();
+    const roles = reflector.getAllAndOverride(PLATFORM_ROLES_KEY, [PlatformController]);
+    expect(roles).toEqual(['SUPERADMIN']);
+  });
 
-  beforeEach(() => {
-    reflector = new Reflector();
+  it('POST :id/admins calls inviteAdmin with id, dto, actor id', async () => {
+    const service = mkService();
+    const controller = new PlatformController(service);
+    await controller.inviteAdmin('org-klass-0001', { email: 'recovery-admin@klass.demo' } as any, superadmin);
+    expect(service.inviteAdmin).toHaveBeenCalledWith(
+      'org-klass-0001',
+      { email: 'recovery-admin@klass.demo' },
+      'user-superadmin-0001',
+    );
+  });
+
+  it('PATCH :id calls updateOrganization with id, dto, actor id', async () => {
+    const service = mkService();
+    const controller = new PlatformController(service);
+    await controller.update('org-klass-0001', { plan: 'ENTERPRISE' } as any, superadmin);
+    expect(service.updateOrganization).toHaveBeenCalledWith(
+      'org-klass-0001',
+      { plan: 'ENTERPRISE' },
+      'user-superadmin-0001',
+    );
   });
 
   describe('DELETE :id', () => {
     it('requires SUPERADMIN platform role', () => {
+      const reflector = new Reflector();
       const controller = new PlatformController(mkService());
       const roles = reflector.getAllAndOverride(PLATFORM_ROLES_KEY, [
         controller.remove,

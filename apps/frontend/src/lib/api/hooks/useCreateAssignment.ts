@@ -25,7 +25,7 @@ export function useCreateAssignment(): UseCreateAssignmentResult {
       setError(null);
       try {
         return await apiClient.post<AssignmentDTO>(
-          `/courses/${courseId}/assignments`,
+          `/subjects/${courseId}/assignments`,
           input,
         );
       } catch (err) {

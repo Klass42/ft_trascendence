@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../client';
-import type { CourseDTO, UpdateCourseInput } from '../types';
+import type { SubjectDTO, UpdateSubjectInput } from '../types';
 
 interface UseUpdateCourseResult {
-  update: (courseId: string, input: UpdateCourseInput) => Promise<CourseDTO>;
+  update: (subjectId: string, input: UpdateSubjectInput) => Promise<SubjectDTO>;
   isLoading: boolean;
   error: Error | null;
 }
@@ -13,11 +13,11 @@ export function useUpdateCourse(): UseUpdateCourseResult {
   const [error, setError] = useState<Error | null>(null);
 
   const update = useCallback(
-    async (courseId: string, input: UpdateCourseInput) => {
+    async (subjectId: string, input: UpdateSubjectInput) => {
       setIsLoading(true);
       setError(null);
       try {
-        return await apiClient.patch<CourseDTO>(`/courses/${courseId}`, input);
+        return await apiClient.patch<SubjectDTO>(`/subjects/${subjectId}`, input);
       } catch (err) {
         const e = err as Error;
         setError(e);

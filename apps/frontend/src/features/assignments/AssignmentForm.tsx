@@ -2,12 +2,11 @@ import { useState } from 'react';
 import {
   Button,
   DatePicker,
-  FileUpload,
   Input,
   Textarea,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import {
   useAuth,
   useCreateAssignment,

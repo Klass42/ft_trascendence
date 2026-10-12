@@ -1,16 +1,10 @@
 import {
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Course, CourseRole, Enrollment, SubmissionStatus } from '@prisma/client';
+import { SubmissionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-/** Course roles that may read a course's analytics — teacher or assistant. */
-export const STAFF_ROLES: CourseRole[] = [
-  CourseRole.TEACHER,
-  CourseRole.ASSISTANT,
-];
+import { CourseAccessService } from '../courses/course-access.service';
 
 /** Statuses that count as "the student has actually handed something in". */
 const SUBMITTED_STATUSES: SubmissionStatus[] = [
@@ -27,7 +21,10 @@ const DEFAULT_RANGE_DAYS = 30;
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: CourseAccessService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Membership gate
@@ -38,40 +35,9 @@ export class AnalyticsService {
   // cuando aterrice el pase de auth.
   // ---------------------------------------------------------------------------
 
-  /**
-   * Resolve a course together with the acting user's enrollment, deriving the
-   * tenant `organizationId` from the course itself (never from the client).
-   *
-   * The enrollment lookup doubles as the tenant/membership gate: a user from
-   * another org (or a stranger to the course) has no enrollment and is treated
-   * as if the course does not exist. Analytics is staff-only, so callers always
-   * pass {@link STAFF_ROLES}.
-   */
-  private async requireMembership(
-    courseId: string,
-    actingUserId: string,
-    roles?: CourseRole[],
-  ): Promise<{ course: Course; enrollment: Enrollment }> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-    });
-    if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_userId: { courseId, userId: actingUserId } },
-    });
-    if (!enrollment) {
-      // Don't leak the course's existence to non-members.
-      throw new NotFoundException(`Course ${courseId} not found`);
-    }
-
-    if (roles && !roles.includes(enrollment.role)) {
-      throw new ForbiddenException('Only course staff can view analytics');
-    }
-
-    return { course, enrollment };
+  private async requireStaff(subjectId: string, actingUserId: string) {
+    const access = await this.access.assertSubjectStaffForUser(subjectId, actingUserId);
+    return access.subject;
   }
 
   // ---------------------------------------------------------------------------
@@ -81,34 +47,33 @@ export class AnalyticsService {
   /**
    * Headline KPIs for a course, computed with aggregate/groupBy queries (no
    * per-row round-trips). Everything is scoped to the course — and therefore to
-   * its organization — because every query filters by `courseId` (directly or
+   * its organization — because every query filters by `subjectId` (directly or
    * through the assignment/section/thread that owns the row).
    */
-  async getOverview(courseId: string, actingUserId: string) {
-    const { course } = await this.requireMembership(
-      courseId,
+  async getOverview(subjectId: string, actingUserId: string) {
+    const subject = await this.requireStaff(
+      subjectId,
       actingUserId,
-      STAFF_ROLES,
     );
 
     // Assignments carry the per-assignment maxScore we need to normalise grades.
     const assignments = await this.prisma.assignment.findMany({
-      where: { courseId },
+      where: { subjectId },
       select: { id: true, maxScore: true },
     });
     const assignmentIds = assignments.map((a) => a.id);
 
     const [studentCount, lessonCount, completionCount, threadCount, postCount] =
       await Promise.all([
-        this.prisma.enrollment.count({
-          where: { courseId, role: CourseRole.STUDENT },
+        this.prisma.courseMembership.count({
+          where: { courseId: subject.courseId, course: { organizationId: subject.organizationId } },
         }),
-        this.prisma.lesson.count({ where: { section: { courseId } } }),
+        this.prisma.lesson.count({ where: { section: { subjectId } } }),
         this.prisma.lessonCompletion.count({
-          where: { lesson: { section: { courseId } } },
+          where: { lesson: { section: { subjectId } } },
         }),
-        this.prisma.forumThread.count({ where: { courseId } }),
-        this.prisma.forumPost.count({ where: { thread: { courseId } } }),
+        this.prisma.forumThread.count({ where: { subjectId } }),
+        this.prisma.forumPost.count({ where: { thread: { subjectId } } }),
       ]);
 
     // Per-status submission counts in a single groupBy, then folded into a map.
@@ -140,7 +105,7 @@ export class AnalyticsService {
     const expectedCompletions = studentCount * lessonCount;
 
     return {
-      course: { id: course.id, title: course.title },
+      course: { id: subject.id, title: subject.title },
       students: studentCount,
       assignments: assignments.length,
       lessons: lessonCount,
@@ -178,18 +143,18 @@ export class AnalyticsService {
    * chart shows explicit zeros, not gaps.
    */
   async getSubmissionsOverTime(
-    courseId: string,
+    subjectId: string,
     actingUserId: string,
     from?: string,
     to?: string,
   ) {
-    await this.requireMembership(courseId, actingUserId, STAFF_ROLES);
+    await this.requireStaff(subjectId, actingUserId);
 
     const { start, end } = resolveRange(from, to);
 
     const assignmentIds = (
       await this.prisma.assignment.findMany({
-        where: { courseId },
+        where: { subjectId },
         select: { id: true },
       })
     ).map((a) => a.id);
@@ -238,11 +203,11 @@ export class AnalyticsService {
    * maxScore and bucketed into ten 10-point bands (0–10 … 90–100). A perfect
    * score lands in the top band rather than a phantom 100–110 one.
    */
-  async getGradeDistribution(courseId: string, actingUserId: string) {
-    await this.requireMembership(courseId, actingUserId, STAFF_ROLES);
+  async getGradeDistribution(subjectId: string, actingUserId: string) {
+    await this.requireStaff(subjectId, actingUserId);
 
     const assignments = await this.prisma.assignment.findMany({
-      where: { courseId },
+      where: { subjectId },
       select: { id: true, maxScore: true },
     });
 
@@ -271,11 +236,11 @@ export class AnalyticsService {
    * histogram, and the last-30-days submissions series. Fields are RFC-4180
    * escaped and the file is prefixed with a UTF-8 BOM so Excel reads accents.
    */
-  async getExportCsv(courseId: string, actingUserId: string) {
+  async getExportCsv(subjectId: string, actingUserId: string) {
     const [overview, distribution, overTime] = await Promise.all([
-      this.getOverview(courseId, actingUserId),
-      this.getGradeDistribution(courseId, actingUserId),
-      this.getSubmissionsOverTime(courseId, actingUserId),
+      this.getOverview(subjectId, actingUserId),
+      this.getGradeDistribution(subjectId, actingUserId),
+      this.getSubmissionsOverTime(subjectId, actingUserId),
     ]);
 
     const rows: string[][] = [];
@@ -317,7 +282,7 @@ export class AnalyticsService {
 
     const csv =
       '﻿' + rows.map((r) => r.map(csvField).join(',')).join('\r\n');
-    return { filename: `analytics-${courseId}.csv`, csv };
+    return { filename: `analytics-${subjectId}.csv`, csv };
   }
 
   // ---------------------------------------------------------------------------

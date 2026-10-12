@@ -3,40 +3,11 @@ import { actAs, STUDENT } from './dev-user';
 
 const COURSE_ID = 'course-web-101';
 const LESSON_ID = 'lesson-web-101-1';
-const BASE_URL = 'http://localhost:3000';
 
-// These flows are the student experience — enroll, lessons, student dashboard.
-// Act as the seeded student regardless of the developer's VITE_DEV_USER_ID.
+// Student experience. Act as the seeded student regardless of VITE_DEV_USER_ID.
 test.beforeEach(async ({ page }) => {
   await actAs(page, STUDENT);
 });
-
-// ═══════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════
-
-async function ensureNotEnrolled() {
-  // Unenroll lucia from seed course so enroll flow is visible
-  try {
-    await fetch(
-      `${BASE_URL}/courses/${COURSE_ID}/enroll?organizationId=org-klass-0001&userId=user-lucia-001`,
-      { method: 'DELETE', headers: { 'x-dev-user': 'user-lucia-001' } },
-    );
-  } catch {
-    // ignore if already unenrolled
-  }
-}
-
-async function enrollViaApi() {
-  await fetch(
-    `${BASE_URL}/courses/${COURSE_ID}/enroll?organizationId=org-klass-0001&userId=user-lucia-001`,
-    {
-      method: 'POST',
-      headers: { 'x-dev-user': 'user-lucia-001', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessCode: 'WEB101' }),
-    },
-  );
-}
 
 // ═══════════════════════════════════════════════════════════
 // F1: CoursesPage
@@ -48,7 +19,7 @@ test.describe('F1 — CoursesPage', () => {
 
     await expect(page.locator('h1')).toContainText('Mis cursos');
 
-    const courseCard = page.locator('text=Introducción al Desarrollo Web').first();
+    const courseCard = page.locator('text=1º A').first();
     await expect(courseCard).toBeVisible({ timeout: 8000 });
   });
 
@@ -56,7 +27,7 @@ test.describe('F1 — CoursesPage', () => {
     await page.goto('/courses');
     await page.waitForTimeout(2000);
 
-    const card = page.locator('text=Introducción al Desarrollo Web').first();
+    const card = page.locator('text=1º A').first();
     await card.click();
 
     await expect(page).toHaveURL(/\/courses\//);
@@ -66,47 +37,13 @@ test.describe('F1 — CoursesPage', () => {
 // ═══════════════════════════════════════════════════════════
 // F2: CourseDetailPage — unenrolled (shows enroll UI)
 // ═══════════════════════════════════════════════════════════
-test.describe('F2 — CourseDetailPage (unenrolled)', () => {
-  test.beforeEach(async () => {
-    await ensureNotEnrolled();
-  });
-
-  test('shows course detail with sections', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}`);
+test.describe('F2 — Subject page', () => {
+  test('shows the published subject and its cohort', async ({ page }) => {
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}`);
     await page.waitForTimeout(2000);
 
     await expect(page.locator('h1')).toContainText('Introducción al Desarrollo Web');
-  });
-
-  test('shows access code input when not enrolled', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}`);
-    await page.waitForTimeout(2000);
-
-    const enrollBtn = page.locator('button:has-text("Inscribirse")');
-    await expect(enrollBtn).toBeVisible({ timeout: 8000 });
-
-    const codeInput = page.locator('input[placeholder="Código de acceso"]');
-    await expect(codeInput).toBeVisible();
-  });
-
-  test('enrolls with correct access code', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}`);
-    await page.waitForTimeout(2000);
-
-    await page.locator('input[placeholder="Código de acceso"]').fill('WEB101');
-    await page.locator('button:has-text("Inscribirse")').click();
-
-    await expect(page.locator('text=¡Inscrito!')).toBeVisible({ timeout: 8000 });
-  });
-
-  test('shows error with wrong access code', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}`);
-    await page.waitForTimeout(2000);
-
-    await page.locator('input[placeholder="Código de acceso"]').fill('CODIGO_MAL');
-    await page.locator('button:has-text("Inscribirse")').click();
-
-    await expect(page.locator('text=Código de acceso incorrecto')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('text=1º A').first()).toBeVisible();
   });
 });
 
@@ -114,13 +51,8 @@ test.describe('F2 — CourseDetailPage (unenrolled)', () => {
 // F3: LessonPage
 // ═══════════════════════════════════════════════════════════
 test.describe('F3 — LessonPage', () => {
-  test.beforeAll(async () => {
-    await ensureNotEnrolled();
-    await enrollViaApi();
-  });
-
   test('shows lesson content with markdown', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}/lessons/${LESSON_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}/lessons/${LESSON_ID}`);
     await page.waitForTimeout(2000);
 
     await expect(page.locator('h1').first()).toContainText('¿Cómo funciona la web?');
@@ -130,7 +62,7 @@ test.describe('F3 — LessonPage', () => {
   });
 
   test('has complete lesson button', async ({ page }) => {
-    await page.goto(`/courses/${COURSE_ID}/lessons/${LESSON_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}/lessons/${LESSON_ID}`);
     await page.waitForTimeout(2000);
 
     // Either the complete button (uncompleted) or the completed badge (already done)
@@ -156,7 +88,7 @@ test.describe('F4 — DashboardPage', () => {
     await page.goto('/dashboard');
     await page.waitForTimeout(2000);
 
-    const courseCard = page.locator('text=Introducción al Desarrollo Web').first();
+    const courseCard = page.locator('text=1º A').first();
     await expect(courseCard).toBeVisible({ timeout: 8000 });
   });
 });
@@ -239,7 +171,7 @@ test.describe('Console — zero warnings', () => {
 
   test('lesson page', async ({ page }) => {
     const errors = trackErrors(page);
-    await page.goto(`/courses/${COURSE_ID}/lessons/${LESSON_ID}`);
+    await page.goto(`/courses/course-klass-2025/subjects/${COURSE_ID}/lessons/${LESSON_ID}`);
     await page.waitForTimeout(2000);
     expect(errors).toEqual([]);
   });

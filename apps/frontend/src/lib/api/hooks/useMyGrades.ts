@@ -1,22 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
-import type { MyGradeDTO } from '../types';
+import type { MyGradesDTO } from '../types';
 
 interface UseMyGradesResult {
-  data: MyGradeDTO[] | null;
+  data: MyGradesDTO | null;
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
 }
 
 /**
- * The acting student's grades for a course: one row per assignment with their
- * score/status/feedback. Backend endpoint: GET /courses/:id/grades/me (any
- * course member).
+ * The acting student's grades for a course: one row per published activity
+ * plus the course `final`. Backend: GET /courses/:id/grades/me (any member).
+ * Empty books return 200 `{ items: [], final: null }`.
  */
 export function useMyGrades(courseId: string | null): UseMyGradesResult {
-  const [data, setData] = useState<MyGradeDTO[] | null>(null);
+  const [data, setData] = useState<MyGradesDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [nonce, setNonce] = useState(0);
@@ -36,7 +36,7 @@ export function useMyGrades(courseId: string | null): UseMyGradesResult {
     setError(null);
 
     apiClient
-      .get<MyGradeDTO[]>(`/courses/${courseId}/grades/me`)
+      .get<MyGradesDTO>(`/subjects/${courseId}/grades/me`)
       .then((result) => {
         if (!cancelled) setData(result);
       })

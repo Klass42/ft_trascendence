@@ -17,18 +17,22 @@ function buildFake() {
 
   const sections: Record<string, any> = {
     [SECTION_ID]: {
-      id: SECTION_ID, courseId: COURSE_ID, title: 'HTML & CSS', order: 1,
+      id: SECTION_ID, subjectId: COURSE_ID, title: 'HTML & CSS', order: 1,
       createdAt: new Date(), lessons: [],
     },
     [SECTION_ID_2]: {
-      id: SECTION_ID_2, courseId: COURSE_ID, title: 'JavaScript', order: 2,
+      id: SECTION_ID_2, subjectId: COURSE_ID, title: 'JavaScript', order: 2,
       createdAt: new Date(), lessons: [],
     },
   };
 
   const prisma = {
-    course: {
-      findUnique: async ({ where }: any) => courses[where.id] ?? null,
+    subject: {
+      findFirst: async ({ where }: any) => {
+        const course = courses[where.id];
+        if (!course || course.organizationId !== where.organizationId) return null;
+        return course;
+      },
     },
     section: {
       findUnique: async ({ where }: any) => {
@@ -36,14 +40,14 @@ function buildFake() {
         return s ? { ...s, lessons: [...(s.lessons ?? [])] } : null;
       },
       findMany: async ({ where }: any) => {
-        let result = Object.values(sections).filter((s: any) => s.courseId === where.courseId);
+        let result = Object.values(sections).filter((s: any) => s.subjectId === where.subjectId);
         result = result.sort((a: any, b: any) => a.order - b.order);
         return result.map((s: any) => ({ ...s, lessons: [...(s.lessons ?? [])] }));
       },
       create: async ({ data }: any) => {
         const section = {
           id: `sec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          courseId: data.courseId, title: data.title, order: data.order ?? 0,
+          subjectId: data.subjectId, title: data.title, order: data.order ?? 0,
           createdAt: new Date(), lessons: [],
         };
         sections[section.id] = section;
@@ -85,7 +89,7 @@ describe('SectionsService', () => {
 
       expect(result.id).toBeTruthy();
       expect(result.title).toBe('Nueva sección');
-      expect(result.courseId).toBe(COURSE_ID);
+      expect(result.subjectId).toBe(COURSE_ID);
     });
 
     it('creates a section with explicit order', async () => {

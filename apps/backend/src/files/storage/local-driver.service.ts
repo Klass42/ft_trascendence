@@ -17,7 +17,9 @@ export class LocalStorageDriver extends StorageService {
     file: Express.Multer.File,
     organizationId: string,
   ): Promise<StoredFile> {
-    const objectKey = `${organizationId}/${randomUUID()}-${file.originalname}`;
+    // Never let a client-controlled filename become part of the filesystem
+    // path. The original name is retained in PostgreSQL for display only.
+    const objectKey = `${organizationId}/${randomUUID()}`;
     const dir = path.join(this.uploadDir, path.dirname(objectKey));
     const filePath = path.join(this.uploadDir, objectKey);
 

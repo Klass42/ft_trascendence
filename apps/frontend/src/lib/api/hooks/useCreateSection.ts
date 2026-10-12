@@ -21,7 +21,7 @@ export function useCreateSection(): UseCreateSectionResult {
       setError(null);
       try {
         return await apiClient.post<SectionDTO>(
-          `/courses/${courseId}/sections?organizationId=${orgId}`,
+          `/subjects/${courseId}/sections?organizationId=${orgId}`,
           input,
         );
       } catch (err) {

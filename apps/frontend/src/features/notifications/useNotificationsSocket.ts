@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import type { NotificationDTO } from '@/lib/api';
+import { socketAuth, type NotificationDTO } from '@/lib/api';
 
 interface UseNotificationsSocketOptions {
   /** Acting user id (from `useAuth`). Null keeps the socket disconnected. */
@@ -17,8 +17,8 @@ interface UseNotificationsSocketOptions {
  * the fresh handshake; we only surface `connected` for optional UI.
  *
  * The connection is same-origin in dev (Vite proxies `/socket.io` → :3000), so
- * no CORS is involved. Identity travels in the handshake as `auth.userId`.
- * TODO(auth): enviar el JWT real (Jorge) en `auth.token` en lugar de auth.userId.
+ * no CORS is involved. Production identity travels as `auth.token`; local
+ * development retains `auth.userId` for the backend's development-only valve.
  */
 export function useNotificationsSocket({
   userId,
@@ -35,9 +35,10 @@ export function useNotificationsSocket({
       return;
     }
 
-    // No URL → same origin. `auth.userId` reaches handshake.auth.userId server-side.
+    // No URL → same origin. The gateway verifies JWTs and permits userId only
+    // outside production for seeded-user development and E2E tests.
     const socket = io({
-      auth: { userId },
+      auth: socketAuth(userId),
       // Graceful reconnection (these are the socket.io defaults, made explicit).
       reconnection: true,
       reconnectionDelay: 1000,

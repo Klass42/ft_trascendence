@@ -1,7 +1,6 @@
 # ============================================================================
 #  CODEOWNERS — auto-requests reviewers by path. Last matching rule wins.
-#  Team: Jorge=@SrJorgeG, Aloiki=@illia, David=@dacs-dev, Ale Pinto=@Aletheios42.
-#  NOTE: Ale (@Aletheios42) still needs Write access granted by a Klass42 admin.
+#  Team: Jorge=@SrJorgeG, Aloiki=@illia, David=@dacs-dev, Viacheslav=@ViacheslavTrofymenko.
 # ============================================================================
 
 # Default — any change gets a look from the 3 app devs
@@ -35,12 +34,15 @@
 /apps/frontend/src/features/forums/        @dacs-dev
 /apps/frontend/src/features/notifications/ @dacs-dev
 
-# ── DevOps / Infra — Ale Pinto ──
-/infra/                    @Aletheios42
-/.github/                  @Aletheios42
-/scripts/                  @Aletheios42
-/Makefile                  @Aletheios42
-/flake.nix                 @Aletheios42
-/apps/backend/Dockerfile   @Aletheios42
-/apps/frontend/Dockerfile  @Aletheios42
-/apps/frontend/nginx.conf  @Aletheios42
+# ── DevOps / Infra — Viacheslav (vtrofyme) ──
+/infra/                    @ViacheslavTrofymenko
+/.github/                  @ViacheslavTrofymenko
+/scripts/                  @ViacheslavTrofymenko
+/Makefile                  @ViacheslavTrofymenko
+/compose.yaml              @ViacheslavTrofymenko
+/.env.example              @ViacheslavTrofymenko
+/.dockerignore             @ViacheslavTrofymenko
+/flake.nix                 @ViacheslavTrofymenko
+/apps/backend/Dockerfile   @ViacheslavTrofymenko
+/apps/frontend/Dockerfile  @ViacheslavTrofymenko
+/apps/frontend/nginx.conf  @ViacheslavTrofymenko

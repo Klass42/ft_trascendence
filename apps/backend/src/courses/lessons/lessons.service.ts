@@ -13,14 +13,33 @@ export class LessonsService {
   ) {
     const section = await this.prisma.section.findUnique({
       where: { id: sectionId },
-      include: { course: true },
+      include: { subject: true },
     });
 
-    if (!section || section.course.organizationId !== organizationId) {
+    if (!section || section.subject.organizationId !== organizationId) {
       throw new NotFoundException(`Section ${sectionId} not found`);
     }
 
     return section;
+  }
+
+  /** Resolves a section's subject with tenant isolation for controller guards. */
+  async findSectionSubjectId(sectionId: string, organizationId: string) {
+    return this.findSectionOrThrow(sectionId, organizationId);
+  }
+
+  /** Resolves a lesson's subject with tenant isolation for controller guards. */
+  async findSubjectId(lessonId: string, organizationId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { section: { include: { subject: true } } },
+    });
+
+    if (!lesson || lesson.section.subject.organizationId !== organizationId) {
+      throw new NotFoundException(`Lesson ${lessonId} not found`);
+    }
+
+    return lesson;
   }
 
   private async findLessonOrThrow(
@@ -88,10 +107,10 @@ export class LessonsService {
   async findById(lessonId: string, organizationId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      include: { section: { include: { course: true } } },
+      include: { section: { include: { subject: true } } },
     });
 
-    if (!lesson || lesson.section.course.organizationId !== organizationId) {
+    if (!lesson || lesson.section.subject.organizationId !== organizationId) {
       throw new NotFoundException(`Lesson ${lessonId} not found`);
     }
 
@@ -167,12 +186,12 @@ export class LessonsService {
   ) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      include: { section: { include: { course: true } } },
+      include: { section: { include: { subject: true } } },
     });
 
     if (
       !lesson ||
-      lesson.section.course.organizationId !== organizationId
+      lesson.section.subject.organizationId !== organizationId
     ) {
       throw new NotFoundException(`Lesson ${lessonId} not found`);
     }
@@ -199,13 +218,13 @@ export class LessonsService {
     const attachment = await this.prisma.lessonAttachment.findUnique({
       where: { lessonId_fileId: { lessonId, fileId } },
       include: {
-        lesson: { include: { section: { include: { course: true } } } },
+        lesson: { include: { section: { include: { subject: true } } } },
       },
     });
 
     if (
       !attachment ||
-      attachment.lesson.section.course.organizationId !== organizationId
+      attachment.lesson.section.subject.organizationId !== organizationId
     ) {
       throw new NotFoundException(`Attachment not found`);
     }

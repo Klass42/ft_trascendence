@@ -110,23 +110,30 @@ export interface PaginationParams {
 // DTOs (api response shapes)
 export type {
   CourseDTO,
+  SubjectDTO,
+  MeSubjectDTO,
   SectionDTO,
   LessonDTO,
   FileDTO,
   LessonAttachmentDTO,
-  EnrollmentDTO,
+  CourseMembershipDTO,
+  SubjectStaffDTO,
   ProgressDTO,
   CompleteLessonDTO,
   MyProgressItem,
-  CourseStatus,
-  CourseRole,
+  CohortStatus,
+  PublicationStatus,
+  SubjectStaffRole,
   CreateCourseInput,
   UpdateCourseInput,
+  CreateSubjectInput,
+  UpdateSubjectInput,
   CreateSectionInput,
   UpdateSectionInput,
   CreateLessonInput,
   UpdateLessonInput,
 } from './types/course';
+export { subjectSelectorLabel } from './types/course';
 
 export type {
   AssignmentDTO,
@@ -135,11 +142,13 @@ export type {
   SubmissionFileDTO,
   SubmissionAuthorDTO,
   SubmissionStatus,
+  PendingAttemptDTO,
   PendingSubmissionDTO,
   TeachingSummaryDTO,
   CreateAssignmentInput,
   UpdateAssignmentInput,
   CreateSubmissionInput,
+  GradeSubmissionInput,
 } from './types/assignment';
 
 export type {
@@ -148,6 +157,7 @@ export type {
   QuestionKind,
   AttemptStatus,
   QuestionDTO,
+  ActivityFileDTO,
   ActivityDTO,
   CreateActivityInput,
   UpdateActivityInput,
@@ -156,16 +166,27 @@ export type {
   AnswerDTO,
   AttemptDTO,
   SaveAnswersInput,
+  GradeAttemptInput,
 } from './types/activity';
 
 export type {
   GradebookDTO,
-  GradebookAssignmentDTO,
+  GradebookItemDTO,
   GradebookCellDTO,
   GradebookRowDTO,
   MyGradeDTO,
-  GradeSubmissionInput,
+  MyGradesDTO,
 } from './types/gradebook';
+export { formatFinalPercent } from './types/gradebook';
+
+export type {
+  TaskTemplateBlock,
+  TaskTemplateDTO,
+  CreateTaskTemplateInput,
+  UpdateTaskTemplateInput,
+  SaveAsTemplateInput,
+  TeachingActivityDTO,
+} from './types/task-template';
 
 export type {
   ForumAuthorDTO,
@@ -189,3 +210,15 @@ export type {
   GradeBucketDTO,
   GradeDistributionDTO,
 } from './types/analytics';
+
+export type {
+  LearningResourceType,
+  LearningResourceStatus,
+  ResourceFileDTO,
+  ResourceSubjectDTO,
+  LearningResourceDTO,
+  SubjectResourceDTO,
+  CreateLearningResourceInput,
+  UpdateLearningResourceInput,
+  PublishResourceInput,
+} from './types/resource';

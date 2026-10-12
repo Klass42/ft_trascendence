@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { io } from 'socket.io-client';
-import { apiClient, useAuth } from '@/lib/api';
+import { apiClient, socketAuth, useAuth } from '@/lib/api';
 import type { PresenceFriendDTO, PresenceUpdate } from './types';
 
 interface PresenceContextValue {
@@ -31,8 +31,8 @@ const PresenceContext = createContext<PresenceContextValue | null>(null);
  * - On every (re)connect we refetch the full list, so a drop/restart resyncs
  *   gracefully (socket.io handles the reconnection/backoff itself).
  *
- * Identity travels in the handshake as `auth.userId` (dev) — same contract as
- * the notifications socket; the gateway also accepts a real JWT in `auth.token`.
+ * Identity travels as an access JWT in production. Local development retains
+ * the server's non-production `auth.userId` valve for seeded-user QA.
  */
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -77,7 +77,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
 
     const socket = io({
-      auth: { userId: user.userId },
+      auth: socketAuth(user.userId),
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

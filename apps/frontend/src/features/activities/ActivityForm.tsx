@@ -2,21 +2,23 @@ import { useState } from 'react';
 import {
   Button,
   DatePicker,
+  FileUpload,
   FormField,
   Input,
   Select,
   Textarea,
+  Toggle,
   useToast,
+  type FileValue,
 } from '@/components/ui';
-import { useActivityMutations } from '@/lib/api';
+import { useActivityMutations, useAuth } from '@/lib/api';
 import type { ActivityDTO, ActivityStatus } from '@/lib/api';
 import { toDatetimeLocal, toIso } from '../assignments/helpers';
 
 /**
- * Create or edit an activity's metadata (title, description, scoring, attempt
- * policy, submission window, publish status). Questions are managed separately
- * in the detail view. `type` is fixed to QUIZ for now — LISTENING/SPEAKING media
- * activities arrive in B4.
+ * Create or edit a task's metadata (title, window, attempts, countsTowardFinal).
+ * `maxScore` is derived from question points — not collected here. Questions
+ * are managed separately. `type` is fixed to QUIZ.
  */
 interface Props {
   courseId: string;
@@ -32,19 +34,33 @@ const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
   { value: 'ARCHIVED', label: 'Archivada' },
 ];
 
-export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: Props) {
+export function ActivityForm({
+  courseId,
+  initial,
+  inModal,
+  onSaved,
+  onCancel,
+}: Props) {
   const editing = !!initial;
+  const { user } = useAuth();
   const { toast } = useToast();
   const { createActivity, updateActivity, isLoading } = useActivityMutations();
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [maxScore, setMaxScore] = useState(String(initial?.maxScore ?? 100));
   const [attempts, setAttempts] = useState(String(initial?.attemptsAllowed ?? 1));
   const [status, setStatus] = useState<ActivityStatus>(initial?.status ?? 'DRAFT');
   const [openAt, setOpenAt] = useState(toDatetimeLocal(initial?.openAt));
   const [dueAt, setDueAt] = useState(toDatetimeLocal(initial?.dueAt));
   const [closeAt, setCloseAt] = useState(toDatetimeLocal(initial?.closeAt));
+  const [countsTowardFinal, setCountsTowardFinal] = useState(
+    initial?.countsTowardFinal ?? true,
+  );
+  const [fileValues, setFileValues] = useState<FileValue[]>([]);
+
+  const uploading = fileValues.some(
+    (f) => f.status === 'uploading' || f.status === 'pending',
+  );
 
   async function handleSave() {
     const trimmed = title.trim();
@@ -52,17 +68,11 @@ export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: 
       toast({ variant: 'error', message: 'El título es obligatorio.' });
       return;
     }
-    const score = Number(maxScore);
-    if (!Number.isFinite(score) || score < 1) {
-      toast({ variant: 'error', message: 'La puntuación máxima debe ser ≥ 1.' });
-      return;
-    }
     const att = Number(attempts);
     if (!Number.isInteger(att) || att < 0) {
       toast({ variant: 'error', message: 'Los intentos deben ser un entero ≥ 0 (0 = ilimitados).' });
       return;
     }
-    // Window ordering (backend re-checks): openAt ≤ dueAt ≤ closeAt.
     const o = toIso(openAt);
     const d = toIso(dueAt);
     const c = toIso(closeAt);
@@ -70,26 +80,33 @@ export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: 
     if (d && c && d > c) return fail('La entrega no puede ser posterior al cierre.');
     if (o && c && o > c) return fail('La apertura no puede ser posterior al cierre.');
 
+    const uploadedIds = fileValues
+      .filter((f) => f.status === 'done')
+      .map((f) => f.id);
+    const keptIds = (initial?.files ?? []).map((f) => f.fileId);
+    const fileIds = editing ? [...keptIds, ...uploadedIds] : uploadedIds;
+
     try {
       const payload = {
         title: trimmed,
         description: description.trim() || undefined,
-        maxScore: score,
         attemptsAllowed: att,
         status,
         openAt: o,
         dueAt: d,
         closeAt: c,
+        countsTowardFinal,
+        ...(fileIds.length > 0 || editing ? { fileIds } : {}),
       };
       const saved = editing
         ? await updateActivity(initial.id, payload)
         : await createActivity(courseId, { type: 'QUIZ', ...payload });
-      toast({ variant: 'success', message: editing ? 'Actividad guardada.' : 'Actividad creada.' });
+      toast({ variant: 'success', message: editing ? 'Tarea guardada.' : 'Tarea creada.' });
       onSaved(saved);
     } catch (err) {
       toast({
         variant: 'error',
-        message: err instanceof Error ? err.message : 'No se pudo guardar la actividad.',
+        message: err instanceof Error ? err.message : 'No se pudo guardar la tarea.',
       });
     }
   }
@@ -114,13 +131,13 @@ export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: 
             }),
       }}
     >
-      <FormField label="Título">
+      <FormField label="Título" required>
         {(field) => (
           <Input
             {...field}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ej. Vocabulario: la casa"
+            placeholder="Ej. Examen mixto · unidad 3"
           />
         )}
       </FormField>
@@ -137,34 +154,33 @@ export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: 
         )}
       </FormField>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 120px' }}>
-          <FormField label="Puntuación máxima">
-            {(field) => (
-              <Input
-                {...field}
-                type="number"
-                min={1}
-                value={maxScore}
-                onChange={(e) => setMaxScore(e.target.value)}
-              />
-            )}
-          </FormField>
-        </div>
-        <div style={{ flex: '1 1 120px' }}>
-          <FormField label="Intentos" hint="0 = ilimitados">
-            {(field) => (
-              <Input
-                {...field}
-                type="number"
-                min={0}
-                value={attempts}
-                onChange={(e) => setAttempts(e.target.value)}
-              />
-            )}
-          </FormField>
-        </div>
+      <div style={{ flex: '1 1 120px', maxWidth: 220 }}>
+        <FormField label="Intentos" hint="0 = ilimitados">
+          {(field) => (
+            <Input
+              {...field}
+              type="number"
+              min={0}
+              value={attempts}
+              onChange={(e) => setAttempts(e.target.value)}
+            />
+          )}
+        </FormField>
       </div>
+
+      <FormField
+        label="Cuenta para la nota final"
+        hint="Si lo desactivas, el alumno ve su nota pero no entra en el promedio."
+      >
+        {(field) => (
+          <Toggle
+            id={field.id}
+            checked={countsTowardFinal}
+            onChange={setCountsTowardFinal}
+            aria-label="Cuenta para la nota final"
+          />
+        )}
+      </FormField>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 180px' }}>
@@ -204,9 +220,25 @@ export function ActivityForm({ courseId, initial, inModal, onSaved, onCancel }: 
         )}
       </FormField>
 
+      {user?.organizationId && (
+        <FileUpload
+          organizationId={user.organizationId}
+          uploaderId={user.userId}
+          multiple
+          maxFiles={5}
+          value={fileValues}
+          onChange={setFileValues}
+          hint="Adjunta recursos del enunciado (máx. 5 archivos)."
+        />
+      )}
+
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant="primary" onClick={handleSave} disabled={isLoading}>
-          {editing ? 'Guardar cambios' : 'Crear actividad'}
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={isLoading || uploading}
+        >
+          {editing ? 'Guardar cambios' : 'Crear tarea'}
         </Button>
         <Button variant="ghost" onClick={onCancel} disabled={isLoading}>
           Cancelar

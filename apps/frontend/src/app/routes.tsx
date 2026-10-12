@@ -26,20 +26,23 @@ const VerifyEmailPage = lazy(() =>
 const OAuthCallbackPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.OAuthCallbackPage }))
 );
+const LegalPage = lazy(() =>
+  import('@/features/legal').then((m) => ({ default: m.LegalPage }))
+);
 const DashboardPage = lazy(() =>
   import('@/features/dashboard').then((m) => ({ default: m.DashboardPage }))
 );
 const CoursesPage = lazy(() =>
   import('@/features/courses').then((m) => ({ default: m.CoursesPage }))
 );
+const CourseCohortPage = lazy(() =>
+  import('@/features/courses').then((m) => ({ default: m.CourseCohortPage }))
+);
 const CourseDetailPage = lazy(() =>
   import('@/features/courses').then((m) => ({ default: m.CourseDetailPage }))
 );
 const LessonPage = lazy(() =>
   import('@/features/courses').then((m) => ({ default: m.LessonPage }))
-);
-const AssignmentsPage = lazy(() =>
-  import('@/features/assignments').then((m) => ({ default: m.AssignmentsPage }))
 );
 const ActivitiesPage = lazy(() =>
   import('@/features/activities').then((m) => ({ default: m.ActivitiesPage }))
@@ -58,6 +61,9 @@ const NotificationsPage = lazy(() =>
 );
 const AnalyticsPage = lazy(() =>
   import('@/features/analytics').then((m) => ({ default: m.AnalyticsPage }))
+);
+const ResourcesPage = lazy(() =>
+  import('@/features/resources').then((m) => ({ default: m.ResourcesPage }))
 );
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
@@ -82,6 +88,7 @@ const OrgMembersPage = lazy(() =>
 );
 const PlatformOrganizationsPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationsPage })));
 const PlatformOrganizationFormPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationFormPage })));
+const PlatformOrganizationDetailPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformOrganizationDetailPage })));
 const PlatformLoginPage = lazy(() => import('@/features/platform').then(m => ({ default: m.PlatformLoginPage })));
 
 function PageLoader() {
@@ -111,7 +118,7 @@ const routes: RouteObject[] = [
       { index: true, element: <Navigate to="organizations" replace /> },
       { path: 'organizations', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
       { path: 'organizations/new', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationFormPage /></Suspense> },
-      { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
+      { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationDetailPage /></Suspense> },
     ] }],
   },
   {
@@ -155,6 +162,22 @@ const routes: RouteObject[] = [
     ),
   },
   {
+    path: '/privacy',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <LegalPage document="privacy" />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/terms',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <LegalPage document="terms" />
+      </Suspense>
+    ),
+  },
+  {
     element: (
       <ProtectedRoute>
         <AppLayout />
@@ -181,12 +204,20 @@ const routes: RouteObject[] = [
         path: '/courses/:courseId',
         element: (
           <Suspense fallback={<PageLoader />}>
+            <CourseCohortPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/courses/:courseId/subjects/:subjectId',
+        element: (
+          <Suspense fallback={<PageLoader />}>
             <CourseDetailPage />
           </Suspense>
         ),
       },
       {
-        path: '/courses/:courseId/lessons/:lessonId',
+        path: '/courses/:courseId/subjects/:subjectId/lessons/:lessonId',
         element: (
           <Suspense fallback={<PageLoader />}>
             <LessonPage />
@@ -195,11 +226,7 @@ const routes: RouteObject[] = [
       },
       {
         path: '/assignments',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AssignmentsPage />
-          </Suspense>
-        ),
+        element: <Navigate to="/activities" replace />,
       },
       {
         path: '/activities',
@@ -239,6 +266,16 @@ const routes: RouteObject[] = [
           <Suspense fallback={<PageLoader />}>
             <AnalyticsPage />
           </Suspense>
+        ),
+      },
+      {
+        path: '/resources',
+        element: (
+          <ProtectedRoute roles={['ADMIN', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <ResourcesPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {
