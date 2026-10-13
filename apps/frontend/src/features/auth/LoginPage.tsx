@@ -57,7 +57,9 @@ export function LoginPage() {
       setError('El código de organización es obligatorio.');
       return;
     }
-    loginWithGoogle(slug);
+    if (!loginWithGoogle(slug)) {
+      setError('El código de organización no es válido. Usa minúsculas, números y guiones, sin espacios.');
+    }
   };
 
   return (

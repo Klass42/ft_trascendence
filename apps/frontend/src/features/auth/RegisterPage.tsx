@@ -165,7 +165,9 @@ export function RegisterPage() {
                   setErrors((p) => ({ ...p, form: 'El código de organización es obligatorio.' }));
                   return;
                 }
-                loginWithGoogle(slug);
+                if (!loginWithGoogle(slug)) {
+                  setErrors((p) => ({ ...p, form: 'El código de organización no es válido. Usa minúsculas, números y guiones, sin espacios.' }));
+                }
               }}
             >
               <svg className={styles.googleIcon} viewBox="0 0 24 24">

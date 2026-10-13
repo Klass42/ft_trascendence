@@ -68,8 +68,8 @@ interface AuthContextValue {
   loginPlatform: (email: string, password: string) => Promise<void>;
   /** Register with name/email/password inside an organization */
   register: (name: string, email: string, password: string, organizationSlug: string) => Promise<void>;
-  /** Login with OAuth (Google) inside an organization */
-  loginWithGoogle: (organizationSlug: string) => void;
+  /** Login with OAuth (Google) inside an organization. Returns false if the code is not a slug. */
+  loginWithGoogle: (organizationSlug: string) => boolean;
   /** Logout and clear tokens */
   logout: () => void;
   /** Refresh user data from server */
@@ -201,8 +201,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Login with Google OAuth
   // ---------------------------------------------------------------------------
   const loginWithGoogle = useCallback((organizationSlug: string) => {
-    const params = new URLSearchParams({ organizationSlug: organizationSlug.trim().toLowerCase() });
+    const slug = organizationSlug.trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return false;
+    const params = new URLSearchParams({ organizationSlug: slug });
     window.location.href = `/api/auth/google?${params.toString()}`;
+    return true;
   }, []);
 
   // ---------------------------------------------------------------------------

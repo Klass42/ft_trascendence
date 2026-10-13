@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Post,
@@ -9,6 +10,7 @@ import {
   Param,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -113,8 +115,14 @@ export class AuthController {
       const { accessToken, refreshToken } = await this.authService.googleLogin(req.user, state ?? '');
       const hash = new URLSearchParams({ accessToken, refreshToken }).toString();
       res.redirect(`${frontendUrl}/auth/callback#${hash}`);
-    } catch {
-      res.redirect(`${frontendUrl}/auth/callback#error=oauth_failed`);
+    } catch (error) {
+      const code =
+        error instanceof UnauthorizedException
+          ? 'unknown_organization'
+          : error instanceof ForbiddenException
+            ? 'wrong_organization'
+            : 'oauth_failed';
+      res.redirect(`${frontendUrl}/auth/callback#error=${code}`);
     }
   }
 
