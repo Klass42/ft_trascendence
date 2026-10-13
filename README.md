@@ -1,35 +1,374 @@
-# github_template
+*This project has been created as part of the 42 curriculum by <login-jorge>, <login-david>, <login-aloiki>, vtrofyme.*
 
-## Descripcion
-Base template for new repositories.
+<!-- TODO(team): replace the three placeholders above with the real 42 logins (same order as the
+     team table below). The subject requires this exact sentence, in italics, as the very first line. -->
 
-## Structure
-```
-.
-├── makefile                         # make help
-└── .github/
-    ├── CODEOWNERS.md
-    ├── PULL_REQUEST_TEMPLATE.md
-    └── workflows/
-        └── ci.yml                   # CI (commented, enable per project)
-```
+# Klass
 
-## Usage
+A learning management system (LMS) for academies: organizations, courses, subjects, lessons,
+assignments and tests, grades, forums, friends and real-time notifications. Final project of the
+42 Common Core (`ft_transcendence`, subject v21.2 "Surprise", free-choice web application).
+
+## Table of contents
+
+1. [Description](#description)
+2. [Team information](#team-information)
+3. [Project management](#project-management)
+4. [Instructions](#instructions)
+5. [Technical stack](#technical-stack)
+6. [Database schema](#database-schema)
+7. [Features list](#features-list)
+8. [Modules](#modules)
+9. [Individual contributions](#individual-contributions)
+10. [Resources](#resources)
+11. [License](#license)
+
+## Description
+
+<!-- TODO(team): goal of the project, a short overview and the key features (subject: "a clear
+     name for the project and its key features"). Draft below, extend or rewrite. -->
+
+**Klass** is a multi-tenant LMS. Each organization (an academy) has its own courses, subjects,
+teachers and students; the platform administrator manages organizations from a separate
+back-office. Teachers publish lessons and assignments (text, files, tests), grade submissions and
+run forums; students follow their courses, hand in work, see their grades and talk to classmates.
+Everything is served over HTTPS from a single `make`.
+
+Key features: organizations and role-based access (platform admin, organization admin, teacher,
+student), courses and subjects, lessons in Markdown, assignments and auto-graded tests, grades,
+forums, friends and presence, real-time notifications, file uploads, Google sign-in, and a
+monitored deployment (Prometheus + Grafana).
+
+## Team information
+
+<!-- TODO(team): the subject requires PO and PM to be named. Add the roles and one line of
+     responsibilities per person. Keep the order of the first line of this file. -->
+
+| Member | 42 login | GitHub | Role(s) | Responsibilities |
+|---|---|---|---|---|
+| Jorge | `<login>` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, <!-- PO/PM? --> developer | authentication, roles and permissions, organizations, database schema |
+| David | `<login>` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
+| Aloiki | `<login>` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
+| Viacheslav | `vtrofyme` | [@ViacheslavTrofymenko](https://github.com/ViacheslavTrofymenko) | DevOps | Docker images and Compose stack, HTTPS, CI/CD, monitoring, deployment, infrastructure docs |
+| Ale Pinto | `<login>` | [@Aletheios42](https://github.com/Aletheios42) | DevOps (left the project) | initial repository, first Compose stack and CI |
+
+## Project management
+
+<!-- TODO(team): how the work was organized (task split, meetings, branches), tools (GitHub
+     Issues / Projects, …) and communication channels (Discord, …). -->
+
+- **Branches:** every member works on a personal branch and opens a pull request to `staging`;
+  `staging` is merged into `master` for delivery. CI runs on every pull request, including a real
+  deployment of the stack (see [CI](#continuous-integration)).
+- **Code ownership:** [`.github/CODEOWNERS`](.github/CODEOWNERS); the split per person is in
+  [`docs/planning/README.md`](docs/planning/README.md).
+- **Tools:** <!-- TODO --> · **Communication:** <!-- TODO --> · **Meetings:** <!-- TODO -->
+
+## Instructions
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Docker Engine | 24+ with the Compose plugin v2.20+ | the only hard requirement; rootless Docker works |
+| GNU make, bash, curl | any | `make` wraps `docker compose`; `make smoke` uses `curl` |
+| Free ports | `4180`, `4443`, `4150` | changeable in `.env` (see below) |
+| Node.js 22 + pnpm 9.15 | optional | only for local development, tests and `make ci` (pnpm comes with `corepack enable`) |
+
+About 1 GB of RAM and 2 GB of disk for images and volumes. Nothing is installed on the host:
+all services run in containers.
+
+### Run
+
 ```bash
-git clone git@github.com:Aletheios42/github_template.git my-project
-cd my-project
-rm -rf .git
-git init
-git add .
-git commit -m "chore: init from template"
-make env
+git clone https://github.com/Klass42/ft_trascendence.git
+cd ft_trascendence
+make
 ```
 
-## Requirements
+`make` does, in order:
 
-- Docker Engine with the Compose plugin, GNU make
+1. `make env` — copies `.env.example` to `.env` and replaces every placeholder secret with a
+   random value ([`scripts/gen-env.sh`](scripts/gen-env.sh)). An existing `.env` is never touched.
+2. `docker compose up -d --build` — builds the backend and frontend images and starts the 12
+   containers in dependency order: PostgreSQL healthy → Prisma migrations (`migrate`, one-shot) →
+   backend healthy → Caddy. The command returns only when the application answers.
+3. Seeds the demo data **only if the database is empty**, so re-running `make` is safe.
+4. Prints the URLs and logins (`make urls`).
 
-## Customization
+Then open **https://localhost:4443** and accept the self-signed certificate once (Caddy issues it
+from its own CA). Demo accounts, organization code `klass`:
 
-- `ci.yml` — uncomment and configure the pipeline
-- `CODEOWNERS.md` — update `@Aletheios42` with team members
+| Account | Password | Role |
+|---|---|---|
+| `student@demo` | `demo1234` | student |
+| `teacher@demo` | `demo1234` | teacher |
+| `admin@demo` | `demo1234` | organization admin |
+| `PLATFORM_SUPERADMIN_EMAIL` from `.env` (`admin@platform.local` by default) | `PLATFORM_SUPERADMIN_PASSWORD` from `.env` | platform admin, signs in at `/platform/login` |
+
+Grafana: **https://localhost:4150**, user `admin`, password `GF_SECURITY_ADMIN_PASSWORD` from
+`.env` (`make urls` prints it).
+
+### Configuration (`.env`)
+
+`.env` is git-ignored; [`.env.example`](.env.example) is the committed template. Only deployment
+settings live there: internal host names, ports and image tags are fixed in
+[`compose.yaml`](compose.yaml).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CADDY_DOMAIN` | `localhost` | host name or IP typed in the browser; the certificate is issued for it |
+| `CADDY_TLS` | `internal` | `internal` = Caddy's own CA (self-signed); an e-mail address = Let's Encrypt (needs a public domain and ports 80/443) |
+| `CADDY_HTTP_PORT` / `CADDY_HTTPS_PORT` | `4180` / `4443` | published ports; HTTP only redirects to HTTPS |
+| `GRAFANA_HOST_PORT` | `4150` | published Grafana port (HTTPS) |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ft` / generated / `ft_prod` | database credentials, applied when the volume is first created |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | generated | token signing |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | empty | Google OAuth, disabled while empty. Redirect URI to register: `https://<CADDY_DOMAIN>:<CADDY_HTTPS_PORT>/api/auth/google/callback` |
+| `PLATFORM_SUPERADMIN_EMAIL` / `_PASSWORD` / `_NAME` | see file | first platform administrator, created on first start |
+| `STORAGE_DRIVER` | `local` | `local` = Docker volume `uploads`; `s3` = the bundled Garage bucket |
+| `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET` | generated | Garage (S3) credentials |
+| `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD` | `admin` / generated | Grafana admin, applied when the volume is first created |
+
+To serve the stack to other machines (multi-user demo), set `CADDY_DOMAIN` to the host's name
+or IP and run `make up`.
+
+### Everyday commands
+
+| Command | What it does |
+|---|---|
+| `make` | deploy (idempotent) |
+| `make status` · `make logs` · `make logs-backend` | state, health and logs |
+| `make urls` | print the URLs and logins again |
+| `make smoke` | 12 checks through the public HTTPS entrypoint: health, SPA, API, Socket.io, redirect, login, Grafana access, dashboards, Prometheus targets and rules |
+| `make down` | stop and remove containers, keep data |
+| `make fclean` · `make re` | also drop volumes and images · wipe and redeploy from scratch |
+| `make db-seed` (`-small`, `-large`, `-e2e`) · `make db-reset` | **replace** the application data with a demo scenario |
+| `make db-migrate NAME=…` · `make db-deploy` | create / apply Prisma migrations |
+| `make check` | validate `compose.yaml`, the Caddyfile and the Prometheus config and rules |
+| `make ci` | run the CI script locally: linters, build, backend tests |
+| `make help` | the full list |
+
+`compose.yaml` and `.env` sit in the repository root, so plain `docker compose ps`,
+`docker compose logs -f backend` or `docker compose exec postgres psql …` work as well.
+
+### Development without Docker rebuilds
+
+```bash
+corepack enable && pnpm install        # Node 22
+pnpm --filter @ft-trascendence/backend run test            # 350 unit tests (Prisma mocked)
+pnpm --filter @ft-trascendence/backend run test:integration
+pnpm --filter @ft-trascendence/frontend run test:e2e:compose   # Playwright against the running stack
+pnpm dev                                                   # both apps in watch mode
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `make` stops with `container …backend… is unhealthy` | `make logs-backend`; usually a failed migration, see `docker compose logs migrate` |
+| `migrate` fails with `P1000: Authentication failed` | the `postgres_data` volume was created with another password: `make re` (drops data) |
+| `required variable … is missing a value` | no `.env`: run `make env` |
+| Port already in use | change `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT` or `GRAFANA_HOST_PORT` in `.env` |
+| Edited a Caddy / Prometheus / Grafana file and nothing changed | `make reload` |
+| Grafana rejects the password from `.env` | `grafana_data` predates it: `docker compose down && docker volume rm ft-trascendence_grafana_data && make up` |
+
+Full infrastructure guide: [`docs/infra/README.md`](docs/infra/README.md).
+
+## Technical stack
+
+### Frontend
+
+<!-- TODO(Aloiki): technologies, frameworks and why. Known facts: React 19, TypeScript, Vite 6,
+     react-router-dom 7, CSS Modules + design tokens (own design system, 17 components),
+     socket.io-client, react-markdown, lucide-react. -->
+
+### Backend
+
+<!-- TODO(Jorge/David): technologies and why. Known facts: NestJS 10 on Node 22, Prisma 6,
+     passport (JWT + Google OAuth 2.0), argon2 password hashing, class-validator DTOs,
+     Socket.io gateway, @nestjs/event-emitter, multer uploads, AWS S3 SDK for Garage. -->
+
+### Database
+
+<!-- TODO(Jorge): PostgreSQL 16 and why it was chosen (relational data with many relations,
+     transactions, concurrent users; MongoDB rejected on licence and data shape). -->
+
+### Infrastructure and observability
+
+| Component | Version | Role | Why this choice |
+|---|---|---|---|
+| **Docker + Docker Compose** | Engine 24+, Compose v2 | 12 containers described in one `compose.yaml`; `make` = `docker compose up` | subject requirement: one command, no host installs |
+| **Caddy** | 2.11 | the only service with published ports: TLS termination, routing (`/api`, `/socket.io`, `/uploads` → backend, rest → SPA, `:4150` → Grafana), compression, security headers | issues certificates by itself (internal CA or Let's Encrypt) and reloads config without downtime; nginx + certbot would need manual certificate handling |
+| **nginx (unprivileged)** | 1.27 | serves the built SPA inside the `frontend` container | 49 MB image, no Node at runtime |
+| **PostgreSQL** | 16 | database, with `postgres-exporter` for metrics | see [Database](#database) |
+| **Garage** | 2.3 | optional S3-compatible object storage for uploads (`STORAGE_DRIVER=s3`) | self-hosted, no cloud account; the default driver is a local volume |
+| **OpenTelemetry SDK + Collector** | 0.57 / 0.114 | the backend pushes HTTP, V8 and event-loop metrics over OTLP; the collector remote-writes them to Prometheus | one vendor-neutral pipeline; the backend needs no `/metrics` endpoint |
+| **Prometheus** | 2.54 | 10 scrape targets, 11 alerting rules, 7-day retention | the de-facto standard named by the subject |
+| **Grafana** | 11.4 | 3 provisioned dashboards (Platform overview, NestJS backend, Infrastructure), alert view | dashboards and alerts live in the repo as JSON/YAML, no manual setup |
+| **node-exporter, postgres-exporter, blackbox-exporter** | 1.8 / 0.16 / 0.25 | host, database and HTTP-probe metrics | standard exporters for the subject's "exporters" requirement |
+| **GitHub Actions** | — | linters, build, backend tests, then a real `make` deployment with smoke and Playwright tests on every pull request | runs on the free tier, no self-hosted runner |
+
+Design rules behind it:
+
+- **One process per container, non-root.** The backend runs as user `node`; migrations run in a
+  one-shot `migrate` container; the frontend is static files on unprivileged nginx.
+- **Start order is enforced**, not hoped for: `depends_on` with health conditions, so `make`
+  fails loudly instead of printing URLs that do not answer. Every long-running service has
+  `restart: unless-stopped`, a health check and log rotation (3 × 10 MB).
+- **Only Caddy is published.** Prometheus, the collector and the exporters stay on the compose
+  network; Grafana is reachable only over HTTPS with a generated admin password, no anonymous
+  access and no sign-up.
+- **No shared secrets in git.** `.env.example` holds placeholders; `make env` generates random
+  values per machine.
+- **Deploy needs only Docker.** Node, pnpm and linters are for development and CI; no Nix, no
+  global installs.
+
+<a id="continuous-integration"></a>
+**Continuous integration** ([`.github/workflows/ci.yaml`](.github/workflows/ci.yaml)), on pull
+requests and pushes to `staging` / `master`:
+
+1. **checks** — [`scripts/ci.sh`](scripts/ci.sh) on Node 22 (same as `make ci`): actionlint,
+   yamllint, hadolint, `prisma validate`, build of both apps, backend unit + integration tests.
+2. **deploy** — `make check`, then `make` on a clean runner, `make smoke` (12 checks over
+   HTTPS) and the Playwright compose smoke suite (login through the proxy with zero browser
+   console errors).
+
+## Database schema
+
+<!-- TODO(Jorge): description of the structure, main tables and relationships, key fields.
+     Diagrams already in the repo: docs/diagrams.md §1 (domain map + two ER diagrams, Mermaid)
+     and docs/diagrams/ERD.md. Facts: Prisma schema with 31 models, 8 migrations
+     (apps/backend/prisma). -->
+
+The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/prisma/schema.prisma)
+(31 models) and versioned as Prisma migrations in `apps/backend/prisma/migrations`. ER diagrams:
+[`docs/diagrams.md`](docs/diagrams.md) (domain map, core ER, assignments ER) and
+[`docs/diagrams/ERD.md`](docs/diagrams/ERD.md).
+
+## Features list
+
+<!-- TODO(team): complete list, one line per feature: what it does + who built it. Suggested
+     groups: authentication & accounts, organizations & roles, courses & subjects, lessons &
+     content, assignments & tests, grades, forums, friends & presence, notifications, files,
+     platform back-office, deployment & monitoring. -->
+
+| Feature | Description | Member(s) |
+|---|---|---|
+| One-command deployment | `make` builds and starts the whole stack over HTTPS from a clean clone, generates secrets, applies migrations and seeds demo data | Viacheslav |
+| HTTPS everywhere | Caddy terminates TLS for the app and Grafana; HTTP redirects to HTTPS; security headers | Viacheslav |
+| Monitoring | Prometheus with 10 targets and 11 alerting rules, 3 Grafana dashboards, password-protected Grafana | Viacheslav |
+| CI pipeline | linters, build, 362 backend tests, real deployment + smoke + browser test on every pull request | Viacheslav |
+| <!-- TODO --> | | |
+
+## Modules
+
+<!-- TODO(team): confirm the list, the points and write 2–4 lines per module: justification,
+     how it was implemented, who did it. The Monitoring row is done. Need 14 points. -->
+
+| Module | Type | Points | Member(s) | Implementation |
+|---|---|---|---|---|
+| Use a framework for both frontend and backend | Major | 2 | <!-- TODO --> | React 19 (Vite) + NestJS 10 <!-- TODO: justify --> |
+| Real-time features with WebSocket | Major | 2 | David | <!-- TODO --> |
+| Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 <!-- TODO --> |
+| Standard user management | Major | 2 | Jorge | <!-- TODO --> |
+| Advanced permissions / RBAC | Major | 2 | Jorge | <!-- TODO --> |
+| Organization system | Major | 2 | Jorge | <!-- TODO --> |
+| Notification system | Minor | 1 | David | <!-- TODO --> |
+| File upload | Minor | 1 | Aloiki | <!-- TODO --> |
+| OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | <!-- TODO --> |
+| **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
+| **Total** | | **16** | | |
+
+**Monitoring system (Major).** *Justification:* the stack has 12 containers; without metrics and
+alerts a failing service is found by users, not by the team. *Implementation:* the NestJS backend
+is instrumented with the OpenTelemetry SDK (HTTP server histograms, V8 heap, GC, event-loop lag)
+and pushes OTLP to an OpenTelemetry Collector, which remote-writes to Prometheus. Prometheus also
+scrapes node-exporter (host), postgres-exporter (database), blackbox-exporter (HTTP probes of
+backend, frontend and Caddy), Caddy, Garage and the monitoring stack itself: 10 targets. Eleven
+alerting rules cover target down, failed health probe, PostgreSQL down, backend 5xx rate and p95
+latency, event-loop saturation, connection pool, host CPU / memory / disk and telemetry export
+failures. Grafana is provisioned from the repo with three dashboards (Platform overview, NestJS
+backend, Infrastructure) and the Prometheus data source; it is served over HTTPS through Caddy
+with a generated admin password, no anonymous access and no sign-up, and nothing else of the
+monitoring stack is published. Configuration: [`infra/monitoring/`](infra/monitoring/).
+*Demo:* `docker compose stop backend` → the `ServiceProbeFailed` alert fires in about 90 seconds;
+`docker compose start backend` → it resolves.
+
+## Individual contributions
+
+<!-- TODO(Jorge, David, Aloiki): what each of you built, which modules, and the challenges you
+     hit and how you solved them. Be specific (the subject asks for honesty here). -->
+
+### Jorge
+
+<!-- TODO -->
+
+### David
+
+<!-- TODO -->
+
+### Aloiki
+
+<!-- TODO -->
+
+### Viacheslav (vtrofyme) — DevOps
+
+Took over the infrastructure from the previous DevOps in September 2026 and reworked it so the
+deployment and the Monitoring module meet the subject:
+
+- **Compose stack** (`compose.yaml`, `.env.example`, `scripts/gen-env.sh`): moved to the repo
+  root, cut the configuration from 96 variables to 22, generated secrets instead of committed
+  ones, health checks and ordered start-up for every service, restart policy and log rotation.
+- **Images:** backend as a non-root single-process container with migrations in a one-shot
+  `migrate` service; frontend as a static build on unprivileged nginx (258 MB → 49 MB);
+  `.dockerignore`.
+- **HTTPS and edge** (`infra/caddy/Caddyfile`): published ports reduced from 6 to 3, security
+  headers, compression, HTTP → HTTPS redirect, Google OAuth callback routed under `/api`.
+- **Monitoring module:** exporters, 11 alerting rules, three dashboards, OpenTelemetry pipeline
+  from the backend, secured Grafana. Removed Tempo and Loki when the team decided metrics were
+  enough, which also dropped two containers and a backend dependency.
+- **Makefile and scripts:** working `up` / `down` / `re`, idempotent seeding, `smoke` (12 HTTPS
+  checks), `check` (config validation), `reload`, `urls`.
+- **CI:** backend unit and integration tests in the pipeline; a `deploy` job that runs `make`,
+  the smoke test and a Playwright login on every pull request; Nix replaced by plain actions.
+- **Documentation:** [`docs/infra/README.md`](docs/infra/README.md) (architecture, configuration,
+  HTTPS, monitoring, CI, troubleshooting) and the Instructions section of this file.
+
+*Challenges.* The previous stack came up but hid failures: `make up` and `make down` were no-ops,
+every `make` re-seeded the database, and the one scrape target that was down was invisible.
+Rebuilding it around health checks and `depends_on` conditions made failures visible at deploy
+time. Backend metrics had to be pushed rather than scraped because the app exposes no `/metrics`
+endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. Google OAuth could not be verified end-to-end without the team's client credentials.
+
+## Resources
+
+<!-- TODO(team): add the references you used for the frontend, backend, Prisma and the modules,
+     and describe your use of AI (which tasks, which parts). -->
+
+### Documentation and references
+
+- 42 subject: `ft_transcendence` v21.2.
+- [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/)
+- [Docker Compose specification](https://docs.docker.com/compose/compose-file/) and [Compose `depends_on` conditions](https://docs.docker.com/compose/how-tos/startup-order/)
+- [Caddy documentation](https://caddyserver.com/docs/) (automatic HTTPS, `reverse_proxy`, internal CA)
+- [Prometheus: configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/), [alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/), [Blackbox exporter](https://github.com/prometheus/blackbox_exporter), [node_exporter](https://github.com/prometheus/node_exporter), [postgres_exporter](https://github.com/prometheus-community/postgres_exporter)
+- [Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/) (data sources and dashboards as code)
+- [OpenTelemetry JS SDK](https://opentelemetry.io/docs/languages/js/) and [Collector configuration](https://opentelemetry.io/docs/collector/configuration/), Prometheus remote-write exporter
+- [GitHub Actions documentation](https://docs.github.com/en/actions), [actionlint](https://github.com/rhysd/actionlint), [hadolint](https://github.com/hadolint/hadolint)
+- [Docker security: non-root containers](https://docs.docker.com/engine/security/), `nginx-unprivileged` image
+
+### Use of AI
+
+<!-- TODO(Jorge, David, Aloiki): your part. -->
+
+- **Infrastructure (Viacheslav):** Claude Code (Anthropic) was used as a pair-programmer for the
+  infrastructure rework: drafting `compose.yaml`, the Makefile, the Caddyfile, Prometheus
+  alerting rules and Grafana dashboard JSON, the CI workflow, `docs/infra/README.md` and this
+  Instructions section, and for reviewing the previous stack against the subject. Every change
+  was read, adjusted and verified by hand (`make` from a clean clone, `make smoke`, alert firing
+  and resolving, CI runs). Design decisions (Caddy instead of nginx, OTLP push instead of a
+  `/metrics` endpoint, what is published, what was removed) were made by the team.
+
+## License
+
+[`LICENSE`](LICENSE).
