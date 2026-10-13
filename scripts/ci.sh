@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 #  ft_trascendence — CI pipeline
-#  Run locally with:  make ci   (nix-portable + flake `ci` devShell)
+#  Run locally with:  make ci   (needs Node 22; pnpm via corepack)
 #  Run in GitHub Actions via .github/workflows/ci.yaml
 #
 #  Blocking checks (fail CI): infra linters + schema validation + build +
@@ -17,7 +17,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# --- pnpm shim (present in the Nix ci shell; fall back to corepack) -----------
+# --- pnpm: use the one on PATH, otherwise the pinned version via corepack -----
 if command -v pnpm >/dev/null 2>&1; then
   PNPM="pnpm"
 elif command -v corepack >/dev/null 2>&1; then
@@ -58,7 +58,7 @@ soft() {
   fi
 }
 
-# skip a blocking tool gracefully if it isn't on PATH (e.g. running outside Nix)
+# skip a blocking tool gracefully if it isn't on PATH (e.g. on a dev machine)
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # ─── 1. Infra linters ────────────────────────────────────────────────────────

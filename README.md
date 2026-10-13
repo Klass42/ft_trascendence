@@ -6,9 +6,6 @@ Base template for new repositories.
 ## Structure
 ```
 .
-├── flake.nix                        # Nix devShell, con los paquetes adecuados por perfil
-├── flake.lock                       # Pinned nixpkgs
-├── .envrc                           # direnv activador del flake
 ├── makefile                         # make help
 └── .github/
     ├── CODEOWNERS.md
@@ -30,11 +27,9 @@ make env
 
 ## Requirements
 
-- Nix with flakes enabled
-- direnv
+- Docker Engine with the Compose plugin, GNU make
 
 ## Customization
 
-- `flake.nix` — replace `pkgs.example1 pkgs.example2` with project dependencies
 - `ci.yml` — uncomment and configure the pipeline
 - `CODEOWNERS.md` — update `@Aletheios42` with team members

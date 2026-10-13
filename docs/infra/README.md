@@ -10,7 +10,7 @@ make
 ```
 
 On a clean clone this creates `.env` with random secrets, builds the two app images, starts
-14 containers, applies the Prisma migrations, loads the demo data (only if the database is
+12 containers, applies the Prisma migrations, loads the demo data (only if the database is
 empty) and prints the URLs and logins:
 
 ```
@@ -19,7 +19,7 @@ Grafana   https://localhost:4150      admin / <generated, printed by `make urls`
 ```
 
 Requirements: Docker Engine with the Compose plugin (v2.20+), GNU make, bash. Nothing else —
-Node, pnpm and Nix are only needed for local development.
+Node and pnpm are only needed for local development.
 
 The stack is plain Docker Compose: `compose.yaml` and `.env` sit in the repo root, so
 `docker compose ps`, `docker compose logs -f backend`, `docker compose exec postgres psql …`
@@ -38,7 +38,7 @@ work directly. The Makefile only wraps the common sequences.
 | `make check` | validate `compose.yaml`, the Caddyfile and the Prometheus config/rules |
 | `make db-seed` (`-small`, `-large`, `-e2e`), `make db-reset` | **replace** application data |
 | `make db-migrate NAME=…` · `make db-deploy` · `make db-push` | Prisma migrations |
-| `make ci` | lint + build + backend tests inside the Nix `ci` shell |
+| `make ci` | lint + build + backend tests (`scripts/ci.sh`, needs Node 22) |
 
 ## 2. Architecture
 
@@ -58,14 +58,10 @@ flowchart LR
         backend -- "OTLP" --> otel[otel-collector]
 
         otel -- metrics --> prometheus
-        otel -- traces --> tempo
-        otel -- logs --> loki
         prometheus -. scrape .-> exporters[node-exporter<br/>postgres-exporter<br/>blackbox-exporter]
         prometheus -. scrape .-> caddy
         prometheus -. scrape .-> garage
         grafana --> prometheus
-        grafana --> tempo
-        grafana --> loki
     end
 ```
 
@@ -77,9 +73,8 @@ flowchart LR
 | `migrate` | same image as backend | `prisma migrate deploy`, then exits; backend waits for it | exit code |
 | `postgres` | `postgres:16-alpine` | database | `pg_isready` |
 | `garage` | `dxflrs/garage:v2.3.0` | S3 bucket `ft-uploads` (see §6) | `garage status` |
-| `otel-collector` | `otel/opentelemetry-collector-contrib` | OTLP in → Prometheus / Tempo / Loki | — (no shell in image) |
+| `otel-collector` | `otel/opentelemetry-collector-contrib` | OTLP metrics in → Prometheus remote-write | — (no shell in image) |
 | `prometheus` | `prom/prometheus` | metrics + alerting rules | `/-/healthy` |
-| `tempo`, `loki` | `grafana/tempo`, `grafana/loki` | traces, logs | scraped by Prometheus |
 | `grafana` | `grafana/grafana` | dashboards, alert view, Explore | `/api/health` |
 | `node-exporter`, `postgres-exporter`, `blackbox-exporter` | Prometheus exporters | host, database, HTTP probes | scraped by Prometheus |
 
@@ -153,7 +148,7 @@ HSTS for any domain other than `localhost`.
 | `postgres_data` | database |
 | `uploads` | files stored by the `local` storage driver |
 | `garage_meta`, `garage_data` | S3 objects |
-| `prometheus_data` (7 d), `tempo_data` (48 h), `loki_data` (72 h), `grafana_data` | observability |
+| `prometheus_data` (7 d), `grafana_data` | observability |
 | `caddy_data`, `caddy_config` | Caddy CA and certificates |
 
 Storage: `STORAGE_DRIVER=local` is the supported mode. With `s3` uploads do reach Garage, but
@@ -162,7 +157,7 @@ the open item in [`../planning/vtrofyme.md`](../planning/vtrofyme.md).
 
 ## 7. Monitoring (module: Prometheus + Grafana)
 
-**Metrics collection.** Prometheus scrapes 12 targets (`infra/monitoring/prometheus/prometheus.yml`):
+**Metrics collection.** Prometheus scrapes 10 targets (`infra/monitoring/prometheus/prometheus.yml`):
 
 | Job | Source | What it gives |
 |---|---|---|
@@ -171,17 +166,16 @@ the open item in [`../planning/vtrofyme.md`](../planning/vtrofyme.md).
 | `probe` | blackbox-exporter | HTTP health of backend, frontend and Caddy from inside the network |
 | `caddy` | Caddy built-in metrics | request rate, status codes, latency at the edge |
 | `garage` | Garage admin API | cluster and block health |
-| `otel-collector`, `prometheus`, `grafana`, `loki`, `tempo` | self-metrics | pipeline health |
+| `otel-collector`, `prometheus`, `grafana` | self-metrics | pipeline health |
 
 Backend application metrics (HTTP server histograms, V8 heap, event loop, GC) are **pushed**:
-NestJS → OTLP → collector → Prometheus remote-write, job `ft-backend`. Traces go to Tempo and
-logs to Loki through the same collector; `OtelLogger` (`apps/backend/src/telemetry/`) forwards
-every Nest log line with its trace id.
+NestJS → OTLP → collector → Prometheus remote-write, job `ft-backend`. The collector carries
+metrics only; application logs stay in `docker compose logs backend`.
 
 **Dashboards** (`infra/monitoring/grafana/dashboards/`, provisioned as code):
 
 - *Platform Overview* (home) — targets up, health probes, firing alerts, request and error rate,
-  telemetry pipeline, backend log volume.
+  telemetry pipeline.
 - *NestJS Backend* — request rate, latency percentiles, error rate, heap, event loop, GC.
 - *Infrastructure* — host, PostgreSQL, Caddy, probes, Garage.
 
@@ -191,8 +185,8 @@ saturation, PostgreSQL connections, host CPU / memory / disk, telemetry export f
 State is shown in Grafana → Alerting → Alert rules and in the "Firing alerts" panel.
 
 **Secured access.** Grafana is reachable only over HTTPS through Caddy, with a generated admin
-password, no anonymous access, no sign-up and secure cookies. Prometheus, Tempo and Loki are not
-published at all; query them through Grafana (Explore) or `docker compose exec`.
+password, no anonymous access, no sign-up and secure cookies. Prometheus is not published at
+all; query them through Grafana (Explore) or `docker compose exec`.
 
 **Demo for the evaluation**
 
@@ -206,7 +200,7 @@ docker compose start backend       # → resolves within a minute
 
 `.github/workflows/ci.yaml`, on pull requests and on pushes to `staging` / `master`:
 
-1. **checks** — `scripts/ci.sh` in the Nix `ci` shell (same as `make ci`): actionlint, yamllint,
+1. **checks** — `scripts/ci.sh` on Node 22 (same as `make ci`): actionlint, yamllint,
    hadolint, `prisma validate`, build, backend unit + integration tests (348 tests); semgrep and
    trivy are informational.
 2. **deploy** — `make check`, then `make` on a clean runner, `scripts/smoke.sh`, and the

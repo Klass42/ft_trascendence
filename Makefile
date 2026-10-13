@@ -11,14 +11,9 @@ PRISMA_DEV := $(COMPOSE) run --rm --user root -v $(CURDIR)/apps/backend/prisma:/
 # $(call dotenv,KEY) → value of KEY in .env, read when the recipe runs.
 dotenv = $$(sed -n 's/^$(1)=//p' .env | tail -n 1)
 
-# Optional local toolchain (Node 22, pnpm, linters) without installing Nix.
-NP_DIR := .cache/nix-portable
-NP_BIN := $(NP_DIR)/nix-portable
-NP_URL := https://github.com/DavHau/nix-portable/releases/download/v012/nix-portable-$(shell uname -m)
-
 .PHONY: all up down clean fclean re reload env status logs urls help check smoke \
         db-seed db-seed-small db-seed-large db-seed-e2e db-reset db-seed-if-empty \
-        db-deploy db-migrate db-push db-studio garage-status dev ci
+        db-deploy db-migrate db-push db-studio garage-status ci
 
 # ─── Deploy ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +36,7 @@ fclean: ## Remove containers, data volumes and locally built images (.env is kep
 re: fclean all ## Wipe everything and deploy from scratch
 
 reload: ## Restart services whose mounted config changed (Caddyfile, Prometheus, Grafana…)
-	$(COMPOSE) restart caddy otel-collector prometheus blackbox-exporter tempo loki grafana
+	$(COMPOSE) restart caddy otel-collector prometheus blackbox-exporter grafana
 
 env: ## Create .env from .env.example with generated secrets (if missing)
 	@bash scripts/gen-env.sh
@@ -126,19 +121,10 @@ garage-status: ## Show the Garage (S3) node, bucket and key
 	$(COMPOSE) exec -T garage /garage bucket list
 	$(COMPOSE) exec -T garage /garage key list
 
-# ─── Local toolchain (optional) ──────────────────────────────────────────────
+# ─── Local checks ────────────────────────────────────────────────────────────
 
-$(NP_BIN):
-	@mkdir -p $(NP_DIR)
-	curl -fL "$(NP_URL)" -o $(NP_BIN)
-	chmod +x $(NP_BIN)
-	ln -sf nix-portable $(NP_DIR)/nix
-
-dev: $(NP_BIN) ## Enter the Nix dev shell (Node 22, pnpm, docker client)
-	$(NP_BIN) nix develop .#dev
-
-ci: $(NP_BIN) ## Run the CI pipeline locally inside the Nix ci shell
-	$(NP_BIN) nix develop .#ci --command bash scripts/ci.sh
+ci: ## Run the CI pipeline locally (needs Node 22 + pnpm; linters optional)
+	bash scripts/ci.sh
 
 help: ## Show this help
 	@printf "\n\033[1;36mft_trascendence\033[0m — \033[32mmake\033[0m deploys the whole stack\n\n"

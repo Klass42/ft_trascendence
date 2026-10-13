@@ -1,15 +1,12 @@
 /**
- * OpenTelemetry SDK initialization.
+ * OpenTelemetry SDK initialization (metrics → OTLP → collector → Prometheus).
  * MUST be imported BEFORE any other application code.
  */
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { Resource } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
@@ -26,26 +23,17 @@ const resource = new Resource({
   [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: process.env.NODE_ENV || 'development',
 });
 
-const traceExporter = new OTLPTraceExporter({
-  url: `${OTEL_COLLECTOR_URL}/v1/traces`,
-});
-
 const metricExporter = new OTLPMetricExporter({
   url: `${OTEL_COLLECTOR_URL}/v1/metrics`,
 });
 
-const logExporter = new OTLPLogExporter({
-  url: `${OTEL_COLLECTOR_URL}/v1/logs`,
-});
-
 const sdk = new NodeSDK({
   resource,
-  traceExporter,
+  // Metrics only: no trace or log exporter (no Tempo/Loki in the stack).
   metricReader: new PeriodicExportingMetricReader({
     exporter: metricExporter,
     exportIntervalMillis: 10000,
   }),
-  logRecordProcessor: new BatchLogRecordProcessor(logExporter),
   instrumentations: [
     getNodeAutoInstrumentations({
       '@opentelemetry/instrumentation-http': {

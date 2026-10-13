@@ -1,6 +1,6 @@
 apiVersion: 1
 
-# Fixed uids: dashboards and the cross-links below refer to them.
+# Fixed uid: the dashboards refer to it.
 datasources:
   - name: Prometheus
     type: prometheus
@@ -10,52 +10,5 @@ datasources:
     isDefault: true
     jsonData:
       httpMethod: POST
-      exemplarTraceIdDestinations:
-        - name: traceID
-          datasourceUid: tempo
       incrementalQuerying: true
       incrementalQueryOverlapWindow: 10m
-
-  - name: Tempo
-    type: tempo
-    uid: tempo
-    access: proxy
-    url: http://tempo:3200
-    jsonData:
-      httpMethod: GET
-      tracesToMetrics:
-        datasourceUid: prometheus
-        spanStartTimeShift: '-1h'
-        spanEndTimeShift: '1h'
-        tags:
-          - key: service.name
-            value: service
-          - key: job
-      # Span → its log lines (logs arrive over OTLP, trace_id is metadata).
-      tracesToLogsV2:
-        datasourceUid: loki
-        spanStartTimeShift: '-5m'
-        spanEndTimeShift: '5m'
-        customQuery: true
-        query: '{service_name="ft-backend"} | trace_id="$${__trace.traceId}"'
-      serviceMap:
-        datasourceUid: prometheus
-      nodeGraph:
-        enabled: true
-      lokiSearch:
-        datasourceUid: loki
-
-  - name: Loki
-    type: loki
-    uid: loki
-    access: proxy
-    url: http://loki:3100
-    jsonData:
-      # Log line → its trace.
-      derivedFields:
-        - name: Trace
-          matcherType: label
-          matcherRegex: trace_id
-          datasourceUid: tempo
-          url: '$${__value.raw}'
-          urlDisplayLabel: View trace
