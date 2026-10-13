@@ -417,33 +417,92 @@ describe('AuthService', () => {
       avatarUrl: 'https://lh3.googleusercontent.com/photo.jpg',
     };
 
-    it('returns tokens when OAuthAccount already linked', async () => {
+    it('returns tokens when OAuthAccount already linked to this organization', async () => {
       mockOAuthAccountFindUnique.mockResolvedValue({
         userId: mockUser.id,
         provider: 'google',
         providerUserId: 'google-123',
+        user: mockUser,
       });
       mockSessionCreate.mockResolvedValue({ id: 'session-g1' });
 
-      const result = await service.googleLogin(googleProfile);
+      const result = await service.googleLogin(googleProfile, 'klass');
       expect(result.accessToken).toBe('access-token-mock');
       expect(result.refreshToken).toBe('refresh-token-mock');
+      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+      expect(mockUserCreate).not.toHaveBeenCalled();
     });
 
-    it('rejects an unlinked Google account because OAuth must start in an organization', async () => {
+    it('rejects a Google account linked to another organization', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue({
+        userId: 'user-other',
+        user: { ...mockUser, organizationId: 'org-other' },
+      });
+      await expect(service.googleLogin(googleProfile, 'klass')).rejects.toThrow(ForbiddenException);
+      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+    });
+
+    it('links an existing user in the organization by email', async () => {
       mockOAuthAccountFindUnique.mockResolvedValue(null);
       mockUserFindFirst.mockResolvedValue(mockUser);
-      await expect(service.googleLogin(googleProfile)).rejects.toThrow(ForbiddenException);
-      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-1' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-g2' });
+
+      const result = await service.googleLogin(
+        { ...googleProfile, email: 'Student@Demo' },
+        'klass',
+      );
+
+      expect(result.accessToken).toBe('access-token-mock');
       expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockUserFindFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: SEED_ORG_ID,
+          email: { equals: 'student@demo', mode: 'insensitive' },
+        },
+      });
+      expect(mockOAuthAccountCreate).toHaveBeenCalledWith({
+        data: {
+          userId: mockUser.id,
+          provider: 'google',
+          providerUserId: 'google-123',
+        },
+      });
     });
 
-    it('does not create a user for an unlinked Google account', async () => {
+    it('creates a student in the chosen organization when the email is new', async () => {
       mockOAuthAccountFindUnique.mockResolvedValue(null);
       mockUserFindFirst.mockResolvedValue(null);
-      await expect(service.googleLogin(googleProfile)).rejects.toThrow(ForbiddenException);
+      mockUserCreate.mockResolvedValue({ ...mockUser, id: 'user-google-new', email: 'newuser@gmail.com' });
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-2' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-g3' });
+
+      const result = await service.googleLogin(googleProfile, 'klass');
+
+      expect(result.accessToken).toBe('access-token-mock');
+      expect(mockUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: SEED_ORG_ID,
+          email: 'newuser@gmail.com',
+          name: 'Google User',
+          passwordHash: null,
+          role: 'STUDENT',
+          avatarUrl: googleProfile.avatarUrl,
+        }),
+      });
+      expect(mockOAuthAccountCreate).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-google-new',
+          provider: 'google',
+          providerUserId: 'google-123',
+        },
+      });
+    });
+
+    it('rejects an unknown organization', async () => {
+      mockOrganizationFindUnique.mockResolvedValue(null);
+      await expect(service.googleLogin(googleProfile, 'missing')).rejects.toThrow(UnauthorizedException);
       expect(mockUserCreate).not.toHaveBeenCalled();
-      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
     });
   });
 });

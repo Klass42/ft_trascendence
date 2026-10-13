@@ -11,8 +11,8 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
+import { GoogleAuthGuard } from './google-auth.guard';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { Public, CurrentUser } from '@/common/auth';
@@ -95,22 +95,30 @@ export class AuthController {
 
   @Public()
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuth() {
     // Passport redirects to Google consent screen — this body is never reached.
   }
 
   @Public()
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleCallback(@Req() req: { user: GoogleProfile }, @Res() res: Response) {
+  @UseGuards(GoogleAuthGuard)
+  async googleCallback(
+    @Req() req: { user: GoogleProfile; query: { state?: string | string[] } },
+    @Res() res: Response,
+  ) {
+    const frontendUrl = this.frontendUrl();
+    const state = Array.isArray(req.query.state) ? req.query.state[0] : req.query.state;
     try {
-      const { accessToken, refreshToken } = await this.authService.googleLogin(req.user);
-      const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
-      res.redirect(`${frontendUrl}/#accessToken=${accessToken}&refreshToken=${refreshToken}`);
+      const { accessToken, refreshToken } = await this.authService.googleLogin(req.user, state ?? '');
+      const hash = new URLSearchParams({ accessToken, refreshToken }).toString();
+      res.redirect(`${frontendUrl}/auth/callback#${hash}`);
     } catch {
-      const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
-      res.redirect(`${frontendUrl}/#error=oauth_failed`);
+      res.redirect(`${frontendUrl}/auth/callback#error=oauth_failed`);
     }
+  }
+
+  private frontendUrl(): string {
+    return (this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:5173').replace(/\/$/, '');
   }
 }

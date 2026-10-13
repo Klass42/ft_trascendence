@@ -52,7 +52,12 @@ export function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
-    loginWithGoogle();
+    const slug = organizationSlug.trim().toLowerCase();
+    if (!slug) {
+      setError('El código de organización es obligatorio.');
+      return;
+    }
+    loginWithGoogle(slug);
   };
 
   return (
