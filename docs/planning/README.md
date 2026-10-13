@@ -25,11 +25,11 @@ Current cross-team delivery status: [`session-status-2026-09-03.md`](./session-s
 | **Jorge** | `@SrJorgeG` | Tech Lead · Identity & Access | `auth`, `users`, `organizations`, `common/auth`, `prisma` (steward) + their frontend |
 | **Aloiki** | `@illia` | Content & UX (frontend-lead) | frontend shell + design system, `courses`, `files`/storage + their frontend |
 | **David** | `@dacs-dev` | Interaction | `assignments`, `forums`, `notifications`, `realtime` + their frontend |
-| **Viacheslav** | `@ViacheslavTrofymenko` | DevOps / Infra | `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `compose.yaml`, `.env.example`, `flake.nix`, Dockerfiles, deploy, monitoring |
+| **Viacheslav** | `@ViacheslavTrofymenko` | DevOps / Infra | `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `compose.yaml`, `.env.example`, Dockerfiles, deploy, monitoring |
 
 **The 3 developers (Jorge, Aloiki, David) write the application. Viacheslav owns everything DevOps** —
 Docker, HTTPS/proxy, S3/Garage, CI/CD, observability, deployment, backups. No app dev touches
-`infra/`, `.github/`, `scripts/`, `Makefile` or `flake.nix` — open an issue/ask Viacheslav instead.
+`infra/`, `.github/`, `scripts/` or `Makefile` — open an issue/ask Viacheslav instead.
 
 ## 2. Branching methodology
 

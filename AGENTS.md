@@ -24,7 +24,7 @@ real-time, modular. The subject explicitly lists an LMS as a valid example proje
 - **Aloiki** (`@illia`) — Content & UX (frontend shell + design system, courses, files).
 - **David** (`@dacs-dev`) — Interaction (evaluations, forums, notifications, real-time).
 - **Viacheslav** (`@ViacheslavTrofymenko`, 42 login `vtrofyme`) — **DevOps / Infra**: owns
-  `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `compose.yaml`, `.env.example`, `flake.nix`,
+  `infra/**`, `.github/**`, `scripts/**`, `Makefile`, `compose.yaml`, `.env.example`,
   Dockerfiles, HTTPS/proxy, storage backend, CI/CD, monitoring, deploy.
   **App devs do not touch infra.**
 
@@ -87,8 +87,8 @@ GDPR (Minor), 2FA (Minor), Advanced analytics dashboard (Major).
 | Object storage | Garage (S3-compatible) | Files stored as references, not blobs. Default driver is the local volume (`STORAGE_DRIVER`) |
 | Real-time | Socket.io via NestJS Gateway | |
 | Reverse proxy / HTTPS | **Caddy 2** | Built — the only container that publishes ports |
-| Observability | OTel Collector → Prometheus + Tempo + Loki + Grafana, exporters, alert rules | Built — see `docs/infra/README.md` |
-| Dev env | Nix flake devShells + direnv | `dev` / `debug` / `ci` |
+| Observability | OTel Collector → Prometheus + Grafana, exporters, alert rules | Built — see `docs/infra/README.md` |
+| Dev env | Node 22 + pnpm 9.15 (corepack) | Docker only for deploy |
 
 **License policy**: prefer OSI-approved (MIT/BSD/Apache/AGPL). Avoid source-available
 non-free (SSPL/BSL/RSAL) — this excludes post-2024 Redis and MongoDB. That's why **Valkey**
@@ -124,9 +124,8 @@ compose.yaml      the whole stack: caddy, frontend, backend, postgres, garage, o
 .env.example      deployment settings and secrets template → `.env` (gitignored).
 infra/caddy       Caddyfile: TLS, routing, security headers.
 infra/garage      Garage (S3) node config.
-infra/monitoring  otel-collector, prometheus (+ alert rules), blackbox, tempo, loki, grafana.
+infra/monitoring  otel-collector, prometheus (+ alert rules), blackbox, grafana.
 scripts/          gen-env.sh (make env), smoke.sh (make smoke), ci.sh (make ci).
-flake.nix         optional devShells: dev / debug / ci (entered via nix-portable).
 Makefile          task runner (see below).
 docs/infra        how the deployment works, runbook, evaluation demo.
 MVP_DESIGN.md     product plan (partly stale — see §1).
@@ -144,7 +143,7 @@ make smoke       # test the running stack through HTTPS
 make reload      # restart services after editing a mounted config (Caddyfile, Prometheus…)
 make db-seed     # REPLACE data with the standard demo (also -small / -large / -e2e)
 make db-migrate NAME=add_x   # create a Prisma migration
-make ci          # nix-portable → flake ci shell + scripts/ci.sh
+make ci          # scripts/ci.sh: lint, build, backend tests (needs Node 22)
 pnpm dev         # run apps in watch mode (parallel)
 ```
 
@@ -154,7 +153,7 @@ and image tags are fixed in `compose.yaml` — do not move them into `.env`.
 
 Default URLs (unprivileged ports for campus): App `https://localhost:4443`, Grafana
 `https://localhost:4150` (user/password in `.env`, printed by `make urls`), HTTP redirect `:4180`.
-Prometheus, Tempo and Loki are **not** published — use Grafana.
+Prometheus is **not** published — use Grafana.
 Dev-without-compose: frontend `5173`, backend `3000`.
 
 ## 7. Code conventions

@@ -18,11 +18,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: cachix/install-nix-action@v31
+
+      - uses: actions/setup-node@v5
         with:
-          nix_path: nixpkgs=channel:nixos-unstable
+          node-version: 22
+          # pnpm is enabled through corepack in scripts/ci.sh; the built-in
+          # cache would look for it before it exists.
+          package-manager-cache: false
+
+      - name: Install linters (actionlint, yamllint, hadolint)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q yamllint
+          curl -sSfL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin actionlint
+          sudo curl -sSfL -o /usr/local/bin/hadolint \
+            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          sudo chmod +x /usr/local/bin/hadolint
+
       - name: Lint, build and test
-        run: nix develop .#ci --command bash scripts/ci.sh
+        run: bash scripts/ci.sh
 
   # The mandatory gate: the stack must come up from a clean clone with one
   # command and serve the app over HTTPS.

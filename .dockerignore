@@ -2,12 +2,10 @@
 # secrets / host artefacts out of image layers.
 .git
 .github
-.direnv
 .cache
 .engram
 .superpowers
 .pnpm-store
-nix-portable
 
 **/node_modules
 **/dist
@@ -30,7 +28,5 @@ scripts
 test
 *.md
 *.pdf
-flake.nix
-flake.lock
 Makefile
 compose*.yaml

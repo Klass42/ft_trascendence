@@ -114,15 +114,10 @@ groups:
   - name: telemetry
     rules:
       - alert: TelemetryExportFailing
-        expr: |
-          sum(rate(otelcol_exporter_send_failed_spans[5m])) > 0
-            or
-          sum(rate(otelcol_exporter_send_failed_metric_points[5m])) > 0
-            or
-          sum(rate(otelcol_exporter_send_failed_log_records[5m])) > 0
+        expr: sum(rate(otelcol_exporter_send_failed_metric_points[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "OpenTelemetry collector is dropping data"
-          description: "The collector fails to export telemetry to Prometheus, Tempo or Loki."
+          description: "The collector fails to remote-write backend metrics to Prometheus."

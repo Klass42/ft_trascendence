@@ -25,20 +25,11 @@ Thumbs.db
 .idea/
 *.swp
 
-# direnv
-.direnv
-
 # engram knowledge graph (local agent memory)
 .engram/
 
 # Docker volumes
 docker-data/
-
-# Nix / nix-portable (binary + extracted store live under .cache/)
-result
-result-*
-.cache/nix-portable/
-nix-portable
 
 # TypeScript
 *.tsbuildinfo

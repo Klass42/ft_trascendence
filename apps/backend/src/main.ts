@@ -6,7 +6,6 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { resolve } from 'node:path';
 import { AppModule } from './app.module';
-import { OtelLogger } from './telemetry/otel-logger';
 
 // Prisma BigInt fields (e.g. File.sizeBytes) are not JSON-serializable by
 // default. Emit them as strings so API responses don't throw.
@@ -15,11 +14,7 @@ import { OtelLogger } from './telemetry/otel-logger';
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bufferLogs: true,
-  });
-  // Same console output as before, plus OTLP log records (collector → Loki).
-  app.useLogger(new OtelLogger());
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // The local development storage driver returns unguessable URLs below this
   // prefix. S3 deployments keep returning short-lived presigned URLs instead.
