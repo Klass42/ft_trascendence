@@ -1,3 +1,4 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleStrategy } from '../google.strategy';
 
@@ -21,5 +22,32 @@ describe('GoogleStrategy', () => {
   it('uses fallback values when env vars are missing', () => {
     const strategy = new GoogleStrategy(mkConfig());
     expect(strategy).toBeDefined();
+  });
+
+  it('returns the email when Google marks it verified', async () => {
+    const strategy = new GoogleStrategy(mkConfig());
+    await expect(
+      strategy.validate('access', 'refresh', {
+        id: 'google-1',
+        displayName: 'Ada',
+        emails: [{ value: 'ada@example.com', verified: true }],
+        photos: [{ value: 'https://photo.example/ada' }],
+      }),
+    ).resolves.toEqual({
+      providerUserId: 'google-1',
+      email: 'ada@example.com',
+      name: 'Ada',
+      avatarUrl: 'https://photo.example/ada',
+    });
+  });
+
+  it('rejects an unverified Google email', async () => {
+    const strategy = new GoogleStrategy(mkConfig());
+    await expect(
+      strategy.validate('access', 'refresh', {
+        id: 'google-1',
+        emails: [{ value: 'ada@example.com', verified: false }],
+      }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 });
