@@ -440,6 +440,7 @@ describe('AuthService', () => {
       });
       await expect(service.googleLogin(googleProfile, 'klass')).rejects.toThrow(ForbiddenException);
       expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+      expect(mockUserCreate).not.toHaveBeenCalled();
     });
 
     it('links an existing user in the organization by email', async () => {
@@ -503,6 +504,151 @@ describe('AuthService', () => {
       mockOrganizationFindUnique.mockResolvedValue(null);
       await expect(service.googleLogin(googleProfile, 'missing')).rejects.toThrow(UnauthorizedException);
       expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+    });
+
+    it.each(['SUSPENDED', 'ARCHIVED'] as const)(
+      'rejects an organization that is not active (%s) without creating records',
+      async (status) => {
+        mockOrganizationFindUnique.mockResolvedValue({
+          id: SEED_ORG_ID,
+          slug: 'klass',
+          status,
+        });
+
+        await expect(service.googleLogin(googleProfile, 'klass')).rejects.toThrow(UnauthorizedException);
+        expect(mockUserCreate).not.toHaveBeenCalled();
+        expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+        expect(mockOAuthAccountFindUnique).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['', '   ', '\n\t'])(
+      'rejects a blank Google email (%j) without creating records',
+      async (email) => {
+        await expect(
+          service.googleLogin({ ...googleProfile, email }, 'klass'),
+        ).rejects.toThrow(UnauthorizedException);
+        expect(mockUserCreate).not.toHaveBeenCalled();
+        expect(mockOAuthAccountCreate).not.toHaveBeenCalled();
+        expect(mockOAuthAccountFindUnique).not.toHaveBeenCalled();
+      },
+    );
+
+    it('sets emailVerifiedAt when linking an existing unverified user', async () => {
+      const unverified = { ...mockUser, emailVerifiedAt: null };
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(unverified);
+      mockUserUpdate.mockImplementation(async (args: { data: { emailVerifiedAt: Date } }) => ({
+        ...unverified,
+        ...args.data,
+      }));
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-unverified' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-unverified' });
+
+      const result = await service.googleLogin(googleProfile, 'klass');
+
+      expect(result.accessToken).toBe('access-token-mock');
+      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockUserUpdate).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+        data: { emailVerifiedAt: expect.any(Date) },
+      });
+      expect(mockOAuthAccountCreate).toHaveBeenCalledWith({
+        data: {
+          userId: mockUser.id,
+          provider: 'google',
+          providerUserId: 'google-123',
+        },
+      });
+    });
+
+    it('does not rewrite emailVerifiedAt when the matched user is already verified', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(mockUser);
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-verified' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-verified' });
+
+      const result = await service.googleLogin(
+        { ...googleProfile, email: '  Student@Demo  ' },
+        'klass',
+      );
+
+      expect(result.accessToken).toBe('access-token-mock');
+      expect(mockUserUpdate).not.toHaveBeenCalled();
+      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockUserFindFirst).toHaveBeenCalledWith({
+        where: {
+          organizationId: SEED_ORG_ID,
+          email: { equals: 'student@demo', mode: 'insensitive' },
+        },
+      });
+      expect(mockOAuthAccountCreate).toHaveBeenCalledWith({
+        data: {
+          userId: mockUser.id,
+          provider: 'google',
+          providerUserId: 'google-123',
+        },
+      });
+    });
+
+    it('stores a trimmed lowercase email, a trimmed name, and emailVerifiedAt', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(null);
+      mockUserCreate.mockResolvedValue({ ...mockUser, id: 'user-trim', email: 'ada@example.com' });
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-trim' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-trim' });
+
+      await service.googleLogin(
+        {
+          ...googleProfile,
+          email: '  Ada@Example.com  ',
+          name: '  Ada Lovelace  ',
+          avatarUrl: null,
+        },
+        'klass',
+      );
+
+      expect(mockUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          organizationId: SEED_ORG_ID,
+          email: 'ada@example.com',
+          name: 'Ada Lovelace',
+          passwordHash: null,
+          role: 'STUDENT',
+          avatarUrl: null,
+          emailVerifiedAt: expect.any(Date),
+        }),
+      });
+      expect(mockOAuthAccountCreate).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-trim',
+          provider: 'google',
+          providerUserId: 'google-123',
+        },
+      });
+    });
+
+    it('uses the normalized email as the name when the Google name is blank', async () => {
+      mockOAuthAccountFindUnique.mockResolvedValue(null);
+      mockUserFindFirst.mockResolvedValue(null);
+      mockUserCreate.mockResolvedValue({ ...mockUser, id: 'user-noname', email: 'ada@example.com' });
+      mockOAuthAccountCreate.mockResolvedValue({ id: 'oauth-noname' });
+      mockSessionCreate.mockResolvedValue({ id: 'session-noname' });
+
+      await service.googleLogin(
+        { ...googleProfile, email: 'Ada@Example.com', name: '   ' },
+        'klass',
+      );
+
+      expect(mockUserCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'ada@example.com',
+          name: 'ada@example.com',
+          passwordHash: null,
+          role: 'STUDENT',
+        }),
+      });
     });
   });
 });
