@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { tokenStorage } from '@/lib/api';
-import type { AuthTokens } from '@/lib/api';
 import { Card, Spinner } from '@/components/ui';
 import styles from './RegisterPage.module.css';
 
@@ -17,7 +16,6 @@ function parseHashFragment(): { accessToken?: string; refreshToken?: string; err
 }
 
 export function OAuthCallbackPage() {
-  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const didRun = useRef(false);
 
@@ -27,21 +25,29 @@ export function OAuthCallbackPage() {
 
     const { accessToken, refreshToken, error: oauthError } = parseHashFragment();
 
+    if (oauthError === 'unknown_organization') {
+      setError('No existe una organización con ese código.');
+      return;
+    }
+    if (oauthError === 'wrong_organization') {
+      setError('Esta cuenta de Google ya está vinculada a otra organización.');
+      return;
+    }
     if (oauthError) {
       setError('Error al iniciar sesión con Google. Inténtalo de nuevo.');
       return;
     }
 
     if (accessToken && refreshToken) {
-      const tokens: AuthTokens = { accessToken, refreshToken };
-      tokenStorage.setTokens(tokens);
-      window.location.hash = '';
-      navigate('/dashboard', { replace: true });
+      tokenStorage.setTokens({ accessToken, refreshToken });
+      // This route loads after AuthProvider's first check. A client-side
+      // navigation would open the dashboard still logged out.
+      window.location.replace('/dashboard');
       return;
     }
 
     setError('No se recibieron tokens de autenticación.');
-  }, [navigate]);
+  }, []);
 
   if (error) {
     return (

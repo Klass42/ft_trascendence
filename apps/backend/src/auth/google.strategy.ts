@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-google-oauth20';
@@ -33,9 +33,15 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     _refreshToken: string,
     profile: any,
   ): Promise<GoogleProfile> {
+    const email = profile.emails?.[0];
+    // passport-google-oauth20 copies Google's email_verified onto emails[].verified.
+    // Linking by address treats that email as proof of ownership.
+    if (!email?.value || email.verified !== true) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
     return {
       providerUserId: profile.id,
-      email: profile.emails?.[0]?.value ?? '',
+      email: email.value,
       name: profile.displayName ?? '',
       avatarUrl: profile.photos?.[0]?.value ?? null,
     };

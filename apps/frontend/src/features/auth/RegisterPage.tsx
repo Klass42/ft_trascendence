@@ -12,14 +12,16 @@ export function RegisterPage() {
   const { register, loginWithGoogle } = useAuth();
 
   const [name, setName] = useState('');
+  const [organizationSlug, setOrganizationSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; organization?: string; email?: string; password?: string; form?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
 
   function validate(): boolean {
     const next: typeof errors = {};
     if (!name.trim()) next.name = 'El nombre es obligatorio';
+    if (!organizationSlug.trim()) next.organization = 'El código de organización es obligatorio';
     if (!email.trim()) {
       next.email = 'El email es obligatorio';
     } else if (!email.includes('@')) {
@@ -59,7 +61,7 @@ export function RegisterPage() {
     if (!validate()) return;
     setIsLoading(true);
     try {
-      await register(name.trim(), email.trim(), password);
+      await register(name.trim(), email.trim(), password, organizationSlug.trim().toLowerCase());
       navigate('/dashboard', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) mapServerErrors(err);
@@ -105,6 +107,16 @@ export function RegisterPage() {
             />
 
             <Input
+              label="Organization code"
+              placeholder="your-school"
+              value={organizationSlug}
+              onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setErrors((p) => ({ ...p, organization: undefined })); }}
+              error={errors.organization}
+              required
+              autoComplete="organization"
+            />
+
+            <Input
               type="email"
               label="Email"
               placeholder="tu@email.com"
@@ -147,7 +159,16 @@ export function RegisterPage() {
               type="button"
               variant="outline"
               fullWidth
-              onClick={loginWithGoogle}
+              onClick={() => {
+                const slug = organizationSlug.trim().toLowerCase();
+                if (!slug) {
+                  setErrors((p) => ({ ...p, form: 'El código de organización es obligatorio.' }));
+                  return;
+                }
+                if (!loginWithGoogle(slug)) {
+                  setErrors((p) => ({ ...p, form: 'El código de organización no es válido. Usa minúsculas, números y guiones, sin espacios.' }));
+                }
+              }}
             >
               <svg className={styles.googleIcon} viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

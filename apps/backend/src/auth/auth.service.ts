@@ -284,12 +284,19 @@ export class AuthService {
     return { verified: true };
   }
 
-  async googleLogin(profile: {
-    providerUserId: string;
-    email: string;
-    name: string;
-    avatarUrl: string | null;
-  }): Promise<{ accessToken: string; refreshToken: string }> {
+  async googleLogin(
+    profile: {
+      providerUserId: string;
+      email: string;
+      name: string;
+      avatarUrl: string | null;
+    },
+    organizationSlug: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const organization = await this.activeOrganization(organizationSlug);
+    const email = profile.email?.trim().toLowerCase();
+    if (!email) throw new UnauthorizedException('Google account has no email');
+
     const oauthAccount = await this.prisma.oAuthAccount.findUnique({
       where: {
         provider_providerUserId: {
@@ -297,18 +304,51 @@ export class AuthService {
           providerUserId: profile.providerUserId,
         },
       },
+      include: { user: true },
     });
 
-    let userId: string;
-
     if (oauthAccount) {
-      userId = oauthAccount.userId;
-    } else {
-      throw new ForbiddenException('Google OAuth must be started with an organization slug');
-
+      if (oauthAccount.user.organizationId !== organization.id) {
+        throw new ForbiddenException('This Google account is linked to another organization');
+      }
+      return this.issueTokens(oauthAccount.userId);
     }
 
-    return this.issueTokens(userId);
+    let user = await this.prisma.user.findFirst({
+      where: {
+        organizationId: organization.id,
+        email: { equals: email, mode: 'insensitive' },
+      },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          organizationId: organization.id,
+          email,
+          name: profile.name?.trim() || email,
+          avatarUrl: profile.avatarUrl,
+          passwordHash: null,
+          role: 'STUDENT',
+          emailVerifiedAt: new Date(),
+        },
+      });
+    } else if (!user.emailVerifiedAt) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
+    await this.prisma.oAuthAccount.create({
+      data: {
+        userId: user.id,
+        provider: 'google',
+        providerUserId: profile.providerUserId,
+      },
+    });
+
+    return this.issueTokens(user.id);
   }
 
   async resolveOrganization(slug: string) {
