@@ -24,6 +24,7 @@ const GENERAL_CONTENT_TYPES = new Set([
   'audio/wav',
   'audio/ogg',
   'audio/mp4',
+  'audio/x-m4a', // Chrome and Edge report .m4a this way
   'video/mp4',
   'video/webm',
   'video/quicktime',
@@ -156,7 +157,7 @@ const FORMATS_BY_EXTENSION = new Map<string, FileFormat>([
   }],
   ['wav', { mimeTypes: ['audio/wav'], matches: (b) => isRiff(b, 'WAVE') }],
   ['ogg', { mimeTypes: ['audio/ogg'], matches: (b) => startsWith(b, 'OggS') }],
-  ['m4a', { mimeTypes: ['audio/mp4'], matches: isIsoMedia }],
+  ['m4a', { mimeTypes: ['audio/mp4', 'audio/x-m4a'], matches: isIsoMedia }],
   ['mp4', { mimeTypes: ['video/mp4', 'audio/mp4'], matches: isIsoMedia }],
   ['m4v', MP4_VIDEO],
   ['webm', { mimeTypes: ['video/webm'], matches: (b) => startsWith(b, [0x1a, 0x45, 0xdf, 0xa3]) }],

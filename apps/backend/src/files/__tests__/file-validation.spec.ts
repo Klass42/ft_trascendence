@@ -16,6 +16,7 @@ const WEBP_BYTES = Buffer.concat([
 const EPUB_BYTES = Buffer.concat([
   Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(26), Buffer.from('mimetypeapplication/epub+zip'),
 ]);
+const M4A_BYTES = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypM4A '), Buffer.alloc(8)]);
 const EXE_BYTES = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
 
 const file = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.File => {
@@ -69,6 +70,15 @@ describe('validateUpload', () => {
       .toThrow('File extension does not match its type');
     expect(() => validateUpload(file({ originalname: 'image.png' })))
       .toThrow('File extension does not match its type');
+  });
+
+  it('accepts .m4a however the browser labels it', () => {
+    const m4a = (mimetype: string) => file({ originalname: 'lecture.m4a', mimetype, buffer: M4A_BYTES });
+    expect(() => validateUpload(m4a('audio/mp4'))).not.toThrow();
+    expect(() => validateUpload(m4a('audio/x-m4a'))).not.toThrow();
+    expect(() => validateUpload(file({
+      originalname: 'lecture.m4a', mimetype: 'audio/x-m4a', buffer: EXE_BYTES,
+    }))).toThrow('File content does not match its type');
   });
 
   it('rejects binary content declared as plain text', () => {
