@@ -1,0 +1,30 @@
+.page {
+  width: min(100%, 1000px);
+  margin: 0 auto;
+  padding: 30px 40px;
+}
+
+.courseGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.status {
+  padding: 30px 40px;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding: 24px 16px;
+  }
+
+  .courseGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .status {
+    padding: 24px 16px;
+  }
+}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useAuth,
@@ -8,6 +8,7 @@ import {
 } from '@/lib/api';
 import type { MyProgressItem, ActivityDTO } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
+import styles from './StudentDashboard.module.css';
 
 const COURSE_COLORS = [
   '#2563eb', '#0f766e', '#d97706', '#7c3aed',
@@ -70,67 +71,30 @@ export function StudentDashboard() {
   const dashOffset = circumference * (1 - avgProgress / 100);
   const userName = user?.name?.split(' ')[0] || '';
 
+  const openNext = () => navigate('/activities');
+  const onKeyActivate = (open: () => void) => (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      open();
+    }
+  };
+
   return (
     <>
       <DashboardHeader title={`Hola de nuevo, ${userName}`} roleLabel="Alumno" />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 14,
-          gridAutoRows: 134,
-        }}
-      >
+      <div className={styles.grid}>
         {/* Progress ring */}
-        <div
-          style={{
-            gridColumn: '1/3',
-            gridRow: '1/3',
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border-primary)',
-            borderRadius: 18,
-            padding: 22,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            Progreso del semestre
-          </div>
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 20,
-            }}
-          >
-            <div
-              style={{
-                position: 'relative',
-                width: 128,
-                height: 128,
-                flex: 'none',
-              }}
-            >
-              <svg width="128" height="128" viewBox="0 0 120 120">
+        <div className={`${styles.card} ${styles.ringCard}`}>
+          <div className={styles.ringTitle}>Progreso del semestre</div>
+          <div className={styles.ringBody}>
+            <div className={styles.ring}>
+              <svg width="128" height="128" viewBox="0 0 120 120" aria-hidden="true">
+                <circle className={styles.ringTrack} cx="60" cy="60" r="52" fill="none" strokeWidth="13" />
                 <circle
+                  className={styles.ringFill}
                   cx="60" cy="60" r="52"
                   fill="none"
-                  stroke="var(--color-border-primary)"
-                  strokeWidth="13"
-                />
-                <circle
-                  cx="60" cy="60" r="52"
-                  fill="none"
-                  stroke="var(--color-accent-primary)"
                   strokeWidth="13"
                   strokeLinecap="round"
                   strokeDasharray={circumference}
@@ -138,51 +102,23 @@ export function StudentDashboard() {
                   transform="rotate(-90 60 60)"
                 />
               </svg>
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <span style={{ fontSize: 31, fontWeight: 700 }}>
-                  {progressLoading ? '–' : `${avgProgress}%`}
-                </span>
-              </div>
+              <span className={styles.ringValue} data-testid="progress-ring-value">
+                {progressLoading ? '–' : `${avgProgress}%`}
+              </span>
             </div>
             {!progressLoading && myProgress && myProgress.length > 0 && (
-              <div>
+              <div className={styles.legend}>
                 {myProgress.map((p: MyProgressItem) => {
                   const course = courses?.find((c) => c.id === p.subjectId);
                   if (!course) return null;
-                  const color = hashToColor(course.title);
                   return (
                     <div
                       key={p.subjectId}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 8,
-                      }}
+                      className={styles.legendRow}
+                      style={{ '--course-color': hashToColor(course.title) } as CSSProperties}
                     >
-                      <span
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 3,
-                          background: color,
-                          flex: 'none',
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 12.5,
-                          color: 'var(--color-text-primary)',
-                        }}
-                      >
+                      <span className={styles.dot} aria-hidden="true" />
+                      <span data-testid="progress-row">
                         {`${course.title} · ${course.course.name} · ${course.course.academicYear}`} · {p.percentage}%
                       </span>
                     </div>
@@ -194,109 +130,43 @@ export function StudentDashboard() {
         </div>
 
         {/* Average progress */}
-        <div
-          style={{
-            gridColumn: '3/4',
-            gridRow: '1/2',
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border-primary)',
-            borderRadius: 18,
-            padding: 18,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            PROGRESO PROMEDIO
-          </span>
-          <div
-            style={{
-              fontSize: 30,
-              fontWeight: 700,
-              color: 'var(--color-accent-primary)',
-              lineHeight: 1,
-            }}
-          >
+        <div className={`${styles.card} ${styles.statCard}`}>
+          <span className={styles.label}>PROGRESO PROMEDIO</span>
+          <div className={styles.avgValue} data-testid="avg-progress">
             {progressLoading ? '–' : `${avgProgress}%`}
           </div>
         </div>
 
         {/* Next assignment */}
         <div
-          onClick={() => navigate('/activities')}
-          style={{
-            gridColumn: '3/4',
-            gridRow: '2/3',
-            background: assignmentsLoading
-              ? 'var(--color-bg-secondary)'
-              : next
-                ? 'var(--color-accent-primary)'
-                : 'var(--color-bg-secondary)',
-            border: next
-              ? 'none'
-              : '1px solid var(--color-border-primary)',
-            borderRadius: 18,
-            padding: 18,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            color: next ? '#fff' : 'var(--color-text-primary)',
-            cursor: 'pointer',
-          }}
+          role="link"
+          tabIndex={0}
+          aria-label={next ? `Próxima entrega: ${next.title}` : 'Ver entregas'}
+          onClick={openNext}
+          onKeyDown={onKeyActivate(openNext)}
+          className={[
+            styles.card,
+            styles.statCard,
+            styles.clickable,
+            !assignmentsLoading && next ? styles.nextActive : '',
+          ].filter(Boolean).join(' ')}
         >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                opacity: next ? 0.82 : 0.6,
-              }}
-            >
-              {next ? 'PRÓXIMA ENTREGA' : 'ENTREGAS'}
-            </span>
+          <div className={styles.nextHeader}>
+            <span className={styles.label}>{next ? 'PRÓXIMA ENTREGA' : 'ENTREGAS'}</span>
             {next && next.dueAt && (
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: 'rgba(255,255,255,.18)',
-                  padding: '3px 10px',
-                  borderRadius: 20,
-                }}
-              >
-                {formatDue(next.dueAt)}
-              </span>
+              <span className={styles.duePill}>{formatDue(next.dueAt)}</span>
             )}
           </div>
           <div>
             {assignmentsLoading ? (
-              <div style={{ fontSize: 13, opacity: 0.7 }}>Cargando…</div>
+              <div className={styles.muted}>Cargando…</div>
             ) : next ? (
               <>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>
-                  {next.title}
-                </div>
-                <div style={{ fontSize: 12.5, opacity: 0.85 }}>
-                  {next.description}
-                </div>
+                <div className={styles.nextTitle}>{next.title}</div>
+                {next.description && <div className={styles.nextDescription}>{next.description}</div>}
               </>
             ) : (
-              <div style={{ fontSize: 13, opacity: 0.6 }}>
-                No hay entregas pendientes
-              </div>
+              <div className={styles.muted}>No hay entregas pendientes</div>
             )}
           </div>
         </div>
@@ -304,58 +174,28 @@ export function StudentDashboard() {
         {/* Course cards */}
         {courses?.map((c) => {
           const pct = progressMap[c.id] ?? 0;
-          const color = hashToColor(c.title);
+          const open = () => navigate(`/courses/${c.course.id}/subjects/${c.id}`);
           return (
             <div
               key={c.id}
-              onClick={() => navigate(`/courses/${c.course.id}/subjects/${c.id}`)}
-              style={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border-primary)',
-                borderRadius: 18,
-                padding: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-              }}
+              role="link"
+              tabIndex={0}
+              data-testid="course-card"
+              aria-label={`${c.title} · ${c.course.name} · ${c.course.academicYear} · ${pct}%`}
+              onClick={open}
+              onKeyDown={onKeyActivate(open)}
+              className={`${styles.card} ${styles.courseCard} ${styles.clickable}`}
+              style={{ '--course-color': hashToColor(c.title) } as CSSProperties}
             >
-              <div
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 11,
-                  background: `${color}1a`,
-                  color,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: 16,
-                }}
-              >
+              <div className={styles.courseInitial} aria-hidden="true">
                 {c.title.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>
+                <div className={styles.courseTitle}>
                   {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
                 </div>
-                <div
-                  style={{
-                    height: 5,
-                    borderRadius: 5,
-                    background: 'var(--color-border-primary)',
-                    marginTop: 6,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${pct}%`,
-                      height: '100%',
-                      background: color,
-                    }}
-                  />
+                <div className={styles.bar}>
+                  <div className={styles.barFill} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             </div>

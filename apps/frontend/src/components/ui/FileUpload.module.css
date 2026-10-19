@@ -103,6 +103,7 @@
 }
 
 .dropzoneTitle {
+  text-align: center;
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   color: var(--color-text-primary);

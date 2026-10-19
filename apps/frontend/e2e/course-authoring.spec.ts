@@ -1,22 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { actAs, TEACHER, STUDENT } from './dev-user';
+import { actAs, ADMIN, TEACHER, STUDENT } from './dev-user';
 
 const BASE_URL = 'http://localhost:3000';
+const ORG = 'org-klass-0001';
+const COHORT = 'course-klass-2025';
+const q = `organizationId=${ORG}`;
+const adminJson = { 'x-dev-user': ADMIN, 'Content-Type': 'application/json' };
 
 test.describe('Course authoring (TEACHER)', () => {
-  const createdIds: string[] = [];
-
-  test.afterAll(async () => {
-    await Promise.all(
-      createdIds.map((id) =>
-        fetch(`${BASE_URL}/courses/${id}?organizationId=org-klass-0001`, {
-          method: 'DELETE',
-          headers: { 'x-dev-user': TEACHER },
-        }).catch(() => {}),
-      ),
-    );
-  });
-
   test.beforeEach(async ({ page }) => {
     await actAs(page, TEACHER);
   });
@@ -24,24 +15,6 @@ test.describe('Course authoring (TEACHER)', () => {
   test('teacher does not see + Crear curso (only organization admins do)', async ({ page }) => {
     await page.goto('/courses');
     await expect(page.getByRole('button', { name: '+ Crear curso' })).toHaveCount(0);
-  });
-
-  test.skip('creates a course with title only', async ({ page }) => {
-    const title = `E2E Curso ${Date.now()}`;
-    await page.goto('/courses');
-    await page.getByRole('button', { name: '+ Crear curso' }).click({ timeout: 8000 });
-
-    const modal = page.getByRole('dialog');
-    await expect(modal).toBeVisible();
-
-    await modal.locator('input').first().fill(title);
-    await modal.getByRole('button', { name: 'Crear curso' }).click();
-
-    await expect(page).toHaveURL(/\/courses\//);
-    await expect(page.locator('h1')).toContainText(title);
-
-    const cid = page.url().split('/courses/')[1]?.split('?')[0] ?? '';
-    if (cid) createdIds.push(cid);
   });
 
   test('student does not see + Crear curso button', async ({ page }) => {
@@ -66,70 +39,6 @@ test.describe('Course authoring (TEACHER)', () => {
     await expect(page.getByRole('button', { name: 'Eliminar' })).toHaveCount(0);
   });
 
-  test.skip('edits course title', async ({ page, request }) => {
-    const created = await request.post(`${BASE_URL}/courses?organizationId=org-klass-0001`, {
-      headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
-      data: { title: `Editable ${Date.now()}`, description: 'Will edit', status: 'DRAFT' },
-    });
-    const cid: string = (await created.json()).id;
-    createdIds.push(cid);
-
-    await page.goto(`/courses/${cid}`);
-    await expect(page.locator('h1')).toBeVisible({ timeout: 8000 });
-
-    await page.getByRole('button', { name: 'Editar' }).click();
-    const modal = page.getByRole('dialog');
-    await expect(modal).toBeVisible();
-
-    const titleInput = modal.locator('input').first();
-    await titleInput.clear();
-    await titleInput.fill('Curso Editado');
-    await modal.getByRole('button', { name: 'Guardar cambios' }).click();
-
-    await expect(page.getByText('Curso actualizado')).toBeVisible({ timeout: 8000 });
-  });
-
-  // TODO(aloiki): flaky — stateful publish/unpublish toggle assertions. Feature works
-  // (CourseDetailPage toggles status + toasts). Harden the toast/button waits and re-enable.
-  test.fixme('publishes a draft course', async ({ page, request }) => {
-    const created = await request.post(`${BASE_URL}/courses?organizationId=org-klass-0001`, {
-      headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
-      data: { title: `Draft ${Date.now()}`, status: 'DRAFT' },
-    });
-    const cid: string = (await created.json()).id;
-    createdIds.push(cid);
-
-    await page.goto(`/courses/${cid}`);
-    await expect(page.getByText('Borrador')).toBeVisible({ timeout: 8000 });
-
-    await page.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByText('Curso publicado')).toBeVisible({ timeout: 8000 });
-
-    await page.getByRole('button', { name: 'Guardar borrador' }).click({ timeout: 5000 });
-    await expect(page.getByText('guardado como borrador')).toBeVisible({ timeout: 8000 });
-  });
-
-  test.skip('deletes a course', async ({ page, request }) => {
-    const created = await request.post(`${BASE_URL}/courses?organizationId=org-klass-0001`, {
-      headers: { 'x-dev-user': TEACHER, 'Content-Type': 'application/json' },
-      data: { title: `ToDelete ${Date.now()}`, status: 'DRAFT' },
-    });
-    const cid: string = (await created.json()).id;
-    // Don't push to createdIds — it's deleted during the test, no afterAll needed.
-
-    await page.goto(`/courses/${cid}`);
-    await expect(page.locator('h1')).toBeVisible({ timeout: 8000 });
-
-    await page.getByRole('button', { name: 'Eliminar' }).click();
-
-    const confirm = page.getByRole('dialog');
-    await expect(confirm).toBeVisible();
-    await confirm.getByRole('button', { name: 'Eliminar' }).click();
-
-    await expect(page.getByText('Curso eliminado')).toBeVisible({ timeout: 8000 });
-    await expect(page).toHaveURL(/\/courses$/);
-  });
-
   test('zero console errors on courses page', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
@@ -137,5 +46,115 @@ test.describe('Course authoring (TEACHER)', () => {
     await page.goto('/courses');
     await expect(page.locator('h1')).toBeVisible({ timeout: 8000 });
     expect(errors).toEqual([]);
+  });
+});
+
+// Courses (cohorts) and their subjects are created, edited, published and
+// deleted by organization admins only.
+test.describe('Course authoring (ADMIN)', () => {
+  const createdCourses: string[] = [];
+  const createdSubjects: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    await actAs(page, ADMIN);
+  });
+
+  test.afterAll(async ({ request }) => {
+    for (const id of createdSubjects) {
+      await request.delete(`${BASE_URL}/subjects/${id}?${q}`, { headers: { 'x-dev-user': ADMIN } });
+    }
+    for (const id of createdCourses) {
+      await request.delete(`${BASE_URL}/courses/${id}?${q}`, { headers: { 'x-dev-user': ADMIN } });
+    }
+  });
+
+  async function createSubject(
+    request: import('@playwright/test').APIRequestContext,
+    title: string,
+    status: 'DRAFT' | 'PUBLISHED' = 'DRAFT',
+  ): Promise<string> {
+    const res = await request.post(`${BASE_URL}/courses/${COHORT}/subjects?${q}`, {
+      headers: adminJson,
+      data: { title, description: 'E2E', status },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const { id } = await res.json();
+    createdSubjects.push(id);
+    return id;
+  }
+
+  async function subjectStatus(request: import('@playwright/test').APIRequestContext, id: string) {
+    const res = await request.get(`${BASE_URL}/subjects/${id}?${q}`, { headers: { 'x-dev-user': ADMIN } });
+    return (await res.json()).status as string;
+  }
+
+  test('creates a course with a name', async ({ page }) => {
+    const name = `E2E Curso ${Date.now()}`;
+    await page.goto('/courses');
+    await page.getByRole('button', { name: '+ Crear curso' }).click({ timeout: 8000 });
+
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
+
+    // Client validation: the name is required.
+    await modal.getByRole('button', { name: 'Crear curso' }).click();
+    await expect(modal.getByText('El nombre es obligatorio')).toBeVisible();
+
+    await modal.getByLabel('Nombre').fill(name);
+    await modal.getByRole('button', { name: 'Crear curso' }).click();
+
+    await expect(page.getByText('Curso creado correctamente')).toBeVisible({ timeout: 8000 });
+    await expect(page).toHaveURL(/\/courses\/[^/]+$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+
+    const id = new URL(page.url()).pathname.split('/').pop() ?? '';
+    if (id) createdCourses.push(id);
+  });
+
+  test('edits course title', async ({ page, request }) => {
+    const id = await createSubject(request, `Editable ${Date.now()}`);
+    await page.goto(`/courses/${COHORT}/subjects/${id}`);
+    await page.getByRole('button', { name: 'Editar', exact: true }).click({ timeout: 8000 });
+
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
+    await modal.getByLabel('Título').fill('Curso Editado');
+    await modal.getByRole('button', { name: 'Guardar cambios' }).click();
+
+    await expect(page.getByText('Curso actualizado')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Curso Editado');
+  });
+
+  test('publishes a draft course and saves it back as a draft', async ({ page, request }) => {
+    const id = await createSubject(request, `Draft ${Date.now()}`);
+    await page.goto(`/courses/${COHORT}/subjects/${id}`);
+    await expect(page.getByText('Borrador', { exact: true })).toBeVisible({ timeout: 8000 });
+
+    await page.getByRole('button', { name: 'Publicar' }).click();
+    await expect(page.getByText('Curso publicado')).toBeVisible({ timeout: 8000 });
+    // The page reflects the new status without a reload.
+    await expect(page.getByRole('button', { name: 'Guardar borrador' })).toBeVisible();
+    await expect(page.getByText('Borrador', { exact: true })).toHaveCount(0);
+    expect(await subjectStatus(request, id)).toBe('PUBLISHED');
+
+    await page.getByRole('button', { name: 'Guardar borrador' }).click();
+    await expect(page.getByText('Curso guardado como borrador')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: 'Publicar' })).toBeVisible();
+    expect(await subjectStatus(request, id)).toBe('DRAFT');
+  });
+
+  test('deletes a course', async ({ page, request }) => {
+    const id = await createSubject(request, `ToDelete ${Date.now()}`);
+    await page.goto(`/courses/${COHORT}/subjects/${id}`);
+    await page.getByRole('button', { name: 'Eliminar', exact: true }).click({ timeout: 8000 });
+
+    const confirm = page.getByRole('dialog');
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Eliminar' }).click();
+
+    await expect(page.getByText('Curso eliminado')).toBeVisible({ timeout: 8000 });
+    await expect(page).toHaveURL(new RegExp(`/courses/${COHORT}$`));
+    const gone = await request.get(`${BASE_URL}/subjects/${id}?${q}`, { headers: { 'x-dev-user': ADMIN } });
+    expect(gone.status()).toBe(404);
   });
 });

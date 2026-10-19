@@ -1,0 +1,258 @@
+/**
+ * StudentDashboard — bento grid. Tokens only; the per-course colour arrives
+ * as the --course-color custom property.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(134px, auto);
+  gap: var(--space-4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-2xl);
+}
+
+.clickable {
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.clickable:hover {
+  border-color: var(--color-accent-primary);
+}
+
+.clickable:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+/* =============================================================================
+ * Progress ring (spans 2 columns x 2 rows)
+ * ============================================================================= */
+
+.ringCard {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+}
+
+.ringTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text-secondary);
+}
+
+.ringBody {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding-top: var(--space-3);
+}
+
+.ring {
+  position: relative;
+  flex: none;
+  width: 128px;
+  height: 128px;
+}
+
+.ringTrack {
+  stroke: var(--color-border-primary);
+}
+
+.ringFill {
+  stroke: var(--color-accent-primary);
+}
+
+.ringValue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+}
+
+.legend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 12rem;
+}
+
+.legendRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--course-color);
+}
+
+/* =============================================================================
+ * Average + next delivery
+ * ============================================================================= */
+
+.statCard {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.avgValue {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-none);
+  color: var(--color-accent-primary);
+}
+
+.nextHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nextActive {
+  background: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
+  color: var(--color-text-inverse);
+}
+
+.nextActive .label {
+  color: inherit;
+  opacity: 0.82;
+}
+
+.duePill {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-inverse) 18%, transparent);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+}
+
+.nextTitle {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  overflow-wrap: anywhere;
+}
+
+.nextDescription {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  opacity: 0.85;
+}
+
+.muted {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* =============================================================================
+ * Course cards
+ * ============================================================================= */
+
+.courseCard {
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.courseInitial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--course-color) 10%, transparent);
+  color: var(--course-color);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+}
+
+.courseTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.bar {
+  height: 5px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-border-primary);
+}
+
+.barFill {
+  height: 100%;
+  background: var(--course-color);
+}
+
+/* =============================================================================
+ * Responsive: two columns on small tablets, one on phones
+ * ============================================================================= */
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ringCard {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    gap: var(--space-3);
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+
+  /* Legend below the ring rather than squeezed beside it. */
+  .ringBody {
+    justify-content: center;
+  }
+
+  .legend {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+}

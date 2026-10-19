@@ -1,7 +1,35 @@
 import { test, expect } from '@playwright/test';
 import { actAs, STUDENT } from './dev-user';
 
+const BASE_URL = 'http://localhost:3000';
+const ORG = 'org-klass-0001';
+const WEB_101_LABEL = 'Introducción al Desarrollo Web · 1º A · 2025-2026';
+
 test.describe('StudentDashboard (real data)', () => {
+  // Lucía's figures come from the backend, not from constants: other specs may
+  // move her progress, so beforeAll pins a known completion and reads the
+  // resulting numbers the dashboard must show.
+  const expected = { web101: 0, average: 0 };
+
+  test.beforeAll(async ({ request }) => {
+    const headers = { 'x-dev-user': STUDENT };
+    const complete = await request.post(
+      `${BASE_URL}/lessons/lesson-web-101-1/complete?organizationId=${ORG}`,
+      { headers },
+    );
+    expect(complete.ok()).toBeTruthy();
+
+    const res = await request.get(`${BASE_URL}/me/progress?organizationId=${ORG}`, { headers });
+    expect(res.ok()).toBeTruthy();
+    const items: { subjectId: string; percentage: number }[] = await res.json();
+    const web101 = items.find((p) => p.subjectId === 'course-web-101');
+    expect(web101).toBeDefined();
+    expected.web101 = web101!.percentage;
+    // At least 1 of web-101's lessons is done, so the ring can't be empty.
+    expect(expected.web101).toBeGreaterThan(0);
+    expected.average = Math.round(items.reduce((sum, p) => sum + p.percentage, 0) / items.length);
+  });
+
   test.beforeEach(async ({ page }) => {
     await actAs(page, STUDENT);
   });
@@ -13,26 +41,22 @@ test.describe('StudentDashboard (real data)', () => {
     await expect(page.getByText('Alumno')).toBeVisible();
   });
 
-  // TODO(aloiki): the 3 tests below hard-code lucía's seeded progress (25%). courses.spec
-  // unenrolls+re-enrolls her (resetting progress to 0) before this file runs, so they only
-  // pass in isolation. Seed a fixed progress in a beforeAll (or decouple from courses.spec)
-  // and re-enable. The dashboard feature itself renders real progress correctly.
-  test.fixme('shows progress ring with real percentage', async ({ page }) => {
+  test('shows progress ring with real percentage', async ({ page }) => {
     await page.goto('/dashboard');
     await expect(page.getByText('Progreso del semestre')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText('25%').first()).toBeVisible();
+    await expect(page.getByTestId('progress-ring-value')).toHaveText(`${expected.average}%`);
   });
 
-  test.fixme('shows per-course progress dot with percentage', async ({ page }) => {
+  test('shows per-course progress dot with percentage', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByText('Introducción al Desarrollo Web · 25%')).toBeVisible({ timeout: 8000 });
+    const row = page.getByTestId('progress-row').filter({ hasText: WEB_101_LABEL });
+    await expect(row).toHaveText(`${WEB_101_LABEL} · ${expected.web101}%`, { timeout: 8000 });
   });
 
-  test.fixme('shows PROGRESO PROMEDIO card with real value', async ({ page }) => {
+  test('shows PROGRESO PROMEDIO card with real value', async ({ page }) => {
     await page.goto('/dashboard');
     await page.getByText('PROGRESO PROMEDIO').waitFor({ timeout: 8000 });
-    // The student has only one course at 25%, so avg = 25%.
-    await expect(page.getByText('25%').first()).toBeVisible();
+    await expect(page.getByTestId('avg-progress')).toHaveText(`${expected.average}%`);
   });
 
   test('shows PRÓXIMA ENTREGA card with upcoming activity', async ({ page }) => {
@@ -43,15 +67,21 @@ test.describe('StudentDashboard (real data)', () => {
     ).toBeVisible();
   });
 
-  // TODO(aloiki): flaky selector — getByText('…').first() matches the non-clickable
-  // per-course progress dot, not the card (whose onClick navigates). Target the card
-  // (e.g. add a data-testid or role=link) and re-enable.
-  test.fixme('shows course cards with progress bars', async ({ page }) => {
+  test('shows course cards with progress bars', async ({ page }) => {
     await page.goto('/dashboard');
-    const card = page.getByText('Introducción al Desarrollo Web').first();
+    const card = page.getByTestId('course-card').filter({ hasText: WEB_101_LABEL });
     await expect(card).toBeVisible({ timeout: 8000 });
+    await expect(card).toHaveAttribute('aria-label', `${WEB_101_LABEL} · ${expected.web101}%`);
     // Click navigates to course detail
     await card.click();
+    await expect(page).toHaveURL(/\/courses\/course-klass-2025\/subjects\/course-web-101/);
+  });
+
+  test('course card opens with the keyboard', async ({ page }) => {
+    await page.goto('/dashboard');
+    const card = page.getByTestId('course-card').filter({ hasText: WEB_101_LABEL });
+    await card.focus();
+    await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/courses\/course-klass-2025\/subjects\/course-web-101/);
   });
 

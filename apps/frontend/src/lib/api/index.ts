@@ -160,6 +160,7 @@ export {
   type MeSubjectDTO,
   type SectionDTO,
   type LessonDTO,
+  type LessonAttachmentDTO,
   type PublicationStatus,
   type CohortStatus,
   type SubjectStaffRole,

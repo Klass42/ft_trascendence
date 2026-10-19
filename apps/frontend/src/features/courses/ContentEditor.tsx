@@ -1,28 +1,219 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { ChevronUp, ChevronDown, Paperclip } from 'lucide-react';
 import {
+  useAuth,
   useSections,
   useCreateSection,
   useUpdateSection,
   useDeleteSection,
+  useReorderSections,
   useCreateLesson,
   useUpdateLesson,
   useDeleteLesson,
+  useReorderLessons,
+  useLessonById,
+  useAttachFile,
+  useDetachFile,
 } from '@/lib/api';
-import type { SectionDTO, LessonDTO } from '@/lib/api';
+import type { SectionDTO, LessonDTO, LessonAttachmentDTO } from '@/lib/api';
 import {
   Button,
-  FormField,
+  Input,
+  Textarea,
   ConfirmDialog,
+  EmptyState,
+  FileUpload,
+  Spinner,
   useToast,
+  type FileValue,
 } from '@/components/ui';
+import styles from './ContentEditor.module.css';
+
+/** Mirrors the GENERAL allowlist in apps/backend/src/files/file-validation.ts. */
+const ATTACHMENT_ACCEPT = [
+  '.pdf', '.epub', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.txt', '.csv',
+  '.jpg', '.jpeg', '.png', '.webp', '.gif',
+  '.mp3', '.wav', '.ogg', '.m4a',
+  '.mp4', '.webm', '.mov',
+].join(',');
+
+/** Same limit as MAX_UPLOAD_BYTES on the server. */
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Returns a copy of `ids` with the item at `index` swapped one step up or down. */
+function moveId(ids: string[], index: number, direction: -1 | 1): string[] {
+  const target = index + direction;
+  if (target < 0 || target >= ids.length) return ids;
+  const next = [...ids];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
+function MoveButtons({
+  label,
+  isFirst,
+  isLast,
+  disabled,
+  onMove,
+}: {
+  label: string;
+  isFirst: boolean;
+  isLast: boolean;
+  disabled: boolean;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  return (
+    <div className={styles.moveButtons}>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={`Subir ${label}`}
+        disabled={disabled || isFirst}
+        onClick={() => onMove(-1)}
+      >
+        <ChevronUp size={16} aria-hidden="true" />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={`Bajar ${label}`}
+        disabled={disabled || isLast}
+        onClick={() => onMove(1)}
+      >
+        <ChevronDown size={16} aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
+function LessonAttachments({ lessonId }: { lessonId: string }) {
+  const { user } = useAuth();
+  const { data: lesson, isLoading, error, refetch } = useLessonById(lessonId);
+  const { attach } = useAttachFile();
+  const { detach, isLoading: detaching } = useDetachFile();
+  const { toast } = useToast();
+
+  const [uploads, setUploads] = useState<FileValue[]>([]);
+  const [confirmRemove, setConfirmRemove] = useState<LessonAttachmentDTO | null>(null);
+  // Uploads already handed to attach(); FileUpload re-emits "done" entries.
+  const attaching = useRef(new Set<string>());
+
+  const attachUploaded = async (file: FileValue) => {
+    try {
+      await attach(lessonId, file.id);
+      toast({ message: `Adjunto "${file.originalName}" añadido`, variant: 'success' });
+      setUploads((prev) => prev.filter((u) => u.id !== file.id));
+      refetch();
+    } catch {
+      toast({ message: `Error al adjuntar "${file.originalName}"`, variant: 'error' });
+    }
+  };
+
+  const handleUploadsChange = (next: FileValue[]) => {
+    setUploads(next);
+    for (const file of next) {
+      if (file.status === 'done' && !attaching.current.has(file.id)) {
+        attaching.current.add(file.id);
+        void attachUploaded(file);
+      }
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!confirmRemove) return;
+    try {
+      await detach(lessonId, confirmRemove.fileId);
+      toast({ message: 'Adjunto eliminado', variant: 'success' });
+      setConfirmRemove(null);
+      refetch();
+    } catch {
+      toast({ message: 'Error al eliminar el adjunto', variant: 'error' });
+    }
+  };
+
+  const attachments = lesson?.attachments ?? [];
+
+  return (
+    <section className={styles.attachments} aria-labelledby={`attachments-${lessonId}`}>
+      <h3 id={`attachments-${lessonId}`} className={styles.attachmentsTitle}>
+        Adjuntos
+      </h3>
+
+      {isLoading && !lesson ? (
+        <div className={styles.status}>
+          <Spinner size="sm" />
+          Cargando adjuntos…
+        </div>
+      ) : error && !lesson ? (
+        <div className={`${styles.status} ${styles.statusError}`} role="alert">
+          Error al cargar los adjuntos
+          <Button size="sm" variant="ghost" onClick={refetch}>Reintentar</Button>
+        </div>
+      ) : attachments.length === 0 ? (
+        <p className={styles.attachmentsEmpty}>Esta lección no tiene adjuntos.</p>
+      ) : (
+        <ul className={styles.attachmentList}>
+          {attachments.map((a) => (
+            <li key={a.fileId} className={styles.attachmentItem} data-testid="lesson-attachment">
+              <Paperclip size={16} aria-hidden="true" />
+              <span className={styles.attachmentName}>{a.file.originalName}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={`Quitar adjunto ${a.file.originalName}`}
+                onClick={() => setConfirmRemove(a)}
+              >
+                Quitar
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {user?.organizationId && (
+        <FileUpload
+          organizationId={user.organizationId}
+          uploaderId={user.userId}
+          accept={ATTACHMENT_ACCEPT}
+          maxSizeBytes={ATTACHMENT_MAX_BYTES}
+          multiple
+          maxFiles={5}
+          value={uploads}
+          onChange={handleUploadsChange}
+          hint="PDF, documentos de Office, imágenes, audio o vídeo. Máx. 10 MB por archivo."
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmRemove !== null}
+        onCancel={() => setConfirmRemove(null)}
+        onConfirm={() => { void handleRemove(); }}
+        title="Quitar adjunto"
+        message={`¿Quitar "${confirmRemove?.file.originalName ?? ''}" de esta lección?`}
+        confirmLabel="Quitar"
+        variant="danger"
+        loading={detaching}
+      />
+    </section>
+  );
+}
 
 function SectionEditor({
   section,
   courseId,
+  isFirst,
+  isLast,
+  moving,
+  onMove,
   onUpdated,
 }: {
   section: SectionDTO;
   courseId: string;
+  isFirst: boolean;
+  isLast: boolean;
+  moving: boolean;
+  onMove: (direction: -1 | 1) => void;
   onUpdated: () => void;
 }) {
   const { update: updateSection } = useUpdateSection();
@@ -30,6 +221,7 @@ function SectionEditor({
   const { create: createLesson } = useCreateLesson();
   const { update: updateLesson } = useUpdateLesson();
   const { remove: deleteLesson } = useDeleteLesson();
+  const { reorder: reorderLessons, isLoading: reorderingLessons } = useReorderLessons();
   const { toast } = useToast();
 
   const [renaming, setRenaming] = useState(false);
@@ -44,11 +236,15 @@ function SectionEditor({
   const [editLessonVideo, setEditLessonVideo] = useState('');
   const [confirmDeleteLesson, setConfirmDeleteLesson] = useState<string | null>(null);
 
+  const lessons = section.lessons ?? [];
+
   const handleRename = async () => {
     if (!newTitle.trim()) return;
     try {
       await updateSection(courseId, section.id, { title: newTitle.trim() });
       setRenaming(false);
+      toast({ message: 'Sección renombrada', variant: 'success' });
+      onUpdated();
     } catch {
       toast({ message: 'Error al renombrar la sección', variant: 'error' });
     }
@@ -58,6 +254,7 @@ function SectionEditor({
     try {
       await deleteSection(courseId, section.id);
       setConfirmDeleteSection(false);
+      toast({ message: 'Sección eliminada', variant: 'success' });
       onUpdated();
     } catch {
       toast({ message: 'Error al eliminar la sección', variant: 'error' });
@@ -69,7 +266,7 @@ function SectionEditor({
     try {
       await createLesson(section.id, {
         title: lessonTitle.trim(),
-        order: (section.lessons?.length ?? 0) + 1,
+        order: lessons.length + 1,
       });
       setAddingLesson(false);
       setLessonTitle('');
@@ -77,6 +274,17 @@ function SectionEditor({
       onUpdated();
     } catch {
       toast({ message: 'Error al crear la lección', variant: 'error' });
+    }
+  };
+
+  const handleMoveLesson = async (index: number, direction: -1 | 1) => {
+    const orderedIds = moveId(lessons.map((l) => l.id), index, direction);
+    try {
+      await reorderLessons(section.id, orderedIds);
+      toast({ message: 'Orden de lecciones actualizado', variant: 'success' });
+      onUpdated();
+    } catch {
+      toast({ message: 'Error al reordenar las lecciones', variant: 'error' });
     }
   };
 
@@ -115,46 +323,35 @@ function SectionEditor({
   };
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--color-border-primary)',
-        borderRadius: 13,
-        marginBottom: 18,
-        overflow: 'hidden',
-      }}
-    >
+    <div className={styles.section} data-testid="section-editor">
       {/* Section header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '12px 16px',
-          background: 'var(--color-bg-secondary)',
-          borderBottom: '1px solid var(--color-border-primary)',
-        }}
-      >
+      <div className={styles.sectionHeader}>
         {renaming ? (
-          <>
-            <input
+          <div className={styles.inlineForm}>
+            <Input
+              size="sm"
+              className={styles.inlineField}
+              aria-label="Nuevo título de la sección"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenaming(false); }}
-              style={{
-                flex: 1, padding: '6px 10px', borderRadius: 6,
-                border: '1px solid var(--color-accent-primary)',
-                fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-              }}
             />
             <Button size="sm" onClick={handleRename}>Guardar</Button>
             <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>Cancelar</Button>
-          </>
+          </div>
         ) : (
           <>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>
+            <span className={styles.sectionTitle} data-testid="section-title">
               {section.title}
             </span>
+            <MoveButtons
+              label={`sección ${section.title}`}
+              isFirst={isFirst}
+              isLast={isLast}
+              disabled={moving}
+              onMove={onMove}
+            />
             <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
               Renombrar
             </Button>
@@ -166,68 +363,45 @@ function SectionEditor({
       </div>
 
       {/* Lessons */}
-      {section.lessons?.map((lesson) =>
+      {lessons.map((lesson, index) =>
         editingLessonId === lesson.id ? (
-          <div
-            key={lesson.id}
-            style={{
-              padding: 16,
-              borderBottom: '1px solid var(--color-border-primary)',
-            }}
-          >
-            <FormField label="Título">
-              {(f) => (
-                <input
-                  {...f}
-                  value={editLessonTitle}
-                  onChange={(e) => setEditLessonTitle(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }}
-                />
-              )}
-            </FormField>
-            <div style={{ height: 8 }} />
-            <FormField label="Contenido (Markdown)">
-              {(f) => (
-                <textarea
-                  {...f}
-                  value={editLessonContent}
-                  onChange={(e) => setEditLessonContent(e.target.value)}
-                  rows={6}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 13, fontFamily: 'monospace', resize: 'vertical' }}
-                />
-              )}
-            </FormField>
-            <div style={{ height: 8 }} />
-            <FormField label="URL del video">
-              {(f) => (
-                <input
-                  {...f}
-                  value={editLessonVideo}
-                  onChange={(e) => setEditLessonVideo(e.target.value)}
-                  placeholder="https://..."
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }}
-                />
-              )}
-            </FormField>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <div key={lesson.id} className={styles.lessonEdit}>
+            <Input
+              label="Título"
+              value={editLessonTitle}
+              onChange={(e) => setEditLessonTitle(e.target.value)}
+            />
+            <Textarea
+              label="Contenido (Markdown)"
+              className={styles.markdown}
+              value={editLessonContent}
+              onChange={(e) => setEditLessonContent(e.target.value)}
+              rows={6}
+            />
+            <Input
+              label="URL del video"
+              value={editLessonVideo}
+              onChange={(e) => setEditLessonVideo(e.target.value)}
+              placeholder="https://..."
+            />
+            <LessonAttachments lessonId={lesson.id} />
+            <div className={styles.actions}>
               <Button size="sm" onClick={handleUpdateLesson}>Guardar</Button>
               <Button size="sm" variant="ghost" onClick={() => setEditingLessonId(null)}>Cancelar</Button>
             </div>
           </div>
         ) : (
-          <div
-            key={lesson.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '11px 16px',
-              borderBottom: '1px solid var(--color-border-primary)',
-            }}
-          >
-            <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
+          <div key={lesson.id} className={styles.lessonRow} data-testid="lesson-row">
+            <span className={styles.lessonTitle} data-testid="lesson-title">
               {lesson.title}
             </span>
+            <MoveButtons
+              label={`lección ${lesson.title}`}
+              isFirst={index === 0}
+              isLast={index === lessons.length - 1}
+              disabled={reorderingLessons}
+              onMove={(direction) => { void handleMoveLesson(index, direction); }}
+            />
             <Button size="sm" variant="ghost" onClick={() => startEditLesson(lesson)}>
               Editar
             </Button>
@@ -239,16 +413,17 @@ function SectionEditor({
       )}
 
       {/* Add lesson */}
-      <div style={{ padding: 12, background: 'var(--color-bg-secondary)' }}>
+      <div className={styles.addLesson}>
         {addingLesson ? (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
+          <div className={styles.inlineForm}>
+            <Input
+              className={styles.inlineField}
+              aria-label="Título de la lección"
               value={lessonTitle}
               onChange={(e) => setLessonTitle(e.target.value)}
               placeholder="Título de la lección"
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter') handleAddLesson(); if (e.key === 'Escape') { setAddingLesson(false); setLessonTitle(''); } }}
-              style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-accent-primary)', fontSize: 14, fontFamily: 'inherit' }}
             />
             <Button size="sm" onClick={handleAddLesson}>Crear</Button>
             <Button size="sm" variant="ghost" onClick={() => { setAddingLesson(false); setLessonTitle(''); }}>Cancelar</Button>
@@ -286,6 +461,7 @@ function SectionEditor({
 export function ContentEditor({ courseId }: { courseId: string }) {
   const { data: sections, isLoading, error, refetch } = useSections(courseId);
   const { create: createSection } = useCreateSection();
+  const { reorder: reorderSections, isLoading: reorderingSections } = useReorderSections();
   const { toast } = useToast();
 
   const refresh = useCallback(() => refetch(), [refetch]);
@@ -308,23 +484,50 @@ export function ContentEditor({ courseId }: { courseId: string }) {
     }
   };
 
-  if (isLoading) return <div style={{ color: 'var(--color-text-secondary)', padding: 20 }}>Cargando secciones…</div>;
+  const handleMoveSection = async (index: number, direction: -1 | 1) => {
+    if (!sections) return;
+    const orderedIds = moveId(sections.map((s) => s.id), index, direction);
+    try {
+      await reorderSections(courseId, orderedIds);
+      toast({ message: 'Orden de secciones actualizado', variant: 'success' });
+      refresh();
+    } catch {
+      toast({ message: 'Error al reordenar las secciones', variant: 'error' });
+    }
+  };
 
-  if (error) return <div style={{ color: 'var(--color-error)', padding: 20 }}>Error al cargar secciones</div>;
+  if (isLoading && !sections) {
+    return (
+      <div className={styles.status}>
+        <Spinner size="sm" />
+        Cargando secciones…
+      </div>
+    );
+  }
+
+  if (error && !sections) {
+    return (
+      <div className={`${styles.status} ${styles.statusError}`} role="alert">
+        Error al cargar secciones
+        <Button size="sm" variant="ghost" onClick={refresh}>Reintentar</Button>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: '26px 40px', maxWidth: 820 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <span style={{ fontSize: 16, fontWeight: 800 }}>Estructura del curso</span>
+    <div className={styles.editor}>
+      <div className={styles.header}>
+        <h2 className={styles.heading}>Estructura del curso</h2>
         {addingSection ? (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
+          <div className={styles.inlineForm}>
+            <Input
+              className={styles.sectionTitleField}
+              aria-label="Título de la sección"
               value={sectionTitle}
               onChange={(e) => setSectionTitle(e.target.value)}
               placeholder="Título de la sección"
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') { setAddingSection(false); setSectionTitle(''); } }}
-              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-accent-primary)', fontSize: 14, fontFamily: 'inherit', width: 250 }}
             />
             <Button size="sm" onClick={handleAddSection}>Crear</Button>
             <Button size="sm" variant="ghost" onClick={() => { setAddingSection(false); setSectionTitle(''); }}>Cancelar</Button>
@@ -335,16 +538,21 @@ export function ContentEditor({ courseId }: { courseId: string }) {
       </div>
 
       {(!sections || sections.length === 0) && !addingSection && (
-        <div style={{ color: 'var(--color-text-muted)', padding: 20, textAlign: 'center' }}>
-          El curso no tiene secciones todavía. Crea la primera sección para empezar.
-        </div>
+        <EmptyState
+          title="El curso no tiene secciones todavía"
+          description="Crea la primera sección para empezar."
+        />
       )}
 
-      {sections?.map((section) => (
+      {sections?.map((section, index) => (
         <SectionEditor
           key={section.id}
           section={section}
           courseId={courseId}
+          isFirst={index === 0}
+          isLast={index === sections.length - 1}
+          moving={reorderingSections}
+          onMove={(direction) => { void handleMoveSection(index, direction); }}
           onUpdated={refresh}
         />
       ))}

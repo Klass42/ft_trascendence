@@ -89,3 +89,9 @@
   width: 3.5rem;
   text-align: right;
 }
+
+@media (max-width: 600px) {
+  .kpis {
+    grid-template-columns: 1fr;
+  }
+}

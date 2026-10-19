@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, useCourses, useCreateCourse } from '@/lib/api';
 import type { CourseDTO, CohortStatus } from '@/lib/api';
 import { Button, Modal, FormField, useToast } from '@/components/ui';
+import styles from './CoursesPage.module.css';
 
 const COURSE_COLORS = [
   '#2563eb', '#0f766e', '#d97706', '#7c3aed',
@@ -25,7 +26,7 @@ function statusLabel(status: CohortStatus): string {
 
 function CourseGrid({ courses, onOpen }: { courses: CourseDTO[]; onOpen: (id: string) => void }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+    <div className={styles.courseGrid}>
       {courses.map((course) => {
         const color = hashToColor(course.name + course.academicYear);
         return (
@@ -114,10 +115,10 @@ export function CoursesPage() {
   };
 
   if (isLoading) {
-    return <div style={{ padding: '30px 40px', color: 'var(--color-text-secondary)' }}>Cargando cursos...</div>;
+    return <div className={styles.status}>Cargando cursos...</div>;
   }
   if (error) {
-    return <div style={{ padding: '30px 40px', color: 'var(--color-text-secondary)' }}>Error al cargar cursos: {error.message}</div>;
+    return <div className={styles.status}>Error al cargar cursos: {error.message}</div>;
   }
 
   const open = (id: string) => navigate(`/courses/${id}`);
@@ -126,7 +127,7 @@ export function CoursesPage() {
   ) : null;
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 1000 }}>
+    <div className={styles.page}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Mis cursos</h1>
         {createButton}
