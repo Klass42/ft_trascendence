@@ -3,8 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import { NotificationsService } from '@/notifications/notifications.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
 import * as crypto from 'crypto';
@@ -24,7 +27,10 @@ export interface Member {
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async invite(organizationId: string, invitedById: string, dto: CreateInvitationDto) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
@@ -93,5 +99,60 @@ export class OrganizationsService {
     if (!target) throw new NotFoundException('User not found');
     if (target.organizationId !== id) throw new ForbiddenException('User belongs to another organization');
     await this.prisma.user.delete({ where: { id: userId } });
+  }
+
+  /**
+   * An org admin cannot delete the organization. This tells every platform
+   * SUPERADMIN, once per unread request, so they can do it from the platform UI.
+   */
+  async requestDeletion(
+    organizationId: string,
+    actor: { userId: string; name: string; email: string },
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const superadmins = await this.prisma.user.findMany({
+      where: { platformRole: 'SUPERADMIN' },
+      select: { id: true },
+    });
+    if (superadmins.length === 0) {
+      throw new ServiceUnavailableException('No platform superadmin can receive this request');
+    }
+
+    const title = `Solicitud de borrado: ${org.name}`;
+    const link = `/platform/organizations/${org.id}`;
+    let notified = 0;
+
+    for (const superadmin of superadmins) {
+      const pending = await this.prisma.notification.findFirst({
+        where: { userId: superadmin.id, link, title, read: false },
+        select: { id: true },
+      });
+      if (pending) continue;
+
+      await this.notifications.emit(superadmin.id, NotificationType.SYSTEM, {
+        title,
+        body: `${actor.name} (${actor.email}) pide borrar la organización «${org.name}» (${org.slug}).`,
+        link,
+      });
+      notified += 1;
+    }
+
+    if (notified > 0) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: actor.userId,
+          action: 'ORGANIZATION_DELETION_REQUESTED',
+          organizationId: org.id,
+          metadata: { notified },
+        },
+      });
+    }
+
+    return { notified, alreadyPending: notified === 0 };
   }
 }

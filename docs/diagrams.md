@@ -238,7 +238,7 @@ flowchart LR
   API["NestJS<br/>apps/backend"]
   PG[("PostgreSQL")]
   Store["Garage / S3<br/>o disco local"]
-  OTel["OTel · Prometheus<br/>Grafana · Loki · Tempo"]
+  OTel["OTel · Prometheus<br/>Grafana"]
 
   Browser --> Caddy
   Caddy --> API

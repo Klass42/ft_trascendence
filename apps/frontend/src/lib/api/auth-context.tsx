@@ -66,10 +66,10 @@ interface AuthContextValue {
   login: (organizationSlug: string, email: string, password: string) => Promise<void>;
   /** Platform accounts have no organization and authenticate separately. */
   loginPlatform: (email: string, password: string) => Promise<void>;
-  /** Register with name/email/password */
-  register: (name: string, email: string, password: string) => Promise<void>;
-  /** Login with OAuth (Google) */
-  loginWithGoogle: () => void;
+  /** Register with name/email/password inside an organization */
+  register: (name: string, email: string, password: string, organizationSlug: string) => Promise<void>;
+  /** Login with OAuth (Google) inside an organization. Returns false if the code is not a slug. */
+  loginWithGoogle: (organizationSlug: string) => boolean;
   /** Logout and clear tokens */
   logout: () => void;
   /** Refresh user data from server */
@@ -181,10 +181,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ---------------------------------------------------------------------------
   // Register with name/email/password
   // ---------------------------------------------------------------------------
-  const register = useCallback(async (name: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, email: string, password: string, organizationSlug: string) => {
     const response = await apiClient.post<LoginResponse>(
       '/auth/register',
-      { name, email, password },
+      { name, email, password, organizationSlug },
       { skipAuth: true }
     );
 
@@ -200,10 +200,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ---------------------------------------------------------------------------
   // Login with Google OAuth
   // ---------------------------------------------------------------------------
-  const loginWithGoogle = useCallback(() => {
-    // Redirect to backend OAuth endpoint
-    // The backend will redirect back with tokens in URL params
-    window.location.href = '/api/auth/google';
+  const loginWithGoogle = useCallback((organizationSlug: string) => {
+    const slug = organizationSlug.trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return false;
+    const params = new URLSearchParams({ organizationSlug: slug });
+    window.location.href = `/api/auth/google?${params.toString()}`;
+    return true;
   }, []);
 
   // ---------------------------------------------------------------------------

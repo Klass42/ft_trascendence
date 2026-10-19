@@ -77,7 +77,7 @@ https://{$CADDY_DOMAIN}:443 {
 	}
 }
 
-# ─── Grafana (own origin; Prometheus/Tempo/Loki are not exposed) ───
+# ─── Grafana (own origin; Prometheus is not exposed) ───
 https://{$CADDY_DOMAIN}:3443 {
 	import common
 	reverse_proxy grafana:3000

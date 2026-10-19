@@ -42,7 +42,6 @@
 /compose.yaml              @ViacheslavTrofymenko
 /.env.example              @ViacheslavTrofymenko
 /.dockerignore             @ViacheslavTrofymenko
-/flake.nix                 @ViacheslavTrofymenko
 /apps/backend/Dockerfile   @ViacheslavTrofymenko
 /apps/frontend/Dockerfile  @ViacheslavTrofymenko
 /apps/frontend/nginx.conf  @ViacheslavTrofymenko

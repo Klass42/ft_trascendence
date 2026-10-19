@@ -1,5 +1,6 @@
-# OpenTelemetry Collector: receives OTLP from the backend and fans it out.
-#   traces  → Tempo        metrics → Prometheus (remote write)        logs → Loki
+# OpenTelemetry Collector: receives OTLP from the backend and remote-writes
+# the metrics to Prometheus. (Traces and logs are not stored — the backend
+# only exports metrics.)
 receivers:
   otlp:
     protocols:
@@ -28,32 +29,12 @@ exporters:
     resource_to_telemetry_conversion:
       enabled: true
 
-  otlp/tempo:
-    endpoint: tempo:4317
-    tls:
-      insecure: true
-
-  otlphttp/loki:
-    endpoint: http://loki:3100/otlp
-    tls:
-      insecure: true
-
 service:
   pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [otlp/tempo]
-
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
       exporters: [prometheusremotewrite]
-
-    logs:
-      receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
-      exporters: [otlphttp/loki]
 
   telemetry:
     logs:

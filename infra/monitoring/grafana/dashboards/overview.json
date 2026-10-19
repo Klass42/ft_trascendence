@@ -131,37 +131,12 @@
       }
     },
     {
-      "title": "OTel Collector: Spans Received",
-      "type": "stat",
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 14,
-        "y": 0
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(otelcol_receiver_accepted_spans[5m]))",
-          "legendFormat": "spans/s"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        }
-      }
-    },
-    {
       "title": "OTel Collector: Metrics Received",
       "type": "stat",
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 19,
+        "w": 10,
+        "x": 14,
         "y": 0
       },
       "datasource": {
@@ -316,16 +291,8 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(otelcol_exporter_sent_spans[5m]))",
-          "legendFormat": "Exported Spans/s"
-        },
-        {
           "expr": "sum(rate(otelcol_exporter_sent_metric_points[5m]))",
           "legendFormat": "Exported Metrics/s"
-        },
-        {
-          "expr": "sum(rate(otelcol_exporter_send_failed_spans[5m]))",
-          "legendFormat": "Failed Spans/s"
         },
         {
           "expr": "sum(rate(otelcol_exporter_send_failed_metric_points[5m]))",
@@ -372,36 +339,6 @@
           }
         }
       }
-    },
-    {
-      "title": "Backend log volume by level",
-      "type": "timeseries",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 26
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
-        {
-          "expr": "sum by (detected_level) (count_over_time({service_name=\"ft-backend\"}[1m]))",
-          "legendFormat": "{{detected_level}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 50,
-            "lineWidth": 1
-          }
-        }
-      }
     }
   ],
   "schemaVersion": 39,
@@ -419,5 +356,5 @@
   },
   "title": "Platform Overview",
   "uid": "platform-overview",
-  "version": 3
+  "version": 4
 }

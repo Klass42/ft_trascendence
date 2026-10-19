@@ -14,7 +14,7 @@ AGENTS.md wins.
 - 42 final project, subject **v21.1 "Surprise"** (free choice — **no mandatory Pong**).
 - We're building a **Learning Management System**. Target **14 module points** (Major=2, Minor=1).
 - Monorepo: **Vite+React 19** frontend, **NestJS 10** backend, **Prisma + Postgres**, full
-  **OTel→Prometheus/Tempo/Loki/Grafana** observability. Node 22, pnpm 9.15, Nix devShells.
+  **OTel→Prometheus/Grafana** observability. Node 22, pnpm 9.15.
 - `MVP_DESIGN.md` is partly **stale** (says 18 pts / Next.js / old module names) — don't trust
   it over AGENTS.md.
 
@@ -28,7 +28,7 @@ AGENTS.md wins.
 - **Viacheslav** `@ViacheslavTrofymenko` → [`docs/planning/vtrofyme.md`](./docs/planning/vtrofyme.md) · **DevOps/Infra** · branch `vtrofyme`
 
 If you're working as one of them, that file is your brief. **App devs never touch `infra/`,
-`.github/`, `scripts/`, `Makefile`, `compose.yaml`, `flake.nix` — that's Viacheslav's.** Trunk is `master`; work on your
+`.github/`, `scripts/`, `Makefile`, `compose.yaml` — that's Viacheslav's.** Trunk is `master`; work on your
 branch and merge **personal → `staging` → `master`** (never straight to `master`). Combined plan +
 directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 
@@ -44,7 +44,7 @@ directory-ownership map: [`docs/planning/README.md`](./docs/planning/README.md).
 - Prefer the **Makefile** (`make`, `make down`, `make logs`, `make smoke`). The full stack +
   observability comes up with `make`; `compose.yaml` and `.env` sit in the repo root, so plain
   `docker compose …` works too. How it all fits: `docs/infra/README.md`.
-  Local Nix is optional **nix-portable** (`make dev` / `make ci`), not a system Nix install.
+  `make ci` runs the CI checks locally (Node 22 + pnpm, no Nix).
 - **Every tenant-scoped DB query must filter by `organizationId`** — a missing filter is a
   security bug, not a style nit.
 - Keep `import './telemetry/otel-sdk'` as the **first line of `apps/backend/src/main.ts`**.
