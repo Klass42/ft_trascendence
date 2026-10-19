@@ -22,6 +22,7 @@ import {
 import { ContentEditor } from './ContentEditor';
 import { RosterPage } from './RosterPage';
 import { CourseResourcesTab } from '@/features/resources';
+import styles from './CourseDetailPage.module.css';
 
 const COURSE_COLORS = [
   '#2563eb', '#0f766e', '#d97706', '#7c3aed',
@@ -45,7 +46,7 @@ export function CourseDetailPage() {
   const { update, isLoading: updating } = useUpdateCourse();
   const { remove, isLoading: deleting } = useDeleteCourse();
 
-  const { data: fullCourse, isLoading: courseLoading } = useCourseDetail(subjectId);
+  const { data: fullCourse, isLoading: courseLoading, refetch: refetchCourse } = useCourseDetail(subjectId);
   const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? subjectId : undefined);
   const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? subjectId : undefined);
   const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? subjectId : undefined);
@@ -58,7 +59,8 @@ export function CourseDetailPage() {
   const [editing, setEditing] = useState(false);
 
   if (
-    courseLoading ||
+    // Only the first load blanks the page; refetches after an edit keep it.
+    (courseLoading && !fullCourse) ||
     (fullCourse && (sectionsLoading || progressLoading || completedLoading))
   ) {
     return (
@@ -100,6 +102,7 @@ export function CourseDetailPage() {
       });
       setEditOpen(false);
       toast({ message: 'Curso actualizado', variant: 'success' });
+      refetchCourse();
     } catch {
       toast({ message: 'Error al actualizar el curso', variant: 'error' });
     }
@@ -110,6 +113,7 @@ export function CourseDetailPage() {
       if (!fullCourse) return;
       await update(fullCourse.id, { status });
       toast({ message: `Curso ${status === 'PUBLISHED' ? 'publicado' : status === 'ARCHIVED' ? 'archivado' : 'guardado como borrador'}`, variant: 'success' });
+      refetchCourse();
     } catch {
       toast({ message: 'Error al cambiar el estado', variant: 'error' });
     }
@@ -128,9 +132,10 @@ export function CourseDetailPage() {
 
   return (
     <div>
-      <div style={{ padding: '26px 40px', background: color, color: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+      {/* Background is the subject's generated colour; layout lives in the module. */}
+      <div className={styles.hero} style={{ background: color }}>
+        <div className={styles.heroTop}>
+          <div className={styles.heroHeading}>
             <button
               onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}
               style={{
@@ -154,7 +159,7 @@ export function CourseDetailPage() {
           </div>
 
           {fullCourse && (isAdmin || isTeacher) && (
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className={styles.heroActions}>
               {isAdmin && (
                 <Button variant="secondary" size="sm" onClick={openEdit}>
                   Editar

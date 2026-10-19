@@ -38,5 +38,5 @@ docker-data/
 uploads/
 
 # Design mockups (exported from design tool, not served)
-Frontend*/
+/Frontend*/
 .superpowers/

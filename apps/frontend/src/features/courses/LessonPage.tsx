@@ -2,7 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useCourseDetail, useLessonById, useCompletedLessons, useCompleteLesson } from '@/lib/api';
+import { Paperclip, ExternalLink } from 'lucide-react';
+import {
+  apiClient,
+  useCourseDetail,
+  useLessonById,
+  useCompletedLessons,
+  useCompleteLesson,
+  useProgress,
+} from '@/lib/api';
+import { useToast } from '@/components/ui';
 import styles from './LessonPage.module.css';
 
 export function LessonPage() {
@@ -12,10 +21,14 @@ export function LessonPage() {
   const { data: course } = useCourseDetail(subjectId);
   const { data: lesson, isLoading: lessonLoading, error: lessonErr } = useLessonById(lessonId);
   const { data: completedLessons } = useCompletedLessons(subjectId);
+  const { data: progress } = useProgress(subjectId);
   const { completeLesson, isLoading: completing } = useCompleteLesson();
+  const { toast } = useToast();
 
   const [isDone, setIsDone] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
+  // Subject progress after completing here (the API returns the new value).
+  const [pctOverride, setPctOverride] = useState<number | null>(null);
 
   useEffect(() => {
     if (completedLessons && lessonId) {
@@ -27,8 +40,9 @@ export function LessonPage() {
     if (!lessonId) return;
     setCompleteError(null);
     try {
-      await completeLesson(lessonId);
+      const result = await completeLesson(lessonId);
       setIsDone(true);
+      setPctOverride(result.progress);
     } catch {
       setCompleteError('Error al marcar la lección como completada');
     }
@@ -50,7 +64,16 @@ export function LessonPage() {
     );
   }
 
-  const pct = completedLessons && lessonId ? (isDone ? 100 : 0) : 0;
+  const pct = pctOverride ?? progress?.progress ?? 0;
+
+  const openAttachment = async (fileId: string) => {
+    try {
+      const { url } = await apiClient.get<{ url: string }>(`/files/${fileId}/url`);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast({ message: 'No se pudo abrir el adjunto', variant: 'error' });
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -105,36 +128,27 @@ export function LessonPage() {
       )}
 
       {lesson.attachments && lesson.attachments.length > 0 && (
-        <div style={{ marginBottom: 26 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+        <section className={styles.attachments} aria-labelledby="lesson-attachments">
+          <h2 id="lesson-attachments" className={styles.attachmentsTitle}>
             Adjuntos
-          </div>
-          {lesson.attachments.map((a) => (
-            <div
-              key={a.fileId}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '10px 14px',
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border-primary)',
-                borderRadius: 10,
-                marginBottom: 6,
-                fontSize: 14,
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              <span>📎</span>
-              <span>{a.file.originalName}</span>
-              {a.file.contentType && (
-                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  ({a.file.contentType})
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+          </h2>
+          <ul className={styles.attachmentList}>
+            {lesson.attachments.map((a) => (
+              <li key={a.fileId}>
+                <button
+                  type="button"
+                  className={styles.attachment}
+                  onClick={() => { void openAttachment(a.fileId); }}
+                  aria-label={`Abrir adjunto ${a.file.originalName}`}
+                >
+                  <Paperclip size={16} aria-hidden="true" />
+                  <span className={styles.attachmentName}>{a.file.originalName}</span>
+                  <ExternalLink size={14} aria-hidden="true" className={styles.attachmentIcon} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {isDone ? (
