@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, useCourses, useCreateCourse } from '@/lib/api';
 import type { CourseDTO, CohortStatus } from '@/lib/api';
 import { Button, Modal, FormField, useToast } from '@/components/ui';
@@ -24,21 +24,21 @@ function statusLabel(status: CohortStatus): string {
   return 'Planificado';
 }
 
-function CourseGrid({ courses, onOpen }: { courses: CourseDTO[]; onOpen: (id: string) => void }) {
+function CourseGrid({ courses }: { courses: CourseDTO[] }) {
   return (
     <div className={styles.courseGrid}>
       {courses.map((course) => {
         const color = hashToColor(course.name + course.academicYear);
         return (
-          <div
+          <Link
             key={course.id}
-            onClick={() => onOpen(course.id)}
+            to={`/courses/${course.id}`}
+            className={styles.courseCard}
             style={{
               background: 'var(--color-bg-secondary)',
               border: '1px solid var(--color-border-primary)',
               borderRadius: 15,
               overflow: 'hidden',
-              cursor: 'pointer',
             }}
           >
             <div style={{ height: 70, background: color, display: 'flex', alignItems: 'flex-end', padding: '12px 16px' }}>
@@ -53,7 +53,7 @@ function CourseGrid({ courses, onOpen }: { courses: CourseDTO[]; onOpen: (id: st
               <div style={{ fontWeight: 800, fontSize: 16 }}>{course.name}</div>
               <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 4 }}>{course.academicYear}</div>
             </div>
-          </div>
+          </Link>
         );
       })}
     </div>
@@ -91,6 +91,7 @@ export function CoursesPage() {
   const handleCreate = async () => {
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = 'El nombre es obligatorio';
+    else if (name.trim().length > 100) errors.name = 'El nombre no puede superar los 100 caracteres.';
     if (!/^\d{4}-\d{4}$/.test(academicYear.trim())) errors.academicYear = 'Usa el formato 2025-2026';
     if (!startsOn) errors.startsOn = 'La fecha de inicio es obligatoria';
     if (!endsOn) errors.endsOn = 'La fecha de fin es obligatoria';
@@ -121,7 +122,6 @@ export function CoursesPage() {
     return <div className={styles.status}>Error al cargar cursos: {error.message}</div>;
   }
 
-  const open = (id: string) => navigate(`/courses/${id}`);
   const createButton = isAdmin ? (
     <Button variant="primary" onClick={() => setModalOpen(true)}>+ Crear curso</Button>
   ) : null;
@@ -138,18 +138,18 @@ export function CoursesPage() {
       ) : isStudent ? (
         <>
           <h2 style={{ fontSize: 18, margin: '8px 0 12px' }}>Curso actual</h2>
-          {current.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>No tienes un curso activo</p> : <CourseGrid courses={current} onOpen={open} />}
+          {current.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>No tienes un curso activo</p> : <CourseGrid courses={current} />}
           <h2 style={{ fontSize: 18, margin: '28px 0 12px' }}>Cursos anteriores</h2>
-          {previous.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>Todavía no hay cursos anteriores</p> : <CourseGrid courses={previous} onOpen={open} />}
+          {previous.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>Todavía no hay cursos anteriores</p> : <CourseGrid courses={previous} />}
         </>
       ) : (
-        <CourseGrid courses={courses} onOpen={open} />
+        <CourseGrid courses={courses} />
       )}
 
       {isAdmin && (
         <Modal open={modalOpen} onClose={() => { setModalOpen(false); resetForm(); }} title="Crear curso" footer={<Button loading={creating} onClick={handleCreate}>Crear curso</Button>}>
           <FormField label="Nombre" error={fieldErrors.name} required>
-            {(field) => <input {...field} value={name} onChange={(event) => setName(event.target.value)} placeholder="1º A" style={inputStyle} />}
+            {(field) => <input {...field} value={name} maxLength={100} onChange={(event) => setName(event.target.value)} placeholder="1º A" style={inputStyle} />}
           </FormField>
           <div style={{ height: 12 }} />
           <FormField label="Año académico" error={fieldErrors.academicYear} required>

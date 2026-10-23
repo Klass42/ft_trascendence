@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button, Spinner } from '@/components/ui';
-import { useMySubjects, useForumThreads } from '@/lib/api';
+import { subjectSelectorLabel, useMySubjects, useForumThreads } from '@/lib/api';
 import { NewThreadForm } from './NewThreadForm';
 import { formatDateTime, initialsOf } from './helpers';
+import styles from './ForumsPage.module.css';
 
 /**
  * Course forums, connected to the real API.
@@ -41,16 +42,8 @@ export function ForumsPage() {
   } = useForumThreads(courseId, debounced);
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 860 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          flexWrap: 'wrap',
-          marginBottom: 20,
-        }}
-      >
+    <div className={styles.page}>
+      <div className={styles.header}>
         <h1
           style={{
             fontSize: 26,
@@ -64,6 +57,8 @@ export function ForumsPage() {
 
         {courses && courses.length > 0 && (
           <select
+            className={styles.courseSelect}
+            aria-label="Curso"
             value={courseId ?? ''}
             onChange={(e) => {
               setCourseId(e.target.value);
@@ -71,7 +66,6 @@ export function ForumsPage() {
               setSearch('');
             }}
             style={{
-              marginLeft: 'auto',
               padding: '8px 12px',
               borderRadius: 9,
               border: '1px solid var(--color-border-primary)',
@@ -83,7 +77,7 @@ export function ForumsPage() {
           >
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
-                {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
+                {subjectSelectorLabel(c)}
               </option>
             ))}
           </select>
@@ -162,20 +156,10 @@ export function ForumsPage() {
           )}
 
           {threads?.map((t) => (
-            <div
+            <Link
               key={t.id}
-              onClick={() => navigate(`/forums/${t.id}`)}
-              style={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border-primary)',
-                borderRadius: 13,
-                padding: '15px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                marginBottom: 11,
-                cursor: 'pointer',
-              }}
+              to={`/forums/${t.id}`}
+              className={styles.threadCard}
             >
               <div
                 style={{
@@ -194,11 +178,12 @@ export function ForumsPage() {
               >
                 {initialsOf(t.author?.name)}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className={styles.threadText}>
                 <div
+                  className={styles.threadTitle}
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, overflowWrap: 'anywhere' }}>
                     {t.title}
                   </span>
                   {t.pinned && (
@@ -229,7 +214,7 @@ export function ForumsPage() {
                 </div>
               </div>
               <span style={{ color: 'var(--color-text-muted)' }}>→</span>
-            </div>
+            </Link>
           ))}
         </>
       )}

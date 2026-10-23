@@ -136,6 +136,7 @@ export function ActivityForm({
           <Input
             {...field}
             value={title}
+            maxLength={200}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Ej. Examen mixto · unidad 3"
           />

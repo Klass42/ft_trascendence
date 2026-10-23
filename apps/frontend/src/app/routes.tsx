@@ -231,25 +231,31 @@ const routes: RouteObject[] = [
       {
         path: '/activities',
         element: (
-          <Suspense fallback={<PageLoader />}>
-            <ActivitiesPage />
-          </Suspense>
+          <ProtectedRoute roles={['STUDENT', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <ActivitiesPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {
         path: '/forums',
         element: (
-          <Suspense fallback={<PageLoader />}>
-            <ForumsPage />
-          </Suspense>
+          <ProtectedRoute roles={['STUDENT', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <ForumsPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {
         path: '/forums/:threadId',
         element: (
-          <Suspense fallback={<PageLoader />}>
-            <ThreadPage />
-          </Suspense>
+          <ProtectedRoute roles={['STUDENT', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <ThreadPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {
@@ -263,9 +269,11 @@ const routes: RouteObject[] = [
       {
         path: '/analytics',
         element: (
-          <Suspense fallback={<PageLoader />}>
-            <AnalyticsPage />
-          </Suspense>
+          <ProtectedRoute roles={['ADMIN', 'TEACHER']}>
+            <Suspense fallback={<PageLoader />}>
+              <AnalyticsPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {
@@ -382,9 +390,9 @@ const routes: RouteObject[] = [
         <h1 style={{ fontSize: '4rem', marginBottom: '1rem', color: 'var(--color-text-primary)' }}>
           404
         </h1>
-        <p>Page not found.</p>
+        <p>Página no encontrada.</p>
         <a href="/dashboard" style={{ marginTop: '1rem', color: 'var(--color-accent-primary)' }}>
-          Go to Dashboard
+          Ir al panel
         </a>
       </div>
     ),

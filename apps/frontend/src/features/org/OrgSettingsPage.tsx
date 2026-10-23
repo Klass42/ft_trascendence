@@ -157,6 +157,7 @@ export function OrgSettingsPage() {
             <Input
               label="Nombre"
               value={editName}
+              maxLength={100}
               onChange={(e) => {
                 setEditName(e.target.value);
                 if (fieldErrors.name) {

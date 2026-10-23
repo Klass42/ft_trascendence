@@ -6,6 +6,7 @@ import {
   useSubmissionsOverTime,
   useGradeDistribution,
   downloadAnalyticsCsv,
+  subjectSelectorLabel,
 } from '@/lib/api';
 import { KpiTiles } from './KpiTiles';
 import { SubmissionsLineChart } from './charts/SubmissionsLineChart';
@@ -95,7 +96,7 @@ export function AnalyticsPage() {
             >
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
+                  {subjectSelectorLabel(c)}
                 </option>
               ))}
             </select>

@@ -1,8 +1,12 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { apiClient, useAuth } from '@/lib/api';
+import { ApiError, apiClient, useAuth } from '@/lib/api';
 import type { CourseDTO, PublicationStatus, SubjectDTO, SubjectStaffRole } from '@/lib/api';
 import { Button, FormField, Modal, useToast } from '@/components/ui';
+import { mapApiValidationErrors } from '@/lib/form-errors';
+import styles from './CourseCohortPage.module.css';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const inputStyle: CSSProperties = {
   width: '100%', padding: '8px 12px', borderRadius: 8,
@@ -27,6 +31,7 @@ export function CourseCohortPage() {
   const [staffEmail, setStaffEmail] = useState('');
   const [staffSubjectId, setStaffSubjectId] = useState('');
   const [staffRole, setStaffRole] = useState<SubjectStaffRole>('TEACHER');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const reload = () => {
@@ -48,7 +53,12 @@ export function CourseCohortPage() {
   useEffect(() => { reload(); }, [courseId]);
 
   const createSubject = async () => {
-    if (!courseId || !title.trim()) return;
+    if (!courseId) return;
+    if (!title.trim()) {
+      setFieldErrors({ title: 'El título es obligatorio.' });
+      return;
+    }
+    setFieldErrors({});
     setBusy(true);
     try {
       await apiClient.post(`/courses/${courseId}/subjects`, { title: title.trim(), status: 'DRAFT' satisfies PublicationStatus });
@@ -56,7 +66,14 @@ export function CourseCohortPage() {
       setTitle('');
       toast({ message: 'Asignatura creada', variant: 'success' });
       reload();
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        if (mapped.fields.title) {
+          setFieldErrors({ title: mapped.fields.title });
+          return;
+        }
+      }
       toast({ message: 'No se pudo crear la asignatura', variant: 'error' });
     } finally {
       setBusy(false);
@@ -70,15 +87,28 @@ export function CourseCohortPage() {
 
   const enrollStudent = async () => {
     if (!courseId || !memberEmail.trim()) return;
+    const email = memberEmail.trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      setFieldErrors({ memberEmail: 'Introduce un correo electrónico válido.' });
+      return;
+    }
+    setFieldErrors({});
     setBusy(true);
     try {
-      const userId = await lookupUserId(memberEmail.trim());
+      const userId = await lookupUserId(email);
       await apiClient.post(`/courses/${courseId}/members`, { userId });
       setMemberOpen(false);
       setMemberEmail('');
       toast({ message: 'Alumno matriculado', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo matricular al alumno', variant: 'error' });
+    } catch (err) {
+      if (err instanceof ApiError && err.isNotFound) {
+        setFieldErrors({ memberEmail: 'No se encontró una cuenta con ese correo.' });
+      } else if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setFieldErrors({ memberEmail: mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.' });
+      } else {
+        toast({ message: 'No se pudo matricular al alumno', variant: 'error' });
+      }
     } finally {
       setBusy(false);
     }
@@ -86,15 +116,28 @@ export function CourseCohortPage() {
 
   const assignTeacher = async () => {
     if (!staffSubjectId || !staffEmail.trim()) return;
+    const email = staffEmail.trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      setFieldErrors({ staffEmail: 'Introduce un correo electrónico válido.' });
+      return;
+    }
+    setFieldErrors({});
     setBusy(true);
     try {
-      const userId = await lookupUserId(staffEmail.trim());
+      const userId = await lookupUserId(email);
       await apiClient.post(`/subjects/${staffSubjectId}/staff`, { userId, role: staffRole });
       setStaffOpen(false);
       setStaffEmail('');
       toast({ message: 'Profesor asignado', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo asignar al profesor', variant: 'error' });
+    } catch (err) {
+      if (err instanceof ApiError && err.isNotFound) {
+        setFieldErrors({ staffEmail: 'No se encontró una cuenta con ese correo.' });
+      } else if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setFieldErrors({ staffEmail: mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.' });
+      } else {
+        toast({ message: 'No se pudo asignar al profesor', variant: 'error' });
+      }
     } finally {
       setBusy(false);
     }
@@ -104,17 +147,17 @@ export function CourseCohortPage() {
   if (error || !course) return <div style={{ padding: 40 }}>{error || 'Curso no encontrado'}</div>;
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 900 }}>
+    <div className={styles.page}>
       <button onClick={() => navigate('/courses')} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', marginBottom: 12 }}>
         ← Mis cursos
       </button>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28 }}>{course.name}</h1>
+      <div className={styles.header}>
+        <div className={styles.heading}>
+          <h1 className={styles.title}>{course.name}</h1>
           <p style={{ color: 'var(--color-text-muted)' }}>{course.academicYear}</p>
         </div>
         {isAdmin && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className={styles.actions}>
             <Button onClick={() => setSubjectOpen(true)}>Crear asignatura</Button>
             <Button variant="secondary" onClick={() => setMemberOpen(true)}>Matricular alumno</Button>
             <Button variant="secondary" onClick={() => setStaffOpen(true)}>Asignar profesor</Button>
@@ -136,23 +179,23 @@ export function CourseCohortPage() {
               }}
             >
               <strong>{subject.title}</strong>
-              <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{subject.status === 'PUBLISHED' ? 'Publicada' : subject.status === 'ARCHIVED' ? 'Archivada' : 'Borrador'}</div>
+              <span className={styles.subjectStatus}>{subject.status === 'PUBLISHED' ? 'Publicada' : subject.status === 'ARCHIVED' ? 'Archivada' : 'Borrador'}</span>
             </button>
           ))}
         </div>
       )}
 
-      <Modal open={subjectOpen} onClose={() => setSubjectOpen(false)} title="Crear asignatura" footer={<Button loading={busy} onClick={createSubject}>Crear</Button>}>
-        <FormField label="Título" required>
-          {(field) => <input {...field} value={title} onChange={(event) => setTitle(event.target.value)} style={inputStyle} />}
+      <Modal open={subjectOpen} onClose={() => { setSubjectOpen(false); setFieldErrors({}); }} title="Crear asignatura" footer={<Button loading={busy} onClick={createSubject}>Crear</Button>}>
+        <FormField label="Título" error={fieldErrors.title} required>
+          {(field) => <input {...field} value={title} maxLength={200} onChange={(event) => { setTitle(event.target.value); setFieldErrors({}); }} style={inputStyle} />}
         </FormField>
       </Modal>
-      <Modal open={memberOpen} onClose={() => setMemberOpen(false)} title="Matricular alumno" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
-        <FormField label="Email del alumno" required>
-          {(field) => <input {...field} value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} style={inputStyle} />}
+      <Modal open={memberOpen} onClose={() => { setMemberOpen(false); setFieldErrors({}); }} title="Matricular alumno" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
+        <FormField label="Correo electrónico del alumno" error={fieldErrors.memberEmail} required>
+          {(field) => <input {...field} type="email" maxLength={254} value={memberEmail} onChange={(event) => { setMemberEmail(event.target.value); setFieldErrors({}); }} style={inputStyle} />}
         </FormField>
       </Modal>
-      <Modal open={staffOpen} onClose={() => setStaffOpen(false)} title="Asignar profesor" footer={<Button loading={busy} onClick={assignTeacher}>Asignar</Button>}>
+      <Modal open={staffOpen} onClose={() => { setStaffOpen(false); setFieldErrors({}); }} title="Asignar profesor" footer={<Button loading={busy} onClick={assignTeacher}>Asignar</Button>}>
         <FormField label="Asignatura" required>
           {(field) => (
             <select {...field} value={staffSubjectId} onChange={(event) => setStaffSubjectId(event.target.value)} style={inputStyle}>
@@ -161,8 +204,8 @@ export function CourseCohortPage() {
           )}
         </FormField>
         <div style={{ height: 12 }} />
-        <FormField label="Email" required>
-          {(field) => <input {...field} value={staffEmail} onChange={(event) => setStaffEmail(event.target.value)} style={inputStyle} />}
+        <FormField label="Correo electrónico" error={fieldErrors.staffEmail} required>
+          {(field) => <input {...field} type="email" maxLength={254} value={staffEmail} onChange={(event) => { setStaffEmail(event.target.value); setFieldErrors({}); }} style={inputStyle} />}
         </FormField>
         <div style={{ height: 12 }} />
         <FormField label="Rol">
