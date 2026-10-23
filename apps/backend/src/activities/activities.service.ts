@@ -3,12 +3,14 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
   Activity,
   Prisma,
   PublicationStatus,
+  NotificationType,
   Question,
   QuestionKind,
   Subject,
@@ -20,12 +22,16 @@ import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ActivitiesService {
+  private readonly logger = new Logger(ActivitiesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   // ─── Tenancy / staff gates ────────────────────────────────────────────────
@@ -131,7 +137,13 @@ export class ActivitiesService {
         where: { id: created.id },
         include: { questions: { orderBy: { order: 'asc' } } },
       });
+      if (created.status === PublicationStatus.PUBLISHED) {
+        await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_PUBLISHED, `Nueva tarea publicada: ${created.title} en ${subject.title}`, created.id);
+      }
       return refreshed ?? created;
+    }
+    if (created.status === PublicationStatus.PUBLISHED) {
+      await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_PUBLISHED, `Nueva tarea publicada: ${created.title} en ${subject.title}`, created.id);
     }
     return created;
   }
@@ -219,11 +231,30 @@ export class ActivitiesService {
         dto.fileIds,
       );
     }
+    const relevantChange =
+      dto.title !== undefined || dto.type !== undefined ||
+      dto.openAt !== undefined || dto.dueAt !== undefined || dto.closeAt !== undefined ||
+      dto.attemptsAllowed !== undefined || dto.timeLimitSec !== undefined ||
+      dto.config !== undefined || dto.fileIds !== undefined || dto.status !== undefined;
+    if (relevantChange && updated.status === PublicationStatus.PUBLISHED) {
+      const publishedNow = activity.status !== PublicationStatus.PUBLISHED;
+      await this.notifyStudents(
+        subject,
+        actingUserId,
+        publishedNow ? NotificationType.ACTIVITY_PUBLISHED : NotificationType.ACTIVITY_CHANGED,
+        publishedNow
+          ? `Nueva tarea publicada: ${updated.title} en ${subject.title}`
+          : `Tarea modificada: ${updated.title} en ${subject.title}`,
+        updated.id,
+      );
+    } else if (activity.status === PublicationStatus.PUBLISHED && updated.status !== PublicationStatus.PUBLISHED && dto.status !== undefined) {
+      await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_CHANGED, `La tarea ya no está disponible: ${activity.title} en ${subject.title}`, activity.id, `/courses/${subject.courseId}/subjects/${subject.id}`);
+    }
     return updated;
   }
 
   async remove(activityId: string, actingUserId: string) {
-    await this.requireActivity(activityId, actingUserId, true);
+    const { activity, subject } = await this.requireActivity(activityId, actingUserId, true);
     const attempts = await this.prisma.attempt.count({
       where: { activityId },
     });
@@ -231,6 +262,9 @@ export class ActivitiesService {
       throw new ConflictException('archivar en su lugar');
     }
     await this.prisma.activity.delete({ where: { id: activityId } });
+    if (activity.status === PublicationStatus.PUBLISHED) {
+      await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_REMOVED, `Tarea eliminada: ${activity.title} en ${subject.title}`, activity.id, `/courses/${subject.courseId}/subjects/${subject.id}`);
+    }
   }
 
   /** Activities of courses the actor staffs, newest first (template library). */
@@ -299,6 +333,7 @@ export class ActivitiesService {
       },
     });
     await this.recomputeMaxScore(activityId);
+    await this.notifyQuestionChange(activityId, actingUserId);
     return question;
   }
 
@@ -334,6 +369,7 @@ export class ActivitiesService {
       },
     });
     await this.recomputeMaxScore(question.activityId);
+    await this.notifyQuestionChange(question.activityId, actingUserId);
     return updated;
   }
 
@@ -342,6 +378,44 @@ export class ActivitiesService {
     await this.assertNoAttempts(question.activityId);
     await this.prisma.question.delete({ where: { id: questionId } });
     await this.recomputeMaxScore(question.activityId);
+    await this.notifyQuestionChange(question.activityId, actingUserId);
+  }
+
+  private async notifyQuestionChange(activityId: string, actingUserId: string) {
+    try {
+      const { activity, subject } = await this.requireActivity(activityId, actingUserId, true);
+      if (activity.status !== PublicationStatus.PUBLISHED) return;
+      await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_CHANGED, `Tarea modificada: ${activity.title} en ${subject.title}`, activityId);
+    } catch (error) {
+      this.logger.error('No se pudo preparar la notificación de cambios en la tarea', error instanceof Error ? error.stack : undefined);
+    }
+  }
+
+  private async notifyStudents(
+    subject: Subject,
+    actingUserId: string,
+    type: NotificationType,
+    title: string,
+    activityId: string,
+    link?: string,
+  ) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      async () => {
+        const memberships = await this.prisma.courseMembership.findMany({
+          where: {
+            courseId: subject.courseId,
+            course: { organizationId: subject.organizationId },
+            user: { organizationId: subject.organizationId, role: 'STUDENT' },
+          },
+          select: { userId: true },
+        });
+        return memberships.map(({ userId }) => userId);
+      },
+      type,
+      { title, link: link ?? `/activities?subjectId=${subject.id}&activityId=${activityId}` },
+      { organizationId: subject.organizationId, actorId: actingUserId },
+    );
   }
 
   /** Reorder every question of an activity. The provided id set must match the
@@ -376,6 +450,7 @@ export class ActivitiesService {
       ),
     );
     await this.recomputeMaxScore(activityId);
+    await this.notifyQuestionChange(activityId, actingUserId);
     return this.prisma.question.findMany({
       where: { activityId },
       orderBy: { order: 'asc' },

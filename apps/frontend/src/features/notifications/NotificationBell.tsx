@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useNotifications } from './NotificationsProvider';
-import { dotColor, formatRelativeTime } from './display';
+import {
+  dotColor,
+  formatRelativeTime,
+  notificationIcon,
+  notificationTypeLabel,
+} from './display';
 import styles from './NotificationBell.module.css';
 
 /**
@@ -67,29 +72,31 @@ export function NotificationBell() {
             {recent.length === 0 ? (
               <div className={styles.empty}>No tienes notificaciones</div>
             ) : (
-              recent.map((n) => (
-                <button
-                  key={n.id}
-                  className={`${styles.item} ${n.read ? '' : styles.unreadItem}`}
-                  onClick={() => {
-                    if (!n.read) markRead(n.id);
-                    if (n.link) navigate(n.link);
-                    setOpen(false);
-                  }}
-                >
-                  <span
-                    className={styles.dot}
-                    style={{ background: dotColor(n.type) }}
-                  />
-                  <span className={styles.itemBody}>
-                    <span className={styles.itemTitle}>{n.title}</span>
-                    {n.body && <span className={styles.itemText}>{n.body}</span>}
-                    <span className={styles.itemTime}>
-                      {formatRelativeTime(n.createdAt)}
+              recent.map((n) => {
+                const Icon = notificationIcon(n.type);
+                return (
+                  <button
+                    key={n.id}
+                    className={`${styles.item} ${n.read ? '' : styles.unreadItem}`}
+                    onClick={() => {
+                      if (!n.read) markRead(n.id);
+                      if (n.link) navigate(n.link);
+                      setOpen(false);
+                    }}
+                    aria-label={`${notificationTypeLabel(n.type)}: ${n.title}`}
+                  >
+                    <Icon size={16} aria-hidden="true" style={{ color: dotColor(n.type), flex: 'none', marginTop: 2 }} />
+                    <span className={styles.itemBody}>
+                      <span className={styles.itemTitle}>{n.title}</span>
+                      <span className={styles.itemType}>{notificationTypeLabel(n.type)}</span>
+                      {n.body && <span className={styles.itemText}>{n.body}</span>}
+                      <span className={styles.itemTime}>
+                        {formatRelativeTime(n.createdAt)}
+                      </span>
                     </span>
-                  </span>
-                </button>
-              ))
+                  </button>
+                );
+              })
             )}
           </div>
 

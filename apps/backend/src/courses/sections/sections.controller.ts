@@ -29,7 +29,7 @@ export class SectionsController {
     @Body() dto: CreateSectionDto,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);
-    return this.sectionsService.create(subjectId, user.organizationId, dto);
+    return this.sectionsService.create(subjectId, user.organizationId, dto, user.userId);
   }
 
   @Get()
@@ -48,7 +48,12 @@ export class SectionsController {
     @Body() dto: OrderedIdsDto,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);
-    await this.sectionsService.reorder(subjectId, user.organizationId, dto.orderedIds);
+    await this.sectionsService.reorder(
+      subjectId,
+      user.organizationId,
+      dto.orderedIds,
+      user.userId,
+    );
     return { reordered: true };
   }
 
@@ -70,7 +75,7 @@ export class SectionsController {
     @Body() dto: UpdateSectionDto,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);
-    return this.sectionsService.update(subjectId, id, user.organizationId, dto);
+    return this.sectionsService.update(subjectId, id, user.organizationId, dto, user.userId);
   }
 
   @Delete(':id')
@@ -80,7 +85,7 @@ export class SectionsController {
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);
-    await this.sectionsService.delete(subjectId, id, user.organizationId);
+    await this.sectionsService.delete(subjectId, id, user.organizationId, user.userId);
     return { deleted: true };
   }
 }

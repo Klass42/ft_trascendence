@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { NotificationType } from '@prisma/client';
 import { UsersService } from '../users.service';
 import { SearchUsersDto } from '../dto/search-users.dto';
 import type { NotificationsService } from '../../notifications/notifications.service';
@@ -26,13 +27,24 @@ const mkPrisma = () => ({
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: ReturnType<typeof mkPrisma>;
-  let notifications: { emit: jest.Mock };
+  let notifications: { emit: jest.Mock; emitMany: jest.Mock };
   const previousNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = mkPrisma();
-    notifications = { emit: jest.fn().mockResolvedValue({}) };
+    notifications = {
+      emit: jest.fn().mockResolvedValue({}),
+      emitMany: jest.fn(async (
+        recipients: readonly string[] | (() => Promise<readonly string[]>),
+        type: NotificationType,
+        payload: { title: string; body?: string; link?: string },
+      ) => {
+        if (Array.isArray(recipients)) {
+          await Promise.all(recipients.map((userId) => notifications.emit(userId, type, payload)));
+        }
+      }),
+    };
     service = new UsersService(prisma, notifications as unknown as NotificationsService);
     process.env.NODE_ENV = 'development';
   });
@@ -114,6 +126,19 @@ describe('UsersService', () => {
       (prisma.user.update as jest.Mock).mockResolvedValue({ ...mockUser, name: 'New' });
       const r = await service.update('user-student-0001', { name: 'New' }, ORG_ID, ADMIN_ID);
       expect(r.name).toBe('New');
+    });
+    it('notifies the affected user when an admin changes their role', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.update as jest.Mock).mockResolvedValue({ ...mockUser, role: 'TEACHER' });
+
+      await service.update(mockUser.id, { role: 'TEACHER' }, ORG_ID, ADMIN_ID);
+
+      expect(notifications.emitMany).toHaveBeenCalledWith(
+        [mockUser.id],
+        NotificationType.USER_CHANGED,
+        { title: 'Tu rol ha cambiado', body: 'Tu nuevo rol es profesor.', link: '/profile' },
+        { organizationId: ORG_ID, actorId: ADMIN_ID },
+      );
     });
     it('throws 403 org mismatch', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
@@ -265,7 +290,7 @@ describe('UsersService', () => {
       mkFriendshipCreate.mockResolvedValue({ id: 'f1', requesterId: ADMIN_ID, addresseeId: 'user-student-0001', status: 'PENDING', createdAt: new Date() });
       const r = await service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID);
       expect(r.status).toBe('PENDING');
-      expect(notifications.emit).toHaveBeenCalledWith('user-student-0001', 'FRIEND_REQUEST', expect.objectContaining({ link: '/friends' }));
+      expect(notifications.emit).toHaveBeenCalledWith('user-student-0001', 'FRIEND_REQUEST', expect.objectContaining({ link: '/profile' }));
     });
 
     it('throws 409 if friendship already exists', async () => {
