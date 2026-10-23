@@ -123,14 +123,6 @@
   background: var(--color-accent-muted);
 }
 
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: none;
-  margin-top: 5px;
-}
-
 .itemBody {
   display: flex;
   flex-direction: column;
@@ -143,6 +135,11 @@
   font-weight: 700;
   color: var(--color-text-primary);
   line-height: 1.35;
+}
+
+.itemType {
+  font-size: 10.5px;
+  color: var(--color-text-muted);
 }
 
 .itemText {

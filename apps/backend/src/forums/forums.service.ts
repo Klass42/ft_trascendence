@@ -1,4 +1,5 @@
 import {
+  Logger,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ const AUTHOR_SELECT = {
 
 @Injectable()
 export class ForumsService {
+  private readonly logger = new Logger(ForumsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
@@ -50,15 +52,15 @@ export class ForumsService {
     threadId: string,
     actingUserId: string,
     staffOnly = false,
-  ): Promise<{ thread: ForumThread }> {
+  ) {
     const thread = await this.prisma.forumThread.findUnique({
       where: { id: threadId },
     });
     if (!thread) {
       throw new NotFoundException(`Thread ${threadId} not found`);
     }
-    await this.requireSubject(thread.subjectId, actingUserId, staffOnly);
-    return { thread };
+    const access = await this.requireSubject(thread.subjectId, actingUserId, staffOnly);
+    return { thread, access };
   }
 
   // ---------------------------------------------------------------------------
@@ -88,11 +90,11 @@ export class ForumsService {
     actingUserId: string,
     dto: CreateThreadDto,
   ) {
-    await this.requireSubject(subjectId, actingUserId);
+    const access = await this.requireSubject(subjectId, actingUserId);
 
     const body = dto.body?.trim();
 
-    return this.prisma.forumThread.create({
+    const thread = await this.prisma.forumThread.create({
       data: {
         subjectId,
         authorId: actingUserId,
@@ -108,8 +110,8 @@ export class ForumsService {
         _count: { select: { posts: true } },
       },
     });
-    // No notification on thread creation: the only "relevant user" is the
-    // thread author, and we never notify the actor about their own action.
+    await this.notifyNewThread(thread, access.subject.organizationId, actingUserId);
+    return thread;
   }
 
   /** A thread with its posts nested into a reply tree, scoped to a member. */
@@ -149,13 +151,13 @@ export class ForumsService {
 
   /** Toggle a thread's pinned flag (course staff only). */
   async togglePin(threadId: string, actingUserId: string) {
-    const { thread } = await this.requireThreadMembership(
+    const { thread, access } = await this.requireThreadMembership(
       threadId,
       actingUserId,
       true,
     );
 
-    return this.prisma.forumThread.update({
+    const updated = await this.prisma.forumThread.update({
       where: { id: threadId },
       data: { pinned: !thread.pinned },
       include: {
@@ -163,6 +165,29 @@ export class ForumsService {
         _count: { select: { posts: true } },
       },
     });
+    if (!thread.pinned && thread.authorId) {
+      await this.notifications.emitMany(
+        [thread.authorId],
+        NotificationType.FORUM_THREAD,
+        { title: 'Tu hilo se ha fijado', body: `«${thread.title}» aparece destacado en el foro.`, link: `/forums/${thread.id}` },
+        { organizationId: access.subject.organizationId, actorId: actingUserId },
+      );
+    }
+    return updated;
+  }
+
+  /** Delete a thread (staff only) and notify its author after deletion. */
+  async deleteThread(threadId: string, actingUserId: string) {
+    const { thread, access } = await this.requireThreadMembership(threadId, actingUserId, true);
+    await this.prisma.forumThread.delete({ where: { id: threadId } });
+    if (thread.authorId) {
+      await this.notifications.emitMany(
+        [thread.authorId],
+        NotificationType.FORUM_THREAD,
+        { title: 'Tu hilo se ha eliminado', body: `«${thread.title}» ya no está en el foro.`, link: '/forums' },
+        { organizationId: access.subject.organizationId, actorId: actingUserId },
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -260,20 +285,39 @@ export class ForumsService {
 
     if (recipients.size === 0) return;
 
-    const actor = await this.prisma.user.findUnique({
-      where: { id: actingUserId },
-      select: { name: true },
-    });
-    const who = actor?.name ?? 'Alguien';
-
-    await Promise.all(
-      [...recipients].map((userId) =>
-        this.notifications.emit(userId, NotificationType.FORUM_REPLY, {
+    try {
+      const [actor, subject] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: actingUserId }, select: { name: true } }),
+        this.prisma.subject.findFirst({ where: { id: thread.subjectId }, select: { organizationId: true } }),
+      ]);
+      if (!subject) return;
+      await this.notifications.emitMany(
+        [...recipients],
+        NotificationType.FORUM_REPLY,
+        {
           title: 'Nueva respuesta en el foro',
-          body: `${who} respondió en «${thread.title}»`,
+          body: `${actor?.name ?? 'Alguien'} respondió en «${thread.title}»`,
           link: `/forums/${thread.id}`,
-        }),
-      ),
+        },
+        { organizationId: subject.organizationId, actorId: actingUserId },
+      );
+    } catch (error) {
+      this.logger.error('No se pudo preparar la notificación de respuesta en el foro', error instanceof Error ? error.stack : undefined);
+    }
+  }
+
+  private async notifyNewThread(thread: ForumThread, organizationId: string, actingUserId: string) {
+    await this.notifications.emitMany(
+      async () => {
+        const staff = await this.prisma.subjectStaff.findMany({
+          where: { subjectId: thread.subjectId, subject: { organizationId }, user: { organizationId } },
+          select: { userId: true },
+        });
+        return staff.map(({ userId }) => userId);
+      },
+      NotificationType.FORUM_THREAD,
+      { title: 'Nuevo hilo en el foro', body: `Se ha creado «${thread.title}».`, link: `/forums/${thread.id}` },
+      { organizationId, actorId: actingUserId },
     );
   }
 

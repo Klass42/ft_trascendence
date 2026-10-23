@@ -84,7 +84,7 @@ export class UsersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthUser) {
-    return this.usersService.create(dto, user.organizationId);
+    return this.usersService.create(dto, user.organizationId, user.userId);
   }
 
   @Patch(':id')

@@ -27,7 +27,7 @@ describe('course-content controller authorization', () => {
     expect(access.assertSubjectStaff).toHaveBeenCalledWith(SUBJECT_ID, ASSISTANT);
     expect(sections.create).toHaveBeenCalledWith(SUBJECT_ID, ASSISTANT.organizationId, {
       title: 'Week 1',
-    });
+    }, ASSISTANT.userId);
   });
 
   it('checks subject readability before exposing section lessons', async () => {

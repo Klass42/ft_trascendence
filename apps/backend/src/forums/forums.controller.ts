@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -63,5 +64,11 @@ export class ForumsController {
   @Patch('threads/:id/pin')
   async togglePin(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.forums.togglePin(id, user.userId);
+  }
+
+  @Delete('threads/:id')
+  async deleteThread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.forums.deleteThread(id, user.userId);
+    return { deleted: true };
   }
 }

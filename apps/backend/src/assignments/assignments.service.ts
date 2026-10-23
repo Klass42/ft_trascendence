@@ -3,17 +3,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Subject } from '@prisma/client';
+import { NotificationType, Subject } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CourseAccessService, SubjectAccess } from '../courses/course-access.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   private async requireSubject(
@@ -103,7 +105,7 @@ export class AssignmentsService {
     const fileIds = dto.fileIds ?? [];
     await this.assertOwnedFiles(fileIds, subject.organizationId, actingUserId);
 
-    return this.prisma.assignment.create({
+    const assignment = await this.prisma.assignment.create({
       data: {
         subjectId,
         title: dto.title,
@@ -117,6 +119,8 @@ export class AssignmentsService {
       },
       include: AssignmentsService.WITH_FILES,
     });
+    await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_PUBLISHED, `Nueva tarea publicada: ${assignment.title} en ${subject.title}`);
+    return assignment;
   }
 
   /** List every assignment of a course (any member), with attachments. */
@@ -182,7 +186,7 @@ export class AssignmentsService {
       );
     }
 
-    return this.prisma.assignment.update({
+    const updated = await this.prisma.assignment.update({
       where: { id: assignmentId },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
@@ -201,16 +205,39 @@ export class AssignmentsService {
       },
       include: AssignmentsService.WITH_FILES,
     });
+    await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_CHANGED, `Tarea modificada: ${updated.title} en ${subject.title}`);
+    return updated;
   }
 
   async remove(assignmentId: string, actingUserId: string) {
-    await this.requireAssignmentMembership(
+    const { assignment, subject } = await this.requireAssignmentMembership(
       assignmentId,
       actingUserId,
       true,
     );
 
     await this.prisma.assignment.delete({ where: { id: assignmentId } });
+    await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_REMOVED, `Tarea eliminada: ${assignment.title} en ${subject.title}`);
+  }
+
+  private async notifyStudents(subject: Subject, actorId: string, type: NotificationType, title: string) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      async () => {
+        const memberships = await this.prisma.courseMembership.findMany({
+          where: {
+            courseId: subject.courseId,
+            course: { organizationId: subject.organizationId },
+            user: { organizationId: subject.organizationId, role: 'STUDENT' },
+          },
+          select: { userId: true },
+        });
+        return memberships.map(({ userId }) => userId);
+      },
+      type,
+      { title, link: `/courses/${subject.courseId}/subjects/${subject.id}` },
+      { organizationId: subject.organizationId, actorId },
+    );
   }
 
   /** Detach a single prompt attachment (staff only). Idempotent. */

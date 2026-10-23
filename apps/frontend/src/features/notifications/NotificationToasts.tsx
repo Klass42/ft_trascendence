@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell } from 'lucide-react';
 import type { NotificationDTO } from '@/lib/api';
-import { dotColor } from './display';
+import { dotColor, notificationIcon, notificationTypeLabel } from './display';
 
 interface NotificationToastsProps {
   toasts: NotificationDTO[];
@@ -32,7 +31,9 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
         maxWidth: 'min(360px, calc(100vw - 40px))',
       }}
     >
-      {toasts.map((n) => (
+      {toasts.map((n) => {
+        const Icon = notificationIcon(n.type);
+        return (
         <div
           key={n.id}
           role="alert"
@@ -62,7 +63,7 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
               marginTop: 1,
             }}
           >
-            <Bell size={17} />
+            <Icon size={17} />
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -74,6 +75,9 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
               }}
             >
               {n.title}
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 2 }}>
+              {notificationTypeLabel(n.type)}
             </div>
             {n.body && (
               <div
@@ -108,7 +112,8 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
             ×
           </button>
         </div>
-      ))}
+        );
+      })}
       <style>{`@keyframes notif-toast-in {
         from { opacity: 0; transform: translateY(-8px); }
         to { opacity: 1; transform: translateY(0); }

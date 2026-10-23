@@ -31,7 +31,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    return this.lessonsService.create(sectionId, user.organizationId, dto);
+    return this.lessonsService.create(sectionId, user.organizationId, dto, user.userId);
   }
 
   @Get('sections/:sectionId/lessons')
@@ -58,7 +58,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    await this.lessonsService.reorder(sectionId, user.organizationId, orderedIds);
+    await this.lessonsService.reorder(sectionId, user.organizationId, orderedIds, user.userId);
     return { reordered: true };
   }
 
@@ -101,7 +101,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    return this.lessonsService.update(sectionId, id, user.organizationId, dto);
+    return this.lessonsService.update(sectionId, id, user.organizationId, dto, user.userId);
   }
 
   @Delete('sections/:sectionId/lessons/:id')
@@ -115,7 +115,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    await this.lessonsService.delete(sectionId, id, user.organizationId);
+    await this.lessonsService.delete(sectionId, id, user.organizationId, user.userId);
     return { deleted: true };
   }
 
@@ -130,7 +130,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
-    return this.lessonsService.attachFile(lessonId, fileId, user.organizationId);
+    return this.lessonsService.attachFile(lessonId, fileId, user.organizationId, user.userId);
   }
 
   @Delete('lessons/:lessonId/attachments/:fileId')
@@ -144,7 +144,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
-    await this.lessonsService.detachFile(lessonId, fileId, user.organizationId);
+    await this.lessonsService.detachFile(lessonId, fileId, user.organizationId, user.userId);
     return { deleted: true };
   }
 }

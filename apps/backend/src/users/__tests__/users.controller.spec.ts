@@ -80,7 +80,7 @@ describe('UsersController', () => {
   it('create calls service with dto + user.organizationId', async () => {
     const svc = mkService();
     await new UsersController(svc).create({ email: 'n@demo', password: 'Pw1', name: 'N' } as any, admin);
-    expect(svc.create).toHaveBeenCalledWith(expect.any(Object), 'org-klass-0001');
+    expect(svc.create).toHaveBeenCalledWith(expect.any(Object), 'org-klass-0001', admin.userId);
   });
 
   it('remove calls service with id, orgId, callerUserId', async () => {

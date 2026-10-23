@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PlatformService } from '../platform.service';
 import type { PrismaService } from '@/prisma/prisma.service';
 
@@ -95,7 +96,8 @@ describe('PlatformService', () => {
   describe('updateOrganization', () => {
     it('forwards plan/limit changes straight to Prisma and logs the change', async () => {
       const { prisma, organization, auditLog } = buildFake();
-      const service = new PlatformService(prisma);
+      const notifications = { emitMany: jest.fn().mockResolvedValue(undefined) };
+      const service = new PlatformService(prisma, notifications as any);
 
       const result = await service.updateOrganization(
         ORG_ID,
@@ -109,6 +111,12 @@ describe('PlatformService', () => {
       });
       expect(result.plan).toBe('ENTERPRISE');
       expect(auditLog.create).toHaveBeenCalled();
+      expect(notifications.emitMany).toHaveBeenCalledWith(
+        expect.any(Function),
+        NotificationType.ORGANIZATION_CHANGED,
+        expect.objectContaining({ title: expect.stringContaining('Klass Academy') }),
+        { organizationId: ORG_ID, actorId: ACTOR_ID },
+      );
     });
   });
 
@@ -116,13 +124,20 @@ describe('PlatformService', () => {
     it('sets status to SUSPENDED and revokes active sessions', async () => {
       const { prisma, organization, user, session, auditLog } = buildFake();
       (user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1' }, { id: 'user-2' }]);
-      const service = new PlatformService(prisma);
+      const notifications = { emitMany: jest.fn().mockResolvedValue(undefined) };
+      const service = new PlatformService(prisma, notifications as any);
 
       await service.suspend(ORG_ID, ACTOR_ID);
 
       expect(organization.update).toHaveBeenCalledWith({ where: { id: ORG_ID }, data: { status: 'SUSPENDED' } });
       expect(session.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['user-1', 'user-2'] } } });
       expect(auditLog.create).toHaveBeenCalled();
+      expect(notifications.emitMany).toHaveBeenCalledWith(
+        expect.any(Function),
+        NotificationType.ORGANIZATION_CHANGED,
+        expect.objectContaining({ title: expect.stringContaining('suspendido') }),
+        { organizationId: ORG_ID, actorId: ACTOR_ID },
+      );
     });
   });
 
