@@ -26,7 +26,7 @@ export function useCourses(status?: string, search?: string): UseCoursesResult {
     setIsLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ organizationId: orgId });
+    const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search) params.set('search', search);
 
