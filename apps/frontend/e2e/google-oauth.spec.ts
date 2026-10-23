@@ -51,7 +51,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('   ');
+    await page.getByLabel('Código de organización').fill('   ');
     await page.getByRole('button', { name: 'Continuar con Google' }).click();
 
     await expect(page).toHaveURL(/\/login$/);
@@ -66,7 +66,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('bad slug');
+    await page.getByLabel('Código de organización').fill('bad slug');
     await page.getByRole('button', { name: 'Continuar con Google' }).click();
 
     await expect(page).toHaveURL(/\/login$/);
@@ -84,7 +84,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('Klass-42');
+    await page.getByLabel('Código de organización').fill('Klass-42');
     const [request] = await Promise.all([
       page.waitForRequest((candidate) => candidate.url().includes('/api/auth/google')),
       page.getByRole('button', { name: 'Continuar con Google' }).click(),
