@@ -1,13 +1,31 @@
-import { IsDateString, IsOptional } from 'class-validator';
+import {
+  IsDateString,
+  IsOptional,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  Validate,
+} from 'class-validator';
+import { analyticsDateRangeError } from '../date-range';
 
-/**
- * Optional ISO date range for the submissions time-series. Both bounds are
- * validated as ISO-8601 date strings; the service falls back to "the last 30
- * days" when either is omitted and swaps them if `from` is after `to`.
- */
+@ValidatorConstraint({ name: 'analyticsDateRange', async: false })
+class AnalyticsDateRangeConstraint implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const range = args.object as SubmissionsOverTimeDto;
+    return analyticsDateRangeError(range.from, range.to) === null;
+  }
+
+  defaultMessage(args: ValidationArguments): string {
+    const range = args.object as SubmissionsOverTimeDto;
+    return analyticsDateRangeError(range.from, range.to) ?? 'El rango de fechas no es válido.';
+  }
+}
+
+/** Optional ISO dates shared by the chart and CSV export. */
 export class SubmissionsOverTimeDto {
   @IsOptional()
   @IsDateString()
+  @Validate(AnalyticsDateRangeConstraint)
   from?: string;
 
   @IsOptional()

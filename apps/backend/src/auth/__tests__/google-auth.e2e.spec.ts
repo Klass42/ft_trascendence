@@ -58,8 +58,12 @@ let googleUser: GoogleProfile = {
 @Injectable()
 class StubGoogleAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<{ user?: GoogleProfile }>();
+    const req = context.switchToHttp().getRequest<{
+      user?: GoogleProfile;
+      googleOrganizationSlug?: string;
+    }>();
     req.user = googleUser;
+    req.googleOrganizationSlug = 'klass-42';
     return true;
   }
 }
@@ -203,7 +207,7 @@ describe('Google OAuth HTTP', () => {
       },
     );
 
-    it('GET /auth/google with a valid slug redirects to Google and keeps that slug as state', async () => {
+    it('GET /auth/google signs random state and binds it to an HttpOnly SameSite cookie', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/google')
         .query({ organizationSlug: 'klass-42' })
@@ -212,42 +216,70 @@ describe('Google OAuth HTTP', () => {
       expect(res.status).toBe(302);
       const url = new URL(locationOf(res));
       expect(`${url.origin}${url.pathname}`).toBe('https://accounts.google.com/o/oauth2/v2/auth');
-      expect(url.searchParams.get('state')).toBe('klass-42');
+      const state = url.searchParams.get('state');
+      expect(state).toBeTruthy();
+      expect(state).not.toBe('klass-42');
+      const [payload, signature] = state!.split('.');
+      const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      expect(decoded.organizationSlug).toBe('klass-42');
+      expect(decoded.nonce).toMatch(/^[a-f0-9]{64}$/);
+      expect(signature).toBeTruthy();
+      expect(res.headers['set-cookie']).toEqual(
+        expect.arrayContaining([expect.stringContaining(`google_oauth_state=${state}`)]),
+      );
+      expect(res.headers['set-cookie'][0]).toMatch(/HttpOnly/i);
+      expect(res.headers['set-cookie'][0]).toMatch(/SameSite=Lax/i);
       expect(url.searchParams.get('response_type')).toBe('code');
       expect(url.searchParams.get('client_id')).toBe('test-google-client-id');
       expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:3000/auth/google/callback');
     });
 
     it.each(['access_denied', 'server_error'])(
-      'GET /auth/google/callback?error=%s redirects to oauth_failed, not a JSON 401',
+      'GET /auth/google/callback?error=%s without browser state redirects to invalid_state',
       async (error) => {
         const res = await request(app.getHttpServer())
           .get('/auth/google/callback')
           .query({ error })
           .redirects(0);
 
-        expectSpaError(res, 'oauth_failed');
+        expectSpaError(res, 'invalid_state');
       },
     );
 
-    it('does not 400 a callback that has an error and no organization slug', async () => {
+    it('redirects a callback with a tampered state to the SPA with a clear error', async () => {
       const res = await request(app.getHttpServer())
         .get('/auth/google/callback')
-        .query({ error: 'access_denied', organizationSlug: 'NOT A SLUG' })
+        .query({ error: 'access_denied', state: 'forged-state' })
         .redirects(0);
 
-      expectSpaError(res, 'oauth_failed');
+      expectSpaError(res, 'invalid_state');
     });
 
-    it('does not send a callback with neither code nor error to the SPA', async () => {
+    it('redirects a callback with no state to the SPA with a clear error', async () => {
       const res = await request(app.getHttpServer()).get('/auth/google/callback').redirects(0);
 
-      expect(res.status).toBe(400);
-      expect(res.headers.location).toBeUndefined();
-      expect(res.body).toMatchObject({
-        statusCode: 400,
-        message: 'Organization code is required',
-      });
+      expectSpaError(res, 'invalid_state');
+    });
+
+    it('accepts the protected state only with its browser cookie and consumes it once', async () => {
+      const browser = request.agent(app.getHttpServer());
+      const start = await browser
+        .get('/auth/google')
+        .query({ organizationSlug: 'klass-42' })
+        .redirects(0);
+      const state = new URL(locationOf(start)).searchParams.get('state');
+
+      const callback = await browser
+        .get('/auth/google/callback')
+        .query({ error: 'access_denied', state })
+        .redirects(0);
+      expectSpaError(callback, 'oauth_failed');
+
+      const replay = await browser
+        .get('/auth/google/callback')
+        .query({ error: 'access_denied', state })
+        .redirects(0);
+      expectSpaError(replay, 'invalid_state');
     });
   });
 
@@ -268,7 +300,7 @@ describe('Google OAuth HTTP', () => {
         .query({ error: 'access_denied' })
         .redirects(0);
 
-      expectSpaError(res, 'oauth_failed', 'http://localhost:5173');
+      expectSpaError(res, 'invalid_state', 'http://localhost:5173');
     });
   });
 
