@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { AuthUser, CurrentUser } from '@/common/auth';
 import { CreateResourceDto } from './dto/create-resource.dto';
@@ -21,13 +22,13 @@ export class ResourcesController {
   }
 
   @Get('resources/:id')
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  findOne(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.resources.findOne(id, user);
   }
 
   @Patch('resources/:id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateResourceDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -35,14 +36,14 @@ export class ResourcesController {
   }
 
   @Delete('resources/:id')
-  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async remove(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     await this.resources.remove(id, user);
     return { deleted: true };
   }
 
   @Post('resources/:id/subjects')
   publishToSubject(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: PublishResourceDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -51,8 +52,8 @@ export class ResourcesController {
 
   @Delete('resources/:id/subjects/:subjectId')
   async removeFromSubject(
-    @Param('id') id: string,
-    @Param('subjectId') subjectId: string,
+    @Param('id', ParseIdPipe) id: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.resources.removeFromSubject(id, subjectId, user);
@@ -61,7 +62,7 @@ export class ResourcesController {
 
   @Get('subjects/:subjectId/resources')
   findForSubject(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @Query() query: ListResourcesDto,
     @CurrentUser() user: AuthUser,
   ) {

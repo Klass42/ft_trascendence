@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Body,
   Controller,
@@ -19,7 +20,7 @@ export class ForumsController {
 
   @Get('subjects/:subjectId/forum/threads')
   async listThreads(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.forums.listThreads(subjectId, user.userId);
@@ -27,7 +28,7 @@ export class ForumsController {
 
   @Post('subjects/:subjectId/forum/threads')
   async createThread(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateThreadDto,
   ) {
@@ -39,7 +40,7 @@ export class ForumsController {
   // order is not actually load-bearing here.
   @Get('subjects/:subjectId/forum/search')
   async search(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
     @Query() query: SearchForumDto,
   ) {
@@ -47,13 +48,13 @@ export class ForumsController {
   }
 
   @Get('threads/:id')
-  async getThread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async getThread(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.forums.getThread(id, user.userId);
   }
 
   @Post('threads/:id/posts')
   async addPost(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreatePostDto,
   ) {
@@ -61,7 +62,7 @@ export class ForumsController {
   }
 
   @Patch('threads/:id/pin')
-  async togglePin(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async togglePin(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.forums.togglePin(id, user.userId);
   }
 }

@@ -1,8 +1,9 @@
-import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { GlobalRole } from '@prisma/client';
 
 export class CreateUserDto {
-  @IsEmail({ require_tld: false })
+  @IsEmail({ require_tld: false }, { message: 'Introduce un correo electrónico válido.' })
+  @MaxLength(254, { message: 'El correo electrónico no puede superar los 254 caracteres.' })
   email: string;
 
   @IsString()
@@ -15,6 +16,7 @@ export class CreateUserDto {
 
   @IsString()
   @MinLength(1)
+  @MaxLength(100, { message: 'El nombre no puede superar los 100 caracteres.' })
   name: string;
 
   @IsEnum(GlobalRole)

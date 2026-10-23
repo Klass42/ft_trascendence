@@ -1,9 +1,10 @@
 import { CohortStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { IsDateString, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateCourseDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(200, { message: 'El nombre del curso no puede superar los 200 caracteres.' })
   name: string;
 
   @IsString()

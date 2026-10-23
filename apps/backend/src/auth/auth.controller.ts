@@ -1,3 +1,4 @@
+import { ParseAuthTokenPipe } from '@/common/pipes/parse-auth-token.pipe';
 import {
   Body,
   Controller,
@@ -60,11 +61,11 @@ export class AuthController {
 
   @Public()
   @Get('invitations/:token')
-  async invitation(@Param('token') token: string) { return this.authService.invitation(token); }
+  async invitation(@Param('token', ParseAuthTokenPipe) token: string) { return this.authService.invitation(token); }
 
   @Public()
   @Post('invitations/:token/accept')
-  async acceptInvitation(@Param('token') token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
+  async acceptInvitation(@Param('token', ParseAuthTokenPipe) token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
 
   @Public()
   @Post('refresh')
@@ -91,7 +92,7 @@ export class AuthController {
 
   @Public()
   @Get('verify-email')
-  async verifyEmail(@Query('token') token: string) {
+  async verifyEmail(@Query('token', ParseAuthTokenPipe) token: string) {
     return this.authService.verifyEmail(token);
   }
 

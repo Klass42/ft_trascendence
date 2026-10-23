@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Controller,
   Delete,
@@ -24,14 +25,14 @@ export class AssignmentsController {
 
   @Get('subjects/:subjectId/assignments')
   async findAll(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.assignments.findAll(subjectId, user.userId);
   }
 
   @Get('assignments/:id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async findOne(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.assignments.findOne(id, user.userId);
   }
 

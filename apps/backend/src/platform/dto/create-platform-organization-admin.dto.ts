@@ -1,4 +1,6 @@
-import { IsEmail } from 'class-validator';
+import { IsEmail, MaxLength } from 'class-validator';
 export class CreatePlatformOrganizationAdminDto {
-  @IsEmail({ require_tld: false }) email: string;
+  @IsEmail({ require_tld: false }, { message: 'Introduce un correo electrónico válido.' })
+  @MaxLength(254, { message: 'El correo electrónico no puede superar los 254 caracteres.' })
+  email: string;
 }
