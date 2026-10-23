@@ -99,7 +99,9 @@ export class AuthController {
   @Public()
   @AuthRateLimit('verifyEmail')
   @Get('verify-email')
-  async verifyEmail(@Query('token', ParseAuthTokenPipe) token: string) {
+  // The verification link carries a signed JWT, not the opaque hex token of invitations;
+  // the service verifies signature, purpose and expiry and answers 400 in Spanish.
+  async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
   }
 
