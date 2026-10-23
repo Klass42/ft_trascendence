@@ -22,11 +22,10 @@ import {
   Textarea,
   ConfirmDialog,
   EmptyState,
-  FileUpload,
   Spinner,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import styles from './ContentEditor.module.css';
 
 /** Mirrors the GENERAL allowlist in apps/backend/src/files/file-validation.ts. */
@@ -35,7 +34,7 @@ const ATTACHMENT_ACCEPT = [
   '.txt', '.csv',
   '.jpg', '.jpeg', '.png', '.webp', '.gif',
   '.mp3', '.wav', '.ogg', '.m4a',
-  '.mp4', '.webm', '.mov',
+  '.mp4', '.m4v', '.webm', '.mov',
 ].join(',');
 
 /** Same limit as MAX_UPLOAD_BYTES on the server. */

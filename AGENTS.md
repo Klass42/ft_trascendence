@@ -188,9 +188,8 @@ skeletons; the root `README.md` is no longer an empty template either.
 
 Still open:
 - ❌ Valkey is not part of the stack (nothing needs it yet).
-- 🔧 `STORAGE_DRIVER=s3` uploads to Garage, but presigned download URLs point at the internal
-  `http://garage:3900` and are unusable from a browser. Keep `local` until the driver gets a
-  public endpoint (plan in `docs/planning/vtrofyme.md`).
+- ✅ Local and S3 file downloads use short-lived signed backend streaming URLs; Garage stays
+  private to the container network.
 - 🔧 CI does not run ESLint (no shared flat config). The **build** (tsc/nest/vite) and the tests
   are the code gate for now.
 - 📝 The root `README.md` still has `TODO`s the subject makes mandatory (module justification,

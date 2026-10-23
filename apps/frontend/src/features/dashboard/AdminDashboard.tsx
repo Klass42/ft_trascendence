@@ -1,5 +1,6 @@
 import { useUsers, useMySubjects } from '@/lib/api';
 import { Spinner, EmptyState } from '@/components/ui';
+import { ProtectedAvatar } from '@/components/ui/ProtectedAvatar';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './AdminDashboard.module.css';
 
@@ -58,7 +59,7 @@ export function AdminDashboard() {
             return (
               <div key={u.id} className={styles.row}>
                 <div className={styles.avatar}>
-                  {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : initials}
+                  <ProtectedAvatar url={u.avatarUrl} fallback={initials} />
                 </div>
                 <span className={styles.name}>{u.name}</span>
                 <span className={styles.role}>{roleLabel}</span>

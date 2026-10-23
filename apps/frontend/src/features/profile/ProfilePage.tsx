@@ -11,6 +11,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
+import { ProtectedAvatar } from '@/components/ui/ProtectedAvatar';
 import styles from './ProfilePage.module.css';
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
@@ -130,7 +131,7 @@ export function ProfilePage() {
       <Card title="Identidad" className={styles.section}>
         <div className={styles.identityRow}>
           <div className={styles.avatar}>
-            {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials}
+            <ProtectedAvatar url={user.avatarUrl} fallback={initials} />
           </div>
           <div>
             <div className={styles.displayName}>{user.name}</div>
@@ -142,8 +143,8 @@ export function ProfilePage() {
 
         {user.organizationId && <div className={styles.upload}>
           <FileUpload
-            accept="image/*"
-            maxSizeBytes={5 * 1024 * 1024}
+            accept=".jpg,.jpeg,.png,.webp"
+            maxSizeBytes={2 * 1024 * 1024}
             multiple={false}
             maxFiles={1}
             organizationId={user.organizationId}
@@ -151,7 +152,7 @@ export function ProfilePage() {
             value={avatarFiles}
             onChange={handleAvatarChange}
             autoUpload
-            hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
+            hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 2 MB."
           />
         </div>}
 
