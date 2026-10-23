@@ -97,9 +97,9 @@
 .dangerZone {
   margin-top: 28px;
   padding: 20px;
-  border: 1px solid rgba(192, 57, 43, 0.35);
-  border-radius: 15px;
-  background: rgba(192, 57, 43, 0.04);
+  border: 1px solid var(--color-error-muted);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
 }
 
 .dangerTitle {
@@ -113,4 +113,25 @@
   color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1.45;
+}
+
+.deleteStatusError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .deleteStatusError {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
