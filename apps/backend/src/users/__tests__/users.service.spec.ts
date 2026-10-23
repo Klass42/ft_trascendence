@@ -1,5 +1,8 @@
 import { ConflictException, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { UsersService } from '../users.service';
+import { SearchUsersDto } from '../dto/search-users.dto';
 import type { NotificationsService } from '../../notifications/notifications.service';
 import type { PrismaService } from '@/prisma/prisma.service';
 
@@ -16,16 +19,23 @@ const mockUser = {
 };
 
 const mkPrisma = () => ({
-  user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-  friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+  user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), delete: jest.fn() },
+  friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), delete: jest.fn() },
 }) as unknown as PrismaService;
 
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: ReturnType<typeof mkPrisma>;
+  let notifications: { emit: jest.Mock };
   const previousNodeEnv = process.env.NODE_ENV;
 
-  beforeEach(() => { jest.clearAllMocks(); prisma = mkPrisma(); service = new UsersService(prisma, { emit: jest.fn() } as unknown as NotificationsService); process.env.NODE_ENV = 'development'; });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = mkPrisma();
+    notifications = { emit: jest.fn().mockResolvedValue({}) };
+    service = new UsersService(prisma, notifications as unknown as NotificationsService);
+    process.env.NODE_ENV = 'development';
+  });
   afterAll(() => { process.env.NODE_ENV = previousNodeEnv; });
 
   describe('findAll', () => {
@@ -229,7 +239,13 @@ describe('UsersService', () => {
   // ── sendFriendRequest ──
   describe('sendFriendRequest', () => {
     beforeEach(() => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.findFirst as jest.Mock).mockImplementation(({ where }: any) =>
+        where.id === ADMIN_ID
+          ? Promise.resolve({ id: ADMIN_ID })
+          : where.id === mockUser.id && where.organizationId === ORG_ID
+            ? Promise.resolve({ id: mockUser.id })
+            : Promise.resolve(null),
+      );
     });
 
     it('creates a PENDING friendship', async () => {
@@ -238,6 +254,7 @@ describe('UsersService', () => {
       mkFriendshipCreate.mockResolvedValue({ id: 'f1', requesterId: ADMIN_ID, addresseeId: 'user-student-0001', status: 'PENDING', createdAt: new Date() });
       const r = await service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID);
       expect(r.status).toBe('PENDING');
+      expect(notifications.emit).toHaveBeenCalledWith('user-student-0001', 'FRIEND_REQUEST', expect.objectContaining({ link: '/friends' }));
     });
 
     it('throws 409 if friendship already exists', async () => {
@@ -250,10 +267,13 @@ describe('UsersService', () => {
       await expect(service.sendFriendRequest(ADMIN_ID, ADMIN_ID, ORG_ID)).rejects.toThrow(BadRequestException);
     });
 
-    it('throws 403 if target is in another org', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, organizationId: OTHER_ORG });
+    it('does not create a friendship with a user from another organization', async () => {
+      (prisma.user.findFirst as jest.Mock).mockImplementation(({ where }: any) =>
+        where.id === ADMIN_ID ? Promise.resolve({ id: ADMIN_ID }) : Promise.resolve(null),
+      );
       (prisma as any).friendship = { findFirst: jest.fn(), create: jest.fn() };
-      await expect(service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID)).rejects.toThrow(ForbiddenException);
+      await expect(service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID)).rejects.toThrow(NotFoundException);
+      expect(prisma.friendship.create).not.toHaveBeenCalled();
     });
   });
 
@@ -262,20 +282,92 @@ describe('UsersService', () => {
     it('returns accepted friends (bidirectional)', async () => {
       (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-teacher-0001', name: 'Theo', avatarUrl: null, role: 'TEACHER', bio: null, onlineAt: null }]);
       (prisma as any).friendship = { findMany: jest.fn().mockResolvedValue([{ requesterId: ADMIN_ID, addresseeId: 'user-teacher-0001' }, { requesterId: 'user-student-0001', addresseeId: ADMIN_ID }]) };
-      const r = await service.listFriends(ADMIN_ID);
+      const r = await service.listFriends(ADMIN_ID, ORG_ID);
       expect(r).toHaveLength(1);
       expect((r[0] as any).email).toBeUndefined();
     });
 
     it('keeps prefs out of the public profile select (listFriends)', async () => {
-      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([
+        { requesterId: 'user-student-0001', addresseeId: 'user-teacher-0001' },
+      ]);
       (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
 
-      await service.listFriends('user-student-0001');
+      await service.listFriends('user-student-0001', ORG_ID);
 
       const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(args.select.emailNotificationsEnabled).toBeUndefined();
       expect(args.select.preferredLanguage).toBeUndefined();
+    });
+  });
+
+  describe('searchUsers', () => {
+    it('searches only within the organization and returns no email', async () => {
+      const result = [{ id: 'user-teacher-0001', name: 'Theo', avatarUrl: null }];
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue(result);
+
+      await expect(service.searchUsers('  th  ', ADMIN_ID, ORG_ID)).resolves.toEqual(result);
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.where.organizationId).toBe(ORG_ID);
+      expect(args.where.OR).toEqual([
+        { name: { contains: 'th', mode: 'insensitive' } },
+        { email: { contains: 'th', mode: 'insensitive' } },
+      ]);
+      expect(args.take).toBe(20);
+      expect(args.select).toEqual({ id: true, name: true, avatarUrl: true });
+    });
+
+    it('rejects a search shorter than two characters', async () => {
+      await expect(service.searchUsers(' a ', ADMIN_ID, ORG_ID)).rejects.toThrow(BadRequestException);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('validates the search query DTO after trimming whitespace', async () => {
+      const dto = plainToInstance(SearchUsersDto, { q: ' a ' });
+      const errors = await validate(dto);
+      expect(errors.some((error) => error.property === 'q')).toBe(true);
+    });
+  });
+
+  describe('uploadAvatar', () => {
+    it('stores a FilesService URL on the current user inside their organization', async () => {
+      const files = {
+        createUpload: jest.fn().mockResolvedValue({ id: 'file-1' }),
+        getSignedUrl: jest.fn().mockResolvedValue({ url: '/api/files/file-1/url' }),
+      };
+      (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...mockUser, avatarUrl: '/api/files/file-1/url' });
+      const uploadService = new UsersService(
+        prisma,
+        notifications as unknown as NotificationsService,
+        files as any,
+      );
+      const authUser = { userId: mockUser.id, organizationId: ORG_ID } as any;
+      const file = { originalname: 'avatar.png', mimetype: 'image/png', size: 8, buffer: Buffer.from('png') } as Express.Multer.File;
+
+      const result = await uploadService.uploadAvatar(authUser, file);
+
+      expect(files.createUpload).toHaveBeenCalledWith(file, ORG_ID, mockUser.id, 'AVATAR');
+      expect(files.getSignedUrl).toHaveBeenCalledWith('file-1', authUser);
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: mockUser.id, organizationId: ORG_ID },
+        data: { avatarUrl: '/api/files/file-1/url' },
+      });
+      expect(result?.avatarUrl).toBe('/api/files/file-1/url');
+    });
+
+    it('clears the current avatar only inside the caller organization', async () => {
+      (prisma.user.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...mockUser, avatarUrl: null });
+
+      const result = await service.removeAvatar({ userId: mockUser.id, organizationId: ORG_ID } as any);
+
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: mockUser.id, organizationId: ORG_ID },
+        data: { avatarUrl: null },
+      });
+      expect(result?.avatarUrl).toBeNull();
     });
   });
 
