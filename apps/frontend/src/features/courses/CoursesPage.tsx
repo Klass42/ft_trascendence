@@ -119,7 +119,7 @@ export function CoursesPage() {
   async function handleCreate() {
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = 'El nombre es obligatorio.';
-    if (name.trim().length > 120) errors.name = 'Usa 120 caracteres como máximo.';
+    if (name.trim().length > 100) errors.name = 'El nombre no puede superar los 100 caracteres.';
     if (!/^\d{4}-\d{4}$/.test(academicYear.trim())) {
       errors.academicYear = 'Usa el formato 2025-2026.';
     }
@@ -260,7 +260,7 @@ export function CoursesPage() {
             )}
           >
             <div className={styles.formFields}>
-              <Input label="Nombre" value={name} maxLength={120} error={fieldErrors.name} onChange={(event) => setName(event.target.value)} required />
+              <Input label="Nombre" value={name} maxLength={100} error={fieldErrors.name} onChange={(event) => setName(event.target.value)} required />
               <Input label="Año académico" value={academicYear} maxLength={9} placeholder="2026-2027" error={fieldErrors.academicYear} onChange={(event) => setAcademicYear(event.target.value)} required />
               <div className={styles.dateFields}>
                 <DatePicker label="Empieza" value={startsOn} error={fieldErrors.startsOn} onChange={(event) => setStartsOn(event.target.value)} required />

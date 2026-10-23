@@ -1,12 +1,10 @@
 import { CohortStatus } from '@prisma/client';
-import { Transform } from 'class-transformer';
 import { IsDateString, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateCourseDto {
   @IsString()
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @MinLength(1)
-  @MaxLength(120)
+  @MaxLength(200, { message: 'El nombre del curso no puede superar los 200 caracteres.' })
   @IsOptional()
   name?: string;
 

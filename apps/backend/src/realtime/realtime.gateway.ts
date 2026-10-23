@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import type { Notification } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
+import { ANALYTICS_UPDATED, AnalyticsUpdatedEvent } from '../analytics/analytics.events';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Same origin the HTTP layer allows (see main.ts). In dev the frontend also
@@ -122,7 +123,12 @@ export class RealtimeGateway
     online: boolean,
   ): Promise<void> {
     try {
-      const friendIds = await this.getAcceptedFriendIds(userId);
+      const actor = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true },
+      });
+      if (!actor?.organizationId) return;
+      const friendIds = await this.getAcceptedFriendIds(userId, actor.organizationId);
       for (const friendId of friendIds) {
         this.server
           ?.to(userRoom(friendId))
@@ -140,11 +146,13 @@ export class RealtimeGateway
    * Ids of users who are ACCEPTED friends of `userId` (friendship is symmetric,
    * so look at both sides of the relation).
    */
-  async getAcceptedFriendIds(userId: string): Promise<string[]> {
+  async getAcceptedFriendIds(userId: string, organizationId: string): Promise<string[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         status: 'ACCEPTED',
         OR: [{ requesterId: userId }, { addresseeId: userId }],
+        requester: { is: { organizationId } },
+        addressee: { is: { organizationId } },
       },
       select: { requesterId: true, addresseeId: true },
     });
@@ -163,6 +171,38 @@ export class RealtimeGateway
     this.server
       ?.to(userRoom(notification.userId))
       .emit('notification:new', notification);
+  }
+
+  /** Push analytics invalidations only to staff in the subject's organization. */
+  @OnEvent(ANALYTICS_UPDATED)
+  async handleAnalyticsUpdated({ courseId, organizationId }: AnalyticsUpdatedEvent): Promise<void> {
+    try {
+      const [staff, admins] = await Promise.all([
+        this.prisma.subjectStaff.findMany({
+          where: {
+            subjectId: courseId,
+            subject: { organizationId },
+          },
+          select: { userId: true },
+        }),
+        this.prisma.user.findMany({
+          where: { organizationId, role: 'ADMIN' },
+          select: { id: true },
+        }),
+      ]);
+      const userIds = new Set([
+        ...staff.map(({ userId }) => userId),
+        ...admins.map(({ id }) => id),
+      ]);
+
+      for (const userId of userIds) {
+        this.server
+          ?.to(userRoom(userId))
+          .emit('analytics:update', { courseId });
+      }
+    } catch (error) {
+      this.logger.warn(`Analytics update broadcast failed for ${courseId}: ${String(error)}`);
+    }
   }
 
   /**

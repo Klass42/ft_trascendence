@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Body,
   Controller,
@@ -17,6 +18,7 @@ import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { AddStaffDto } from './dto/add-staff.dto';
 import { UpdateStaffRoleDto } from './dto/update-staff-role.dto';
+import { ListCoursesQueryDto } from './dto/list-courses-query.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
 
 @Controller()
@@ -43,17 +45,16 @@ export class CoursesController {
   @Get('courses')
   findAll(
     @CurrentUser() user: AuthUser,
-    @Query('status') status?: string,
-    @Query('search') search?: string,
+    @Query() query: ListCoursesQueryDto,
   ) {
-    return this.coursesService.findAll(user, status, search);
+    return this.coursesService.findAll(user, query.status, query.search);
   }
 
   @Post('courses/:courseId/subjects')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   createSubject(
-    @Param('courseId') courseId: string,
+    @Param('courseId', ParseIdPipe) courseId: string,
     @Body() dto: CreateSubjectDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -62,7 +63,7 @@ export class CoursesController {
 
   @Get('courses/:courseId/subjects')
   listSubjects(
-    @Param('courseId') courseId: string,
+    @Param('courseId', ParseIdPipe) courseId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.listSubjects(courseId, user);
@@ -72,7 +73,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   addMember(
-    @Param('courseId') courseId: string,
+    @Param('courseId', ParseIdPipe) courseId: string,
     @Body() dto: AddMemberDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -83,8 +84,8 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async removeMember(
-    @Param('courseId') courseId: string,
-    @Param('userId') userId: string,
+    @Param('courseId', ParseIdPipe) courseId: string,
+    @Param('userId', ParseIdPipe) userId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.coursesService.removeMember(courseId, userId, user);
@@ -93,14 +94,14 @@ export class CoursesController {
 
   @Get('courses/:courseId/members')
   listMembers(
-    @Param('courseId') courseId: string,
+    @Param('courseId', ParseIdPipe) courseId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.listMembers(courseId, user);
   }
 
   @Get('courses/:id')
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  findOne(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.coursesService.findOne(id, user);
   }
 
@@ -108,7 +109,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateCourseDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -118,14 +119,14 @@ export class CoursesController {
   @Delete('courses/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async delete(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     await this.coursesService.delete(id, user);
     return { deleted: true };
   }
 
   @Get('subjects/:subjectId/members')
   listSubjectMembers(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.listSubjectMembers(subjectId, user);
@@ -133,7 +134,7 @@ export class CoursesController {
 
   @Get('subjects/:subjectId/staff')
   listStaff(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.listStaff(subjectId, user);
@@ -143,7 +144,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   addStaff(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @Body() dto: AddStaffDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -154,8 +155,8 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   updateStaffRole(
-    @Param('subjectId') subjectId: string,
-    @Param('userId') userId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Param('userId', ParseIdPipe) userId: string,
     @Body() dto: UpdateStaffRoleDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -166,8 +167,8 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async removeStaff(
-    @Param('subjectId') subjectId: string,
-    @Param('userId') userId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Param('userId', ParseIdPipe) userId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.coursesService.removeStaff(subjectId, userId, user);
@@ -176,7 +177,7 @@ export class CoursesController {
 
   @Get('subjects/:subjectId')
   findSubject(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.coursesService.findSubject(subjectId, user);
@@ -186,7 +187,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   updateSubject(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @Body() dto: UpdateSubjectDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -197,7 +198,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async deleteSubject(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.coursesService.deleteSubject(subjectId, user);

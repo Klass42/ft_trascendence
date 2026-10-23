@@ -6,7 +6,9 @@ import {
   useSubmissionsOverTime,
   useGradeDistribution,
   downloadAnalyticsCsv,
+  subjectSelectorLabel,
 } from '@/lib/api';
+import { useNotifications } from '@/features/notifications';
 import { KpiTiles } from './KpiTiles';
 import { SubmissionsLineChart } from './charts/SubmissionsLineChart';
 import { GradeDistributionChart } from './charts/GradeDistributionChart';
@@ -21,6 +23,7 @@ import styles from './analytics.module.css';
  */
 export function AnalyticsPage() {
   const { data: courses, isLoading: coursesLoading } = useMySubjects();
+  const { analyticsUpdate } = useNotifications();
   const [courseId, setCourseId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -35,12 +38,23 @@ export function AnalyticsPage() {
   }, [courses, courseId]);
 
   const overview = useAnalyticsOverview(courseId);
+  const rangeError = useMemo(() => validateRange(from, to), [from, to]);
   const overTime = useSubmissionsOverTime(
-    courseId,
+    rangeError ? null : courseId,
     from || undefined,
     to || undefined,
   );
   const distribution = useGradeDistribution(courseId);
+
+  useEffect(() => {
+    if (!courseId || analyticsUpdate?.courseId !== courseId) return;
+    const timer = window.setTimeout(() => {
+      overview.refetch();
+      overTime.refetch();
+      distribution.refetch();
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [analyticsUpdate, courseId, overview.refetch, overTime.refetch, distribution.refetch]);
 
   // Toggle a body class only while printing so a normal Ctrl+P elsewhere is
   // unaffected by the dashboard's print stylesheet.
@@ -53,16 +67,11 @@ export function AnalyticsPage() {
     };
   }, []);
 
-  const rangeInvalid = useMemo(
-    () => Boolean(from && to && from > to),
-    [from, to],
-  );
-
   async function handleCsv() {
     if (!courseId) return;
     setDownloading(true);
     try {
-      await downloadAnalyticsCsv(courseId);
+      await downloadAnalyticsCsv(courseId, from, to);
     } catch {
       alert('No se pudo descargar el CSV.');
     } finally {
@@ -95,7 +104,7 @@ export function AnalyticsPage() {
             >
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {`${c.title} · ${c.course.name} · ${c.course.academicYear}`}
+                  {subjectSelectorLabel(c)}
                 </option>
               ))}
             </select>
@@ -104,11 +113,11 @@ export function AnalyticsPage() {
             variant="secondary"
             onClick={handleCsv}
             loading={downloading}
-            disabled={!hasData}
+            disabled={!hasData || Boolean(rangeError)}
           >
             Exportar CSV
           </Button>
-          <Button variant="secondary" onClick={handlePdf} disabled={!hasData}>
+          <Button variant="secondary" onClick={handlePdf} disabled={!hasData || Boolean(rangeError)}>
             Exportar PDF
           </Button>
         </div>
@@ -152,6 +161,7 @@ export function AnalyticsPage() {
                     className={styles.dateInput}
                     value={from}
                     max={to || undefined}
+                    min={to ? shiftDate(to, -366) : undefined}
                     onChange={(e) => setFrom(e.target.value)}
                   />
                   <label className={styles.rangeLabel} htmlFor="to">
@@ -163,15 +173,14 @@ export function AnalyticsPage() {
                     className={styles.dateInput}
                     value={to}
                     min={from || undefined}
+                    max={from ? shiftDate(from, 366) : undefined}
                     onChange={(e) => setTo(e.target.value)}
                   />
                 </div>
               </div>
 
-              {rangeInvalid ? (
-                <p className={styles.error}>
-                  La fecha «Desde» no puede ser posterior a «Hasta».
-                </p>
+              {rangeError ? (
+                <p className={styles.error}>{rangeError}</p>
               ) : overTime.isLoading ? (
                 <Spinner size="sm" label="Cargando…" />
               ) : overTime.error ? (
@@ -208,4 +217,24 @@ function isoDaysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
+}
+
+function validateRange(from: string, to: string): string | null {
+  if (!from || !to) return null;
+  const start = Date.parse(`${from}T00:00:00.000Z`);
+  const end = Date.parse(`${to}T00:00:00.000Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return 'Introduce un rango de fechas válido.';
+  }
+  if (start > end) return 'La fecha «Desde» debe ser anterior o igual a «Hasta».';
+  if (end - start > 366 * 86_400_000) {
+    return 'El rango de fechas no puede superar 366 días.';
+  }
+  return null;
+}
+
+function shiftDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }

@@ -69,6 +69,8 @@ export function QuestionList({ activity, onChanged }: Props) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
           marginBottom: 12,
         }}
       >
@@ -97,19 +99,19 @@ export function QuestionList({ activity, onChanged }: Props) {
                 background: 'var(--color-bg-primary)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, justifyContent: 'space-between' }}>
-                <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: '1 1 180px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <Badge variant="neutral">{KIND_LABELS[q.kind]}</Badge>
                     <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
                       {q.points} {q.points === 1 ? 'punto' : 'puntos'}
                     </span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
                     {i + 1}. {q.prompt}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 4, flex: '1 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <Button variant="ghost" size="sm" aria-label={`Subir pregunta ${i + 1}`} disabled={i === 0 || isLoading} onClick={() => move(i, -1)}>↑</Button>
                   <Button variant="ghost" size="sm" aria-label={`Bajar pregunta ${i + 1}`} disabled={i === questions.length - 1 || isLoading} onClick={() => move(i, 1)}>↓</Button>
                   <Button variant="outline" size="sm" onClick={() => setEditing(q)}>Editar</Button>

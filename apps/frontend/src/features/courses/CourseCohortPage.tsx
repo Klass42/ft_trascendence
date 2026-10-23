@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Archive, ArchiveRestore, BookOpen, MoreVertical, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
-import { apiClient, useAuth } from '@/lib/api';
+import { ApiError, apiClient, useAuth } from '@/lib/api';
 import type { CohortStatus, CourseDTO, PublicationStatus, SubjectDTO, SubjectStaffRole, UpdateCourseInput, UpdateSubjectInput } from '@/lib/api';
+import { mapApiValidationErrors } from '@/lib/form-errors';
 import {
   Badge,
   Button,
@@ -114,10 +115,11 @@ export function CourseCohortPage() {
 
   async function createSubject() {
     const nextTitle = title.trim();
-    if (!courseId || !nextTitle || nextTitle.length > 120) {
-      setSubjectTitleError(!nextTitle ? 'El título es obligatorio.' : 'Usa 120 caracteres como máximo.');
+    if (!courseId || !nextTitle) {
+      setSubjectTitleError(!nextTitle ? 'El título es obligatorio.' : '');
       return;
     }
+    setSubjectTitleError('');
     setBusy(true);
     try {
       await apiClient.post(`/courses/${courseId}/subjects`, { title: nextTitle, status: 'DRAFT' satisfies PublicationStatus });
@@ -126,7 +128,14 @@ export function CourseCohortPage() {
       setSubjectTitleError('');
       toast({ message: 'Asignatura creada.', variant: 'success' });
       reload();
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        if (mapped.fields.title) {
+          setSubjectTitleError(mapped.fields.title);
+          return;
+        }
+      }
       toast({ message: 'No se pudo crear la asignatura.', variant: 'error' });
     } finally {
       setBusy(false);
@@ -235,10 +244,11 @@ export function CourseCohortPage() {
   async function enrollStudent() {
     const email = memberEmail.trim();
     if (!isValidEmail(email)) {
-      setMemberEmailError('Escribe un email válido.');
+      setMemberEmailError('Introduce un correo electrónico válido.');
       return;
     }
     if (!courseId) return;
+    setMemberEmailError('');
     setBusy(true);
     try {
       const userId = await lookupUserId(email);
@@ -247,8 +257,15 @@ export function CourseCohortPage() {
       setMemberEmail('');
       setMemberEmailError('');
       toast({ message: 'Alumno matriculado.', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo matricular al alumno.', variant: 'error' });
+    } catch (err) {
+      if (err instanceof ApiError && err.isNotFound) {
+        setMemberEmailError('No se encontró una cuenta con ese correo.');
+      } else if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setMemberEmailError(mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.');
+      } else {
+        toast({ message: 'No se pudo matricular al alumno.', variant: 'error' });
+      }
     } finally {
       setBusy(false);
     }
@@ -258,9 +275,10 @@ export function CourseCohortPage() {
     const email = staffEmail.trim();
     if (!staffSubjectId) return;
     if (!isValidEmail(email)) {
-      setStaffEmailError('Escribe un email válido.');
+      setStaffEmailError('Introduce un correo electrónico válido.');
       return;
     }
+    setStaffEmailError('');
     setBusy(true);
     try {
       const userId = await lookupUserId(email);
@@ -269,8 +287,15 @@ export function CourseCohortPage() {
       setStaffEmail('');
       setStaffEmailError('');
       toast({ message: 'Profesor asignado.', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo asignar al profesor.', variant: 'error' });
+    } catch (err) {
+      if (err instanceof ApiError && err.isNotFound) {
+        setStaffEmailError('No se encontró una cuenta con ese correo.');
+      } else if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setStaffEmailError(mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.');
+      } else {
+        toast({ message: 'No se pudo asignar al profesor.', variant: 'error' });
+      }
     } finally {
       setBusy(false);
     }
@@ -358,31 +383,27 @@ export function CourseCohortPage() {
         title="Crear asignatura"
         footer={(
           <div className={styles.modalActions}>
-            <Button variant="ghost" onClick={() => setSubjectOpen(false)}>Cancelar</Button>
+            <Button variant="ghost" onClick={() => { setSubjectOpen(false); setSubjectTitleError(''); }}>Cancelar</Button>
             <Button loading={busy} onClick={createSubject}>Crear asignatura</Button>
           </div>
         )}
       >
-        <Input label="Título" value={title} maxLength={120} error={subjectTitleError} onChange={(event) => setTitle(event.target.value)} required />
+        <Input label="Título" value={title} maxLength={200} error={subjectTitleError} onChange={(event) => { setTitle(event.target.value); setSubjectTitleError(''); }} required />
       </Modal>
 
       <Modal
         open={subjectEditTarget !== null}
-        onClose={() => setSubjectEditTarget(null)}
+        onClose={() => { setSubjectEditTarget(null); setSubjectTitleError(''); }}
         title="Editar asignatura"
         footer={(
           <div className={styles.modalActions}>
-            <Button variant="ghost" onClick={() => setSubjectEditTarget(null)}>Cancelar</Button>
+            <Button variant="ghost" onClick={() => { setSubjectEditTarget(null); setSubjectTitleError(''); }}>Cancelar</Button>
             <Button
               loading={busy}
               onClick={() => {
                 const trimmedTitle = subjectTitle.trim();
                 if (!trimmedTitle) {
                   setSubjectTitleError('El título es obligatorio.');
-                  return;
-                }
-                if (trimmedTitle.length > 120) {
-                  setSubjectTitleError('Usa 120 caracteres como máximo.');
                   return;
                 }
                 setSubjectTitleError('');
@@ -397,17 +418,17 @@ export function CourseCohortPage() {
         )}
       >
         <div className={styles.formFields}>
-          <Input label="Título" value={subjectTitle} maxLength={120} error={subjectTitleError} onChange={(event) => setSubjectTitle(event.target.value)} required />
+          <Input label="Título" value={subjectTitle} maxLength={200} error={subjectTitleError} onChange={(event) => { setSubjectTitle(event.target.value); setSubjectTitleError(''); }} required />
           <Textarea label="Descripción" value={subjectDescription} onChange={(event) => setSubjectDescription(event.target.value)} rows={4} />
           <Input label="Categoría" value={subjectCategory} maxLength={80} onChange={(event) => setSubjectCategory(event.target.value)} />
         </div>
       </Modal>
 
-      <Modal open={memberOpen} onClose={() => setMemberOpen(false)} title="Matricular alumno" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
-        <Input label="Email del alumno" type="email" maxLength={254} value={memberEmail} error={memberEmailError} onChange={(event) => { setMemberEmail(event.target.value); setMemberEmailError(''); }} required />
+      <Modal open={memberOpen} onClose={() => { setMemberOpen(false); setMemberEmailError(''); }} title="Matricular alumno" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
+        <Input label="Correo electrónico del alumno" type="email" maxLength={254} value={memberEmail} error={memberEmailError} onChange={(event) => { setMemberEmail(event.target.value); setMemberEmailError(''); }} required />
       </Modal>
 
-      <Modal open={staffOpen} onClose={() => setStaffOpen(false)} title="Asignar profesor" footer={<Button loading={busy} onClick={assignTeacher}>Asignar profesor</Button>}>
+      <Modal open={staffOpen} onClose={() => { setStaffOpen(false); setStaffEmailError(''); }} title="Asignar profesor" footer={<Button loading={busy} onClick={assignTeacher}>Asignar profesor</Button>}>
         <div className={styles.formFields}>
           <Select
             label="Asignatura"
@@ -415,7 +436,7 @@ export function CourseCohortPage() {
             onChange={(event) => setStaffSubjectId(event.target.value)}
             options={subjects.map((subject) => ({ value: subject.id, label: subject.title }))}
           />
-          <Input label="Email" type="email" maxLength={254} value={staffEmail} error={staffEmailError} onChange={(event) => { setStaffEmail(event.target.value); setStaffEmailError(''); }} required />
+          <Input label="Correo electrónico" type="email" maxLength={254} value={staffEmail} error={staffEmailError} onChange={(event) => { setStaffEmail(event.target.value); setStaffEmailError(''); }} required />
           <Select
             label="Rol"
             value={staffRole}

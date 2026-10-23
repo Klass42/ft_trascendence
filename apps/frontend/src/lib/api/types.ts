@@ -82,6 +82,8 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 }
 
 export interface UploadOptions extends RequestOptions {
+  /** HTTP method of the upload request (defaults to POST) */
+  method?: 'POST' | 'PATCH';
   /** Additional form fields to send with the file */
   fields?: Record<string, string>;
   /** Progress callback (0-100) */

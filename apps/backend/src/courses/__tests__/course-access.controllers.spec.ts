@@ -43,6 +43,40 @@ describe('course-content controller authorization', () => {
     expect(access.assertSubjectReadable).toHaveBeenCalledWith(SUBJECT_ID, ASSISTANT);
     expect(lessons.findAll).toHaveBeenCalledWith('section-1', ASSISTANT.organizationId);
   });
+
+  it('passes the validated ordered id list to the sections service', async () => {
+    const sections = { reorder: jest.fn().mockResolvedValue(undefined) };
+    const access = { assertSubjectStaff: jest.fn().mockResolvedValue(undefined) };
+    const controller = new SectionsController(sections as never, access as never);
+    const orderedIds = [`c${'a'.repeat(24)}`, `c${'b'.repeat(24)}`];
+
+    await expect(controller.reorder(SUBJECT_ID, ASSISTANT, { orderedIds })).resolves.toEqual({
+      reordered: true,
+    });
+    expect(sections.reorder).toHaveBeenCalledWith(
+      SUBJECT_ID,
+      ASSISTANT.organizationId,
+      orderedIds,
+    );
+  });
+
+  it('passes the validated file id to the lesson attachment service', async () => {
+    const lessons = {
+      findSubjectId: jest.fn().mockResolvedValue({ section: { subjectId: SUBJECT_ID } }),
+      attachFile: jest.fn().mockResolvedValue({ id: 'attachment-1' }),
+    };
+    const access = { assertSubjectStaff: jest.fn().mockResolvedValue(undefined) };
+    const controller = new LessonsController(lessons as never, access as never);
+    const fileId = `c${'f'.repeat(24)}`;
+
+    await controller.attachFile('lesson-1', ASSISTANT, { fileId });
+
+    expect(lessons.attachFile).toHaveBeenCalledWith(
+      'lesson-1',
+      fileId,
+      ASSISTANT.organizationId,
+    );
+  });
 });
 
 describe('progress controller authorization', () => {

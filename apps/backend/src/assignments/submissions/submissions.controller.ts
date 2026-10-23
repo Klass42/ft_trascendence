@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Controller, Get, GoneException, Param, Post } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { SubmissionsService } from './submissions.service';
@@ -15,7 +16,7 @@ export class SubmissionsController {
 
   @Get('assignments/:assignmentId/submissions')
   async listForAssignment(
-    @Param('assignmentId') assignmentId: string,
+    @Param('assignmentId', ParseIdPipe) assignmentId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.submissions.listForAssignment(assignmentId, user.userId);
@@ -23,7 +24,7 @@ export class SubmissionsController {
 
   @Get('assignments/:assignmentId/submissions/me')
   async findMine(
-    @Param('assignmentId') assignmentId: string,
+    @Param('assignmentId', ParseIdPipe) assignmentId: string,
     @CurrentUser() user: AuthUser,
   ) {
     return this.submissions.findMine(assignmentId, user.userId);

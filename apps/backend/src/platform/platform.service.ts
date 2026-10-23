@@ -2,13 +2,14 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as crypto from 'crypto';
 import { PrismaService } from '@/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { FilesService } from '@/files/files.service';
 import type { CreatePlatformOrganizationDto } from './dto/create-platform-organization.dto';
 import type { UpdatePlatformOrganizationDto } from './dto/update-platform-organization.dto';
 import type { CreatePlatformOrganizationAdminDto } from './dto/create-platform-organization-admin.dto';
 
 @Injectable()
 export class PlatformService {
- constructor(private readonly prisma: PrismaService) {}
+ constructor(private readonly prisma: PrismaService, private readonly files: FilesService) {}
  private token() { const raw = crypto.randomBytes(32).toString('base64url'); return { raw, hash: crypto.createHash('sha256').update(raw).digest('hex') }; }
  async createOrganization(dto: CreatePlatformOrganizationDto, actorId: string) {
   const token = this.token(); const expiresAt = new Date(Date.now() + 7 * 86400000);
@@ -21,18 +22,21 @@ export class PlatformService {
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
  async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: true } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
- async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) { const org = await this.prisma.organization.update({ where: { id }, data: dto }); await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } }); return org; }
- async suspend(id: string, actorId: string) { const org = await this.prisma.$transaction(async tx => { const updated = await tx.organization.update({ where: { id }, data: { status: 'SUSPENDED' } }); const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } }); await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } }); await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } }); return updated; }); return org; }
+ async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) { const org = await this.prisma.organization.update({ where: { id }, data: dto, include: { _count: { select: { users: true, invitations: true } } } }); await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } }); return org; }
+ async suspend(id: string, actorId: string) { const org = await this.prisma.$transaction(async tx => { const updated = await tx.organization.update({ where: { id }, data: { status: 'SUSPENDED' }, include: { _count: { select: { users: true, invitations: true } } } }); const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } }); await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } }); await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } }); return updated; }); return org; }
  async deleteOrganization(id: string, actorId: string) {
   const org = await this.prisma.organization.findUnique({ where: { id } });
   if (!org) throw new NotFoundException('Organization not found');
-  await this.prisma.$transaction(async tx => {
+  const objectKeys = await this.prisma.$transaction(async tx => {
+   const files = await tx.file.findMany({ where: { organizationId: id }, select: { objectKey: true } });
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_DELETED', organizationId: id, metadata: { name: org.name, slug: org.slug } } });
    // LearningResource.createdBy and .file are ON DELETE RESTRICT. Remove the
    // catalog rows before the organization cascade deletes users and files.
    await tx.learningResource.deleteMany({ where: { organizationId: id } });
    await tx.organization.delete({ where: { id } });
+   return files.map(file => file.objectKey);
   });
+  await this.files.deleteOrganizationObjects(id, objectKeys);
  }
 
  // Support/recovery flow (issue #18): an org that lost access to its own

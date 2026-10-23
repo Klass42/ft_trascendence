@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Body,
   Controller,
@@ -32,7 +33,7 @@ export class OrganizationsController {
   invite(@Body() dto: CreateInvitationDto, @CurrentUser() user: AuthUser) { return this.organizationsService.invite(tenantId(user), user.userId, dto); }
 
   @Post('me/invitations/:id/revoke') @UseGuards(RolesGuard) @Roles('ADMIN')
-  revokeInvitation(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
+  revokeInvitation(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
 
   @Post('me/deletion-request')
   @UseGuards(RolesGuard)
@@ -49,7 +50,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateOrganizationDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -60,7 +61,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async findMembers(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
     @Query() query: ListMembersQueryDto,
   ) {
@@ -79,8 +80,8 @@ export class OrganizationsController {
   @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
-    @Param('id') id: string,
-    @Param('userId') userId: string,
+    @Param('id', ParseIdPipe) id: string,
+    @Param('userId', ParseIdPipe) userId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.organizationsService.removeMember(

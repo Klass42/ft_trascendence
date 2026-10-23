@@ -1,26 +1,22 @@
 import { PublicationStatus } from '@prisma/client';
-import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateSubjectDto {
   @IsString()
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @MinLength(1)
-  @MaxLength(120)
+  @MaxLength(200, { message: 'El título no puede superar los 200 caracteres.' })
   title: string;
 
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(5000, { message: 'La descripción no puede superar los 5000 caracteres.' })
   @IsOptional()
   description?: string;
 
   @IsString()
-  @MaxLength(80)
   @IsOptional()
   category?: string;
 
   @IsString()
-  @MaxLength(2048)
   @IsOptional()
   imageUrl?: string;
 

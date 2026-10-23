@@ -11,6 +11,7 @@ import {
 import {
   downloadGradebookCsv,
   formatFinalPercent,
+  subjectSelectorLabel,
   useMySubjects,
   useGradebook,
 } from '@/lib/api';
@@ -91,7 +92,7 @@ export function GradebookPage() {
               aria-label="Curso"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
-              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
+              options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))}
             />
           )}
           <Button

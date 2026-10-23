@@ -23,12 +23,12 @@ export class PresenceService {
     private readonly gateway: RealtimeGateway,
   ) {}
 
-  async getFriendsPresence(actingUserId: string): Promise<PresenceFriend[]> {
-    const friendIds = await this.gateway.getAcceptedFriendIds(actingUserId);
+  async getFriendsPresence(actingUserId: string, organizationId: string): Promise<PresenceFriend[]> {
+    const friendIds = await this.gateway.getAcceptedFriendIds(actingUserId, organizationId);
     if (friendIds.length === 0) return [];
 
     const users = await this.prisma.user.findMany({
-      where: { id: { in: friendIds } },
+      where: { id: { in: friendIds }, organizationId },
       select: { id: true, name: true, avatarUrl: true },
       orderBy: { name: 'asc' },
     });

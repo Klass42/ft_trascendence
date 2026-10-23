@@ -224,24 +224,56 @@ export class CoursesService {
   }
 
   async addMember(courseId: string, user: AuthUser, dto: AddMemberDto) {
-    const course = await this.requireCourse(courseId, user.organizationId);
-    const target = await this.prisma.user.findFirst({
-      where: { id: dto.userId, organizationId: user.organizationId },
-      select: { id: true },
-    });
-    if (!target) {
-      throw new NotFoundException('User not found in this organization');
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const course = await tx.course.findFirst({
+            where: { id: courseId, organizationId: user.organizationId },
+          });
+          if (!course) throw new NotFoundException(`Course ${courseId} not found`);
+
+          const target = await tx.user.findFirst({
+            where: { id: dto.userId, organizationId: user.organizationId },
+            select: { id: true },
+          });
+          if (!target) {
+            throw new NotFoundException('User not found in this organization');
+          }
+
+          const existing = await tx.courseMembership.findFirst({
+            where: {
+              courseId,
+              userId: dto.userId,
+              course: { organizationId: user.organizationId },
+            },
+          });
+          if (existing) {
+            throw new ConflictException('Already a member of this course');
+          }
+
+          await this.assertSingleActiveMembership(
+            dto.userId,
+            user.organizationId,
+            course,
+            tx,
+          );
+          return tx.courseMembership.create({
+            data: { courseId, userId: dto.userId },
+          });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch (error) {
+        if (!this.isSerializationConflict(error)) throw error;
+        if (attempt === maxAttempts - 1) {
+          throw new ConflictException(
+            'No se pudo completar el alta por un conflicto concurrente. Inténtalo de nuevo.',
+          );
+        }
+      }
     }
-    const existing = await this.prisma.courseMembership.findUnique({
-      where: { courseId_userId: { courseId, userId: dto.userId } },
-    });
-    if (existing) {
-      throw new ConflictException('Already a member of this course');
-    }
-    await this.assertSingleActiveMembership(dto.userId, user.organizationId, course);
-    return this.prisma.courseMembership.create({
-      data: { courseId, userId: dto.userId },
-    });
+
+    throw new ConflictException('No se pudo completar el alta. Inténtalo de nuevo.');
   }
 
   async removeMember(courseId: string, memberUserId: string, user: AuthUser) {
@@ -399,9 +431,10 @@ export class CoursesService {
     userId: string,
     organizationId: string,
     course: { id: string; status: CohortStatus },
+    tx: Prisma.TransactionClient,
   ) {
     if (course.status !== 'ACTIVE') return;
-    const other = await this.prisma.courseMembership.findFirst({
+    const other = await tx.courseMembership.findFirst({
       where: {
         userId,
         courseId: { not: course.id },
@@ -411,6 +444,15 @@ export class CoursesService {
     if (other) {
       throw new ConflictException('The user already belongs to an active course');
     }
+  }
+
+  private isSerializationConflict(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2034'
+    );
   }
 
   private async assertMembersHaveNoOtherActiveCourse(courseId: string, organizationId: string) {
