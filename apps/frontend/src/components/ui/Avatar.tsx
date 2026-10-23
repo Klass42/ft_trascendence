@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import styles from './Avatar.module.css';
+import { useProtectedImageUrl } from './useProtectedImageUrl';
 
 export interface AvatarProps {
   src?: string | null;
@@ -11,7 +12,8 @@ export interface AvatarProps {
 export function Avatar({ src, alt = '', size = 'md', className }: AvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => setImageFailed(false), [src]);
-  const showImage = Boolean(src) && !imageFailed;
+  const imageUrl = useProtectedImageUrl(src);
+  const showImage = Boolean(imageUrl) && !imageFailed;
 
   return (
     <span
@@ -21,7 +23,7 @@ export function Avatar({ src, alt = '', size = 'md', className }: AvatarProps) {
       aria-hidden={alt ? undefined : true}
     >
       {showImage ? (
-        <img src={src!} alt="" onError={() => setImageFailed(true)} />
+        <img src={imageUrl!} alt="" onError={() => setImageFailed(true)} />
       ) : (
         <svg viewBox="0 0 40 40" focusable="false" aria-hidden="true">
           <circle cx="20" cy="20" r="20" className={styles.background} />

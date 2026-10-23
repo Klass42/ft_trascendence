@@ -1,16 +1,15 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ServiceUnavailableException } from '@nestjs/common';
+import { Readable } from 'node:stream';
 import {
   S3StorageConfig,
   S3StorageDriver,
   s3StorageConfigFromEnvironment,
 } from '../s3-driver.service';
-
-jest.mock('@aws-sdk/s3-request-presigner', () => ({ getSignedUrl: jest.fn() }));
 
 const config: S3StorageConfig = {
   endpoint: 'http://garage:3900',
@@ -19,7 +18,6 @@ const config: S3StorageConfig = {
   accessKeyId: 'access-key',
   secretAccessKey: 'secret-key',
   forcePathStyle: true,
-  signedUrlTtlSeconds: 300,
 };
 
 const file = {
@@ -55,15 +53,13 @@ describe('S3StorageDriver', () => {
     }));
   });
 
-  it('uses a short-lived signed URL for downloads', async () => {
-    (getSignedUrl as jest.Mock).mockResolvedValue('https://garage.test/signed');
+  it('streams objects through the authenticated backend endpoint', async () => {
+    const body = Readable.from([Buffer.from('pdf')]);
+    send.mockResolvedValueOnce({ Body: body });
 
-    await expect(driver.getSignedUrl('org-1/file-id')).resolves.toBe('https://garage.test/signed');
-    expect(getSignedUrl).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ input: { Bucket: 'uploads', Key: 'org-1/file-id' } }),
-      { expiresIn: 300 },
-    );
+    await expect(driver.getObject('org-1/file-id')).resolves.toBe(body);
+    const command = send.mock.calls[0][0] as GetObjectCommand;
+    expect(command.input).toEqual({ Bucket: 'uploads', Key: 'org-1/file-id' });
   });
 
   it('sends a delete command for an object', async () => {
@@ -76,8 +72,8 @@ describe('S3StorageDriver', () => {
     send.mockRejectedValueOnce(new Error('Garage unavailable'));
     await expect(driver.putObject(file, 'org-1')).rejects.toThrow(ServiceUnavailableException);
 
-    (getSignedUrl as jest.Mock).mockRejectedValueOnce(new Error('Garage unavailable'));
-    await expect(driver.getSignedUrl('org-1/file-id')).rejects.toThrow(ServiceUnavailableException);
+    send.mockRejectedValueOnce(new Error('Garage unavailable'));
+    await expect(driver.getObject('org-1/file-id')).rejects.toThrow(ServiceUnavailableException);
   });
 });
 
@@ -87,7 +83,7 @@ describe('s3StorageConfigFromEnvironment', () => {
     expect(() => s3StorageConfigFromEnvironment({ S3_ENDPOINT: 'http://garage' })).toThrow('S3_ACCESS_KEY_ID');
   });
 
-  it('defaults to Garage-compatible path-style URLs and a five-minute expiry', () => {
+  it('defaults to Garage-compatible path-style requests', () => {
     expect(s3StorageConfigFromEnvironment({
       S3_ENDPOINT: 'http://garage',
       S3_ACCESS_KEY_ID: 'key',
@@ -96,7 +92,6 @@ describe('s3StorageConfigFromEnvironment', () => {
       bucket: 'ft-uploads',
       region: 'us-east-1',
       forcePathStyle: true,
-      signedUrlTtlSeconds: 300,
     });
   });
 

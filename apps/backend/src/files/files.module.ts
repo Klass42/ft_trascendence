@@ -4,9 +4,10 @@ import { FilesService } from './files.service';
 import { createStorageDriver } from './storage';
 import { StorageService } from './storage/storage.service';
 import { ResourcesModule } from '@/resources/resources.module';
+import { CourseAccessModule } from '@/courses/course-access.module';
 
 @Module({
-  imports: [ResourcesModule],
+  imports: [ResourcesModule, CourseAccessModule],
   controllers: [FilesController],
   providers: [
     FilesService,

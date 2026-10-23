@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Readable } from 'node:stream';
 
 export interface StoredFile {
   bucket: string;
@@ -10,7 +11,7 @@ export interface StorageDriver {
     file: Express.Multer.File,
     organizationId: string,
   ): Promise<StoredFile>;
-  getSignedUrl(objectKey: string): Promise<string>;
+  getObject(objectKey: string): Promise<Readable>;
   deleteObject(objectKey: string): Promise<void>;
 }
 
@@ -20,6 +21,6 @@ export abstract class StorageService implements StorageDriver {
     file: Express.Multer.File,
     organizationId: string,
   ): Promise<StoredFile>;
-  abstract getSignedUrl(objectKey: string): Promise<string>;
+  abstract getObject(objectKey: string): Promise<Readable>;
   abstract deleteObject(objectKey: string): Promise<void>;
 }
