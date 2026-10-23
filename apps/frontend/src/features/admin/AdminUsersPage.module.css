@@ -47,6 +47,53 @@
   color: var(--color-text-secondary);
 }
 
+.mobileCards {
+  display: none;
+}
+
+.userCard {
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.userCardHeader,
+.userCardMeta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.userCardName {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.userCardEmail {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.userCardMeta {
+  align-items: center;
+  justify-content: flex-start;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.userCardActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
 .loadingWrap {
   display: flex;
   justify-content: center;
@@ -130,6 +177,15 @@
 
   .filters > div:first-child {
     grid-column: auto;
+  }
+
+  .desktopTable {
+    display: none;
+  }
+
+  .mobileCards {
+    display: grid;
+    gap: var(--space-3);
   }
 
   .pageControls {

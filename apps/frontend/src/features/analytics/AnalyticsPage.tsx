@@ -100,7 +100,7 @@ export function AnalyticsPage() {
               className={styles.select}
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
-              aria-label="Curso"
+              aria-label="Asignatura"
             >
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Badge,
@@ -11,6 +11,7 @@ import {
   useToast,
 } from '@/components/ui';
 import {
+  apiClient,
   useAuth,
   useActivities,
   useActivityMutations,
@@ -29,6 +30,69 @@ import { TaskLibrary } from './TaskLibrary';
 import { GradePanel, type GradeTarget } from '../gradebook/GradePanel';
 import styles from './ActivitiesPage.module.css';
 
+const LAST_SUBJECT_KEY = 'activities:last-subject';
+
+function readLastSubject(userId: string | undefined, availableIds: string[]): string | null {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const saved = window.localStorage.getItem(`${LAST_SUBJECT_KEY}:${userId}`);
+    return saved && availableIds.includes(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberSubject(userId: string | undefined, subjectId: string) {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${LAST_SUBJECT_KEY}:${userId}`, subjectId);
+  } catch {
+    // The remembered course is only a convenience; selection still works without storage.
+  }
+}
+
+function useActivityCourseSelection(
+  courses: Array<{ id: string }> | null,
+  userId: string | undefined,
+  linkedSubjectId: string | null,
+  activityId: string | null,
+) {
+  const [courseId, setCourseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!courses?.length) return;
+    let active = true;
+    const availableIds = courses.map((course) => course.id);
+    const linkedSubject = linkedSubjectId && availableIds.includes(linkedSubjectId)
+      ? linkedSubjectId
+      : null;
+    const fallback = linkedSubject ?? readLastSubject(userId, availableIds) ?? availableIds[0];
+
+    if (!activityId) {
+      setCourseId(fallback);
+      return () => { active = false; };
+    }
+
+    apiClient.get<ActivityDTO>(`/activities/${encodeURIComponent(activityId)}`)
+      .then((activity) => {
+        if (!active) return;
+        setCourseId(availableIds.includes(activity.subjectId) ? activity.subjectId : fallback);
+      })
+      .catch(() => {
+        if (active) setCourseId(fallback);
+      });
+
+    return () => { active = false; };
+  }, [courses, userId, linkedSubjectId, activityId]);
+
+  function selectCourse(subjectId: string) {
+    setCourseId(subjectId);
+    rememberSubject(userId, subjectId);
+  }
+
+  return { courseId, selectCourse };
+}
+
 /**
  * Unified Tareas workspace. Staff author, publish, and grade; students take
  * published tasks in the player. A course selector scopes the list. Tenant is
@@ -39,25 +103,18 @@ export function ActivitiesPage() {
   const isStaff = user?.role === 'TEACHER' || user?.role === 'ADMIN';
 
   const { data: courses, isLoading: coursesLoading } = useMySubjects();
-  const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedSubjectId = searchParams.get('subjectId');
-  const handledLinkedSubjectId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!courses?.length || !linkedSubjectId || handledLinkedSubjectId.current === linkedSubjectId) return;
-    if (!courses.some((course) => course.id === linkedSubjectId)) return;
-    handledLinkedSubjectId.current = linkedSubjectId;
-    setCourseId(linkedSubjectId);
-    setSelectedId(null);
-  }, [courses, linkedSubjectId]);
-
-  useEffect(() => {
-    if (!courseId && courses?.length) setCourseId(courses[0].id);
-  }, [courses, courseId]);
+  const linkedActivityId = searchParams.get('activityId');
+  const { courseId, selectCourse } = useActivityCourseSelection(
+    courses,
+    user?.userId,
+    linkedSubjectId,
+    isStaff ? linkedActivityId : null,
+  );
 
   const {
     data: activities,
@@ -103,12 +160,16 @@ export function ActivitiesPage() {
         {courses && courses.length > 0 && (
           <div className={styles.courseSelector}>
             <Select
-              aria-label="Curso"
+              aria-label="Asignatura"
               value={courseId ?? ''}
               onChange={(e) => {
-                setCourseId(e.target.value);
+                selectCourse(e.target.value);
                 setSelectedId(null);
                 setCreating(false);
+                const next = new URLSearchParams(searchParams);
+                next.delete('activityId');
+                next.delete('subjectId');
+                setSearchParams(next, { replace: true });
               }}
               options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))}
             />
@@ -240,14 +301,16 @@ export function ActivitiesPage() {
 /** Learner workspace. The activity and attempt endpoints determine membership
  * and course role on the server; this UI never receives an answer key. */
 function StudentActivitiesPage() {
+  const { user } = useAuth();
   const { data: courses, isLoading: coursesLoading } = useMySubjects();
-  const [courseId, setCourseId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-
-  useEffect(() => {
-    if (!courseId && courses?.length) setCourseId(courses[0].id);
-  }, [courseId, courses]);
+  const { courseId, selectCourse: selectCourseFromUser } = useActivityCourseSelection(
+    courses,
+    user?.userId,
+    searchParams.get('subjectId'),
+    searchParams.get('activityId'),
+  );
 
   const { data: activities, isLoading, error, refetch } = useActivities(courseId);
 
@@ -271,7 +334,14 @@ function StudentActivitiesPage() {
     <div className={styles.page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Tareas</h1>
-        {courses?.length ? <div className={styles.courseSelector}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))} /></div> : null}
+        {courses?.length ? <div className={styles.courseSelector}><Select aria-label="Asignatura" value={courseId ?? ''} onChange={(event) => {
+          selectCourseFromUser(event.target.value);
+          setSelectedId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete('activityId');
+          next.delete('subjectId');
+          setSearchParams(next, { replace: true });
+        }} options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))} /></div> : null}
       </div>
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
       {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus tareas aparecerán aquí." />}

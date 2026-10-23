@@ -166,19 +166,46 @@ export function AdminUsersPage() {
         </div>
       ) : (
         <>
-          <Table
-            columns={columns}
-            data={result?.data ?? []}
-            rowKey={(member) => member.id}
-            empty={(
-              <EmptyState
-                icon={<Users size={21} />}
-                title={result?.total ? 'No hay resultados' : 'Aún no hay usuarios'}
-                description={result?.total ? 'Prueba con otro nombre, email, rol o estado.' : 'Invita a las personas que participarán en esta organización.'}
-                action={!result?.total ? <Button onClick={() => navigate('/admin/users/invite')}>Invitar usuario</Button> : undefined}
-              />
-            )}
-          />
+          <div className={result?.data.length ? styles.desktopTable : undefined}>
+            <Table
+              columns={columns}
+              data={result?.data ?? []}
+              rowKey={(member) => member.id}
+              empty={(
+                <EmptyState
+                  icon={<Users size={21} />}
+                  title={result?.total ? 'No hay resultados' : 'Aún no hay usuarios'}
+                  description={result?.total ? 'Prueba con otro nombre, email, rol o estado.' : 'Invita a las personas que participarán en esta organización.'}
+                  action={!result?.total ? <Button onClick={() => navigate('/admin/users/invite')}>Invitar usuario</Button> : undefined}
+                />
+              )}
+            />
+          </div>
+          {result && result.data.length > 0 && (
+            <div className={styles.mobileCards}>
+              {result.data.map((member) => (
+                <article key={member.id} className={styles.userCard}>
+                  <div className={styles.userCardHeader}>
+                    <h2 className={styles.userCardName}>{member.name}</h2>
+                    <Badge variant="accent">{ROLE_LABEL[member.role]}</Badge>
+                  </div>
+                  <p className={styles.userCardEmail}>{member.email}</p>
+                  <div className={styles.userCardMeta}>
+                    <span>Estado</span>
+                    <Badge variant={statusVariant(member.status)} dot>{statusLabel(member.status)}</Badge>
+                  </div>
+                  <div className={styles.userCardActions}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Pencil size={15} />}
+                      onClick={() => navigate(`/admin/users/${member.id}`)}
+                    >Editar</Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
           {(result?.total ?? 0) > 0 && (
             <footer className={styles.pagination}>
               <span className={styles.resultCount}>Mostrando {firstItem}–{lastItem} de {result?.total}</span>

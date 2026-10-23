@@ -101,6 +101,8 @@ export interface AnswerDTO {
   response: Record<string, unknown>;
   correct: boolean | null;
   awarded: number | null;
+  /** Original file names are included only in the staff attempt list. */
+  files?: Array<{ id: string; originalName: string }>;
 }
 
 export interface AttemptDTO {

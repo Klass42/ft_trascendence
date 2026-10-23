@@ -33,6 +33,7 @@ interface NavItem {
   student?: boolean;
   teacher?: boolean;
   adminOnly?: boolean;
+  hideFromAdmin?: boolean;
 }
 
 const NAV_ITEMS: readonly NavItem[] = [
@@ -41,8 +42,8 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/friends', icon: <Users size={20} />, label: 'Amigos' },
   { to: '/activities', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
-  { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos' },
-  { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true },
+  { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos', hideFromAdmin: true },
+  { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true, hideFromAdmin: true },
   { to: '/resources', icon: <Library size={20} />, label: 'Biblioteca', staffOnly: true },
   { to: '/org', icon: <Building2 size={20} />, label: 'Organización' },
   { to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios', adminOnly: true },
@@ -129,6 +130,9 @@ export function AppLayout() {
             const role = user?.role;
             // Admin-only tools (e.g. Usuarios) — hide from non-admins.
             if (item.adminOnly && role !== 'ADMIN') {
+              return false;
+            }
+            if (item.hideFromAdmin && role === 'ADMIN') {
               return false;
             }
             // Analytics dashboard is a staff tool — hide from students.
