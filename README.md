@@ -7,7 +7,7 @@
 
 A learning management system (LMS) for academies: organizations, courses, subjects, lessons,
 assignments and tests, grades, forums, friends and real-time notifications. Final project of the
-42 Common Core (`ft_transcendence`, subject v21.2 "Surprise", free-choice web application).
+42 Common Core (`ft_transcendence`, subject v21.1 "Surprise", free-choice web application).
 
 ## Table of contents
 
@@ -184,9 +184,17 @@ Full infrastructure guide: [`docs/infra/README.md`](docs/infra/README.md).
 
 ### Backend
 
-<!-- TODO(Jorge/David): technologies and why. Known facts: NestJS 10 on Node 22, Prisma 6,
-     passport (JWT + Google OAuth 2.0), argon2 password hashing, class-validator DTOs,
-     Socket.io gateway, @nestjs/event-emitter, multer uploads, AWS S3 SDK for Garage. -->
+NestJS 10 on Node 22 with TypeScript, Prisma 6 as the ORM, Passport (JWT + Google OAuth 2.0),
+argon2 for passwords, class-validator DTOs behind a global `ValidationPipe` (`whitelist` +
+`forbidNonWhitelisted`), `@nestjs/throttler` for rate limiting, multer uploads with content
+sniffing, an S3 driver for Garage and a local driver, Socket.io (`@nestjs/websockets`) and
+`@nestjs/event-emitter`.
+
+*Why:* NestJS gives us modules, dependency injection and guards, so each feature lives in its own
+module and tenant isolation and RBAC are enforced in one place (`@CurrentUser()`, `RolesGuard`)
+instead of being repeated per route. The real-time layer is decoupled with an event bus: services
+publish domain events (`notification.created`, `analytics.updated`) and the Socket.io gateway
+reacts to them, so no service imports the gateway and nothing breaks when nobody is connected.
 
 ### Database
 
@@ -258,7 +266,15 @@ The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/pris
 | HTTPS everywhere | Caddy terminates TLS for the app and Grafana; HTTP redirects to HTTPS; security headers | Viacheslav |
 | Monitoring | Prometheus with 10 targets and 11 alerting rules, 3 Grafana dashboards, password-protected Grafana | Viacheslav |
 | CI pipeline | linters, build, 362 backend tests, real deployment + smoke + browser test on every pull request | Viacheslav |
-| <!-- TODO --> | | |
+| Real-time channel | Socket.io gateway authenticated with the user's JWT; one room per user; live notification push, presence and analytics refresh; clean handling of connect/disconnect (presence is only broadcast on the first and last socket of a user) | David |
+| Notifications | Persisted notifications with a bell, unread counter, toasts, a notification page and deep links; emitted on grading, forum replies, friend requests and content/enrolment changes | David |
+| Activities and attempts | Unified task engine: quizzes, exams and written tasks built from question blocks (multiple choice, true/false, fill the blanks, matching, ordering, short answer, essay, file upload); attempt window and limits, draft autosave and resume, automatic grading with partial credit, manual grading with feedback | David (engine with Jorge) |
+| Gradebook and final grade | Per-course gradebook, student grades page, weighted course final grade, CSV export with formula-injection protection | David |
+| Forums | Threads and nested replies per subject, pinning, search, reply notifications | David |
+| Friends and presence | Search people in your organization, send/accept/reject/cancel/remove friend requests, live online status | David |
+| Analytics dashboard | Course KPIs, submissions over time, grade distribution, date range, CSV and print-to-PDF export, live refresh when an attempt is submitted or graded | David |
+| Secure file access | Downloads are authorised per owner (course member, author, library, avatar) and served through short-lived HMAC-signed URLs; no public `/uploads` | David / Aloiki |
+| Auth hardening | Refresh tokens verified before any revocation, signed single-use OAuth `state`, rate limiting with `429 + Retry-After` | David / Jorge |
 
 ## Modules
 
@@ -268,16 +284,45 @@ The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/pris
 | Module | Type | Points | Member(s) | Implementation |
 |---|---|---|---|---|
 | Use a framework for both frontend and backend | Major | 2 | <!-- TODO --> | React 19 (Vite) + NestJS 10 <!-- TODO: justify --> |
-| Real-time features with WebSocket | Major | 2 | David | <!-- TODO --> |
+| Real-time features with WebSocket | Major | 2 | David | Socket.io gateway with JWT handshake, per-user rooms, live notifications, presence to friends and live analytics; connect/disconnect handled; efficient targeted broadcasting (see below) |
 | Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 <!-- TODO --> |
 | Standard user management | Major | 2 | Jorge | <!-- TODO --> |
 | Advanced permissions / RBAC | Major | 2 | Jorge | <!-- TODO --> |
 | Organization system | Major | 2 | Jorge | <!-- TODO --> |
-| Notification system | Minor | 1 | David | <!-- TODO --> |
+| Notification system | Minor | 1 | David | Persisted, real-time notifications for the create/update/delete actions of tasks, content, subjects, enrolments, forum, library and users (see below) |
+| Advanced analytics dashboard | Major | 2 | David | Interactive line/bar charts, live refresh, date range filter, CSV and PDF export (see below) |
 | File upload | Minor | 1 | Aloiki | <!-- TODO --> |
 | OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | <!-- TODO --> |
 | **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
-| **Total** | | **16** | | |
+| **Total** | | **18** | | |
+
+**Real-time features with WebSocket (Major).** *Justification:* a learning platform is full of
+things that change under the user's feet (a grade is published, a teacher posts a task, a friend
+comes online); polling would be wasteful and slow. *Implementation:* a Socket.io gateway
+(`apps/backend/src/realtime`) authenticates the handshake with the access JWT, joins each socket
+to a `user:<id>` room and pushes `notification:new`, `presence:update` and `analytics:update`
+only to the people concerned. Presence counts sockets per user in memory and broadcasts only on
+the first connection and the last disconnection, so a user with three tabs causes two events, not
+six. The frontend keeps one connection (`useNotificationsSocket`, `PresenceProvider`) and
+reconnects automatically. *Limit we know about:* the socket counter is per process; running
+several backend replicas would need a shared store such as Valkey.
+
+**Notification system (Minor).** *Implementation:* `NotificationsService.emit/emitMany` persist
+the row and publish an event; the gateway pushes it live. Emitters sit in the services that
+create, update or delete tasks, course content, subjects/cohorts, enrolments, forum threads,
+library resources and users, never notify the actor, deduplicate recipients and cannot break the
+action if they fail. The UI has the bell, unread counter, toasts, a page with deep links and
+mark-all-read.
+
+**Advanced analytics dashboard (Major).** *Justification:* teachers need to see how a course is
+going without opening every attempt. *Implementation:* `apps/backend/src/analytics` aggregates
+attempts with `groupBy`/`aggregate` (no N+1), always filtered by organization and gated to the
+staff of the subject; grades use each student's best graded attempt normalised to the activity's
+maximum score. The frontend draws hand-made SVG line and bar charts with tooltips (we avoided a
+chart library that still depends on `findDOMNode`, removed in React 19), a date-range filter
+(maximum 366 days), CSV export that honours the selected range and a print stylesheet for PDF.
+When a student submits or a teacher grades an attempt, the backend emits an event and the open
+dashboard refreshes by itself.
 
 **Monitoring system (Major).** *Justification:* the stack has 12 containers; without metrics and
 alerts a failing service is found by users, not by the team. *Implementation:* the NestJS backend
@@ -305,7 +350,23 @@ monitoring stack is published. Configuration: [`infra/monitoring/`](infra/monito
 
 ### David
 
-<!-- TODO -->
+I owned everything that happens *around* the content: the activities and attempts engine
+(question blocks, graders with partial credit, attempt windows and limits, resume and autosave),
+grading and the gradebook, forums, notifications, the Socket.io real-time layer with presence,
+the analytics dashboard, the friends screen, and later the security hardening of those areas
+(authorised file downloads with signed URLs, hidden answer keys, attempt concurrency, CSV
+injection). Modules I carry: Real-time WebSockets (Major), Notifications (Minor) and Advanced
+analytics (Major), and I contributed to Standard user management (friends and presence).
+
+*Challenges.* (1) **Decoupling real time**: a gateway that every service imports creates circular
+dependencies, so services publish domain events and the gateway subscribes. (2) **Concurrency**:
+two requests opening the same attempt could exceed the attempt limit; starting an attempt is now a
+serializable transaction that resumes the open attempt on conflict, covered by a concurrent-call
+test. (3) **Not trusting my own tests**: after the rework a live pass with Playwright found
+things unit tests had missed (analytics still read a legacy model and showed zeros; the avatar
+upload used the wrong HTTP verb), so every change now goes through a real-stack check. (4)
+**Tenant isolation**: every query is scoped by `organizationId` and by course membership; an
+audit found a cross-course clone and an answer-key leak, both fixed with regression tests.
 
 ### Aloiki
 
@@ -347,7 +408,7 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ### Documentation and references
 
-- 42 subject: `ft_transcendence` v21.2.
+- 42 subject: `ft_transcendence` v21.1.
 - [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/)
 - [Docker Compose specification](https://docs.docker.com/compose/compose-file/) and [Compose `depends_on` conditions](https://docs.docker.com/compose/how-tos/startup-order/)
 - [Caddy documentation](https://caddyserver.com/docs/) (automatic HTTPS, `reverse_proxy`, internal CA)
@@ -359,7 +420,16 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ### Use of AI
 
-<!-- TODO(Jorge, David, Aloiki): your part. -->
+<!-- TODO(Jorge, Aloiki): your part. -->
+
+- **David:** Claude Code (Anthropic) was used as an orchestrator that reads the code base, writes
+  design notes and reviews diffs, and OpenAI Codex agents (several in parallel, each in its own git
+  worktree) implemented scoped changes. We used them for the activities engine, the analytics
+  rewrite, security fixes found by an audit and the friends/avatar screens. Rules we followed:
+  every task had written acceptance criteria; nothing was merged without reading the diff, running
+  the unit tests and checking the behaviour on the running stack (several agent mistakes were
+  caught that way, for example an over-strict id validator and a wrong HTTP method); and the
+  agents never touched infrastructure or secrets.
 
 - **Infrastructure (Viacheslav):** Claude Code (Anthropic) was used as a pair-programmer for the
   infrastructure rework: drafting `compose.yaml`, the Makefile, the Caddyfile, Prometheus
