@@ -123,7 +123,12 @@ export class RealtimeGateway
     online: boolean,
   ): Promise<void> {
     try {
-      const friendIds = await this.getAcceptedFriendIds(userId);
+      const actor = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true },
+      });
+      if (!actor?.organizationId) return;
+      const friendIds = await this.getAcceptedFriendIds(userId, actor.organizationId);
       for (const friendId of friendIds) {
         this.server
           ?.to(userRoom(friendId))
@@ -141,11 +146,13 @@ export class RealtimeGateway
    * Ids of users who are ACCEPTED friends of `userId` (friendship is symmetric,
    * so look at both sides of the relation).
    */
-  async getAcceptedFriendIds(userId: string): Promise<string[]> {
+  async getAcceptedFriendIds(userId: string, organizationId: string): Promise<string[]> {
     const friendships = await this.prisma.friendship.findMany({
       where: {
         status: 'ACCEPTED',
         OR: [{ requesterId: userId }, { addresseeId: userId }],
+        requester: { is: { organizationId } },
+        addressee: { is: { organizationId } },
       },
       select: { requesterId: true, addresseeId: true },
     });

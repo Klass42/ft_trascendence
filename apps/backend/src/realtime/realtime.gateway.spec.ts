@@ -44,6 +44,7 @@ describe('RealtimeGateway (integration)', () => {
     user: {
       update: async () => ({}),
       findMany: jest.fn(async () => [{ id: 'analytics-admin' }]),
+      findUnique: async () => ({ organizationId: 'org-test' }),
     },
     subjectStaff: {
       findMany: jest.fn(async () => [{ userId: 'analytics-teacher' }]),
