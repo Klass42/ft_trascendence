@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { User, Mail, Lock, UserPlus } from 'lucide-react';
 import { useAuth, ApiError } from '@/lib/api';
 import { Button, Input, Card } from '@/components/ui';
+import { mapApiValidationErrors } from '@/lib/form-errors';
 import styles from './RegisterPage.module.css';
 
 const PASSWORD_RULES = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
@@ -21,11 +22,17 @@ export function RegisterPage() {
   function validate(): boolean {
     const next: typeof errors = {};
     if (!name.trim()) next.name = 'El nombre es obligatorio';
+    else if (name.trim().length > 100) next.name = 'El nombre no puede superar los 100 caracteres.';
     if (!organizationSlug.trim()) next.organization = 'El código de organización es obligatorio';
+    else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(organizationSlug.trim().toLowerCase())) {
+      next.organization = 'El código solo puede contener letras minúsculas, números y guiones.';
+    }
     if (!email.trim()) {
       next.email = 'El email es obligatorio';
-    } else if (!email.includes('@')) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       next.email = 'Formato de email inválido';
+    } else if (email.trim().length > 254) {
+      next.email = 'El correo no puede superar los 254 caracteres.';
     }
     if (!password) {
       next.password = 'La contraseña es obligatoria';
@@ -40,15 +47,14 @@ export function RegisterPage() {
 
   function mapServerErrors(err: ApiError) {
     if (err.isValidationError && err.errors) {
-      const next: typeof errors = {};
-      for (const msg of err.errors) {
-        const lower = msg.toLowerCase();
-        if (lower.includes('email')) next.email = msg;
-        else if (lower.includes('password') || lower.includes('contraseña')) next.password = msg;
-        else if (lower.includes('name') || lower.includes('nombre')) next.name = msg;
-        else next.form = msg;
-      }
-      setErrors(next);
+      const mapped = mapApiValidationErrors(err.errors);
+      setErrors({
+        name: mapped.fields.name,
+        organization: mapped.fields.organization,
+        email: mapped.fields.email,
+        password: mapped.fields.password,
+        form: mapped.form,
+      });
     } else if (err.status === 409) {
       setErrors({ email: 'Este email ya está registrado' });
     } else {
@@ -98,6 +104,7 @@ export function RegisterPage() {
               label="Nombre completo"
               placeholder="Tu nombre"
               value={name}
+              maxLength={100}
               onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: undefined })); }}
               leftIcon={<User size={18} />}
               error={errors.name}
@@ -107,9 +114,10 @@ export function RegisterPage() {
             />
 
             <Input
-              label="Organization code"
+              label="Código de organización"
               placeholder="your-school"
               value={organizationSlug}
+              maxLength={63}
               onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setErrors((p) => ({ ...p, organization: undefined })); }}
               error={errors.organization}
               required
@@ -121,6 +129,7 @@ export function RegisterPage() {
               label="Email"
               placeholder="tu@email.com"
               value={email}
+              maxLength={254}
               onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}
               leftIcon={<Mail size={18} />}
               error={errors.email}
@@ -133,6 +142,7 @@ export function RegisterPage() {
               label="Contraseña"
               placeholder="••••••••"
               value={password}
+              maxLength={128}
               onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: undefined })); }}
               leftIcon={<Lock size={18} />}
               error={errors.password}

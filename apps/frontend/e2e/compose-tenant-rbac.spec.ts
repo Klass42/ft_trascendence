@@ -70,7 +70,7 @@ test.describe('E2E tenant, RBAC, files and submissions — Compose over HTTPS', 
     const file = await upload.json() as { id: string };
 
     const foreignUrl = await request.get(`/api/files/${file.id}/url`, { headers: bearer(studentA) });
-    expect(foreignUrl.status()).toBe(403);
+    expect(foreignUrl.status()).toBe(404);
     expect((await request.get(`/api/files/${file.id}/url`, { headers: bearer(studentB) })).ok()).toBeTruthy();
   });
 

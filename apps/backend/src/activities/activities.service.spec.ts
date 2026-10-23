@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PublicationStatus, QuestionKind } from '@prisma/client';
 import { ActivitiesService } from './activities.service';
@@ -365,5 +367,56 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     await expect(
       service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
     ).rejects.toThrow(/no se puede publicar vacía/);
+  });
+});
+
+describe('ActivitiesService source activity authorization', () => {
+  it('hides an inaccessible source activity before loading its questions', async () => {
+    const access = {
+      assertSubjectStaffForUser: jest.fn(async (subjectId: string) => {
+        if (subjectId === 'destination-subject') {
+          return {
+            subject: { id: subjectId, organizationId: 'org-klass-0001' },
+            isStaff: true,
+          };
+        }
+        throw new ForbiddenException();
+      }),
+      assertSubjectReadableForUser: jest.fn(),
+    };
+    const prisma = {
+      activity: {
+        findFirst: jest.fn(async () => ({ subjectId: 'source-subject' })),
+        create: jest.fn(),
+      },
+    } as unknown as PrismaService;
+    const service = new ActivitiesService(prisma, access as any);
+
+    await expect(
+      service.create('destination-subject', 'user-teacher-001', {
+        title: 'Copia',
+        sourceActivityId: 'private-source',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(access.assertSubjectStaffForUser).toHaveBeenNthCalledWith(
+      1,
+      'destination-subject',
+      'user-teacher-001',
+    );
+    expect(access.assertSubjectStaffForUser).toHaveBeenNthCalledWith(
+      2,
+      'source-subject',
+      'user-teacher-001',
+    );
+    expect(prisma.activity.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.activity.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'private-source',
+        subject: { organizationId: 'org-klass-0001' },
+      },
+      select: { subjectId: true },
+    });
+    expect(prisma.activity.create).not.toHaveBeenCalled();
   });
 });

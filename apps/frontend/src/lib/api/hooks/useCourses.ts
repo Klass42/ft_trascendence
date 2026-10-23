@@ -7,12 +7,14 @@ interface UseCoursesResult {
   data: CourseDTO[] | null;
   isLoading: boolean;
   error: Error | null;
+  refetch: () => void;
 }
 
 export function useCourses(status?: string, search?: string): UseCoursesResult {
   const [data, setData] = useState<CourseDTO[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [reloadCount, setReloadCount] = useState(0);
   const { user } = useAuth();
   const orgId = user?.organizationId;
 
@@ -26,7 +28,7 @@ export function useCourses(status?: string, search?: string): UseCoursesResult {
     setIsLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ organizationId: orgId });
+    const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search) params.set('search', search);
 
@@ -42,7 +44,7 @@ export function useCourses(status?: string, search?: string): UseCoursesResult {
       });
 
     return () => { cancelled = true; };
-  }, [orgId, status, search]);
+  }, [orgId, status, search, reloadCount]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch: () => setReloadCount((count) => count + 1) };
 }

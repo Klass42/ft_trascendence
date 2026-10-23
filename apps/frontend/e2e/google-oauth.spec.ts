@@ -51,7 +51,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('   ');
+    await page.getByLabel('Código de organización').fill('   ');
     await page.getByRole('button', { name: 'Continuar con Google' }).click();
 
     await expect(page).toHaveURL(/\/login$/);
@@ -66,7 +66,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('bad slug');
+    await page.getByLabel('Código de organización').fill('bad slug');
     await page.getByRole('button', { name: 'Continuar con Google' }).click();
 
     await expect(page).toHaveURL(/\/login$/);
@@ -84,7 +84,7 @@ test.describe('Google sign-in client', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('Klass-42');
+    await page.getByLabel('Código de organización').fill('Klass-42');
     const [request] = await Promise.all([
       page.waitForRequest((candidate) => candidate.url().includes('/api/auth/google')),
       page.getByRole('button', { name: 'Continuar con Google' }).click(),
@@ -134,6 +134,13 @@ test.describe('Google sign-in client', () => {
       page.getByText('Esta cuenta de Google ya está vinculada a otra organización.'),
     ).toBeVisible();
     await expect(page).toHaveURL(/\/auth\/callback/);
+  });
+
+  test('shows a clear message when OAuth state is missing or invalid', async ({ page }) => {
+    await page.goto('/auth/callback#error=invalid_state');
+    await expect(
+      page.getByText('La solicitud de Google no es válida o ha caducado. Vuelve a intentarlo.'),
+    ).toBeVisible();
   });
 
   test('shows the generic Google error for oauth_failed and any other error', async ({ page }) => {

@@ -1,6 +1,6 @@
-import { IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 export class UpdatePlatformOrganizationDto {
- @IsOptional() @IsString() @MinLength(1) name?: string;
+ @IsOptional() @IsString() @MinLength(1) @MaxLength(100, { message: 'El nombre de la organización no puede superar los 100 caracteres.' }) name?: string;
  @IsOptional() @IsString() logoUrl?: string;
  @IsOptional() @IsString() primaryColor?: string;
  @IsOptional() @IsString() defaultLanguage?: string;

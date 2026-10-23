@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Badge,
@@ -17,6 +17,7 @@ import {
   useMySubjects,
   useSaveAsTemplate,
   useStaffAttempts,
+  subjectSelectorLabel,
 } from '@/lib/api';
 import type { ActivityDTO } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
@@ -26,6 +27,7 @@ import { ActivityPlayer } from './ActivityPlayer';
 import { QuestionList } from './QuestionList';
 import { TaskLibrary } from './TaskLibrary';
 import { GradePanel, type GradeTarget } from '../gradebook/GradePanel';
+import styles from './ActivitiesPage.module.css';
 
 /**
  * Unified Tareas workspace. Staff author, publish, and grade; students take
@@ -42,9 +44,19 @@ export function ActivitiesPage() {
   const [creating, setCreating] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const linkedSubjectId = searchParams.get('subjectId');
+  const handledLinkedSubjectId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!courseId && courses && courses.length > 0) setCourseId(courses[0].id);
+    if (!courses?.length || !linkedSubjectId || handledLinkedSubjectId.current === linkedSubjectId) return;
+    if (!courses.some((course) => course.id === linkedSubjectId)) return;
+    handledLinkedSubjectId.current = linkedSubjectId;
+    setCourseId(linkedSubjectId);
+    setSelectedId(null);
+  }, [courses, linkedSubjectId]);
+
+  useEffect(() => {
+    if (!courseId && courses?.length) setCourseId(courses[0].id);
   }, [courses, courseId]);
 
   const {
@@ -83,13 +95,13 @@ export function ActivitiesPage() {
   }
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
+    <div className={styles.page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
           Tareas
         </h1>
         {courses && courses.length > 0 && (
-          <div style={{ marginLeft: 'auto', minWidth: 220 }}>
+          <div className={styles.courseSelector}>
             <Select
               aria-label="Curso"
               value={courseId ?? ''}
@@ -98,7 +110,7 @@ export function ActivitiesPage() {
                 setSelectedId(null);
                 setCreating(false);
               }}
-              options={courses.map((c) => ({ value: c.id, label: `${`${c.title} · ${c.course.name} · ${c.course.academicYear}`} · ${c.course.name} · ${c.course.academicYear}` }))}
+              options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))}
             />
           </div>
         )}
@@ -114,9 +126,9 @@ export function ActivitiesPage() {
       )}
 
       {courseId && (
-        <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div className={styles.columns}>
           {/* List column */}
-          <div style={{ flex: '1 1 300px', minWidth: 260 }}>
+          <div className={styles.listColumn}>
             <div style={{ marginBottom: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button variant="primary" onClick={() => setCreating(true)}>
                 + Nueva tarea
@@ -175,16 +187,7 @@ export function ActivitiesPage() {
           </div>
 
           {/* Detail column */}
-          <div
-            style={{
-              flex: '2 1 420px',
-              minWidth: 300,
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-primary)',
-              borderRadius: 14,
-              padding: 22,
-            }}
-          >
+          <div className={styles.detailColumn}>
             {!selected ? (
               <p style={{ color: 'var(--color-text-muted)' }}>
                 Selecciona una tarea para editarla.
@@ -265,15 +268,15 @@ function StudentActivitiesPage() {
   }
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
+    <div className={styles.page}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Tareas</h1>
-        {courses?.length ? <div style={{ marginLeft: 'auto', minWidth: 220 }}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: `${`${course.title} · ${course.course.name} · ${course.course.academicYear}`} · ${course.course.name} · ${course.course.academicYear}` }))} /></div> : null}
+        {courses?.length ? <div className={styles.courseSelector}><Select aria-label="Curso" value={courseId ?? ''} onChange={(event) => { setCourseId(event.target.value); setSelectedId(null); }} options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))} /></div> : null}
       </div>
       {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
       {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus tareas aparecerán aquí." />}
-      {courseId && <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 300px', minWidth: 260 }}>
+      {courseId && <div className={styles.columns}>
+        <div className={styles.listColumn}>
           {isLoading && <Spinner size="md" label="Cargando tareas…" />}
           {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las tareas de este curso.</p>}
           {activities?.length === 0 && !isLoading && <EmptyState title="Sin tareas todavía" description="Este curso aún no tiene tareas publicadas." />}
@@ -288,7 +291,7 @@ function StudentActivitiesPage() {
             })}
           </div>
         </div>
-        <div style={{ flex: '2 1 420px', minWidth: 300, background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 14, padding: 22 }}>
+        <div className={styles.detailColumn}>
           {selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={refetch} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una tarea para ver sus detalles.</p>}
         </div>
       </div>}
@@ -353,13 +356,13 @@ function ActivityDetail({
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{activity.title}</h2>
           <Badge variant={status.variant} dot>{status.label}</Badge>
           <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className={styles.detailActions}>
           <Button variant={published ? 'outline' : 'primary'} size="sm" onClick={togglePublish} disabled={isLoading}>
             {published ? 'Despublicar' : 'Publicar'}
           </Button>

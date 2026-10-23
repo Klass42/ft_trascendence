@@ -51,6 +51,13 @@ describe('ForumsService', () => {
               ? { name: 'Lucía Molina' }
               : null,
       },
+      subject: {
+        findFirst: async ({ where }: any) =>
+          where.id === COURSE_ID ? { id: COURSE_ID, organizationId: ORG_ID } : null,
+      },
+      subjectStaff: {
+        findMany: async () => [{ userId: TEACHER }],
+      },
       forumThread: {
         create: async ({ data }: any) => {
           seq += 1;
@@ -77,7 +84,21 @@ describe('ForumsService', () => {
           return { ...thread, author: null, _count: { posts: 0 } };
         },
         findUnique: async ({ where }: any) =>
-          threads.find((t) => t.id === where.id) ?? null,
+          (() => {
+            const thread = threads.find((t) => t.id === where.id);
+            // Prisma returns a record snapshot; don't expose the mutable fake row.
+            return thread ? { ...thread } : null;
+          })(),
+        update: async ({ where, data }: any) => {
+          const thread = threads.find((t) => t.id === where.id);
+          if (!thread) return null;
+          Object.assign(thread, data);
+          return { ...thread, author: null, _count: { posts: 0 } };
+        },
+        delete: async ({ where }: any) => {
+          const index = threads.findIndex((t) => t.id === where.id);
+          if (index >= 0) threads.splice(index, 1);
+        },
       },
       forumPost: {
         findFirst: async ({ where }: any) =>
@@ -105,11 +126,12 @@ describe('ForumsService', () => {
   it('a teacher reply notifies the thread author, not the replier', async () => {
     const prisma = buildPrismaFake();
     const emitted: Array<{ userId: string; type: NotificationType }> = [];
+    const emitMany = jest.fn(async (loader: any, type: NotificationType) => {
+      const userIds = typeof loader === 'function' ? await loader() : loader;
+      for (const userId of userIds) emitted.push({ userId, type });
+    });
     const notifications = {
-      emit: async (userId: string, type: NotificationType) => {
-        emitted.push({ userId, type });
-        return { id: 'n-1' };
-      },
+      emitMany,
     } as unknown as NotificationsService;
 
     const service = new ForumsService(prisma, notifications, accessFromPrisma(prisma));
@@ -120,8 +142,8 @@ describe('ForumsService', () => {
       body: 'Llevo horas peleándome con flexbox.',
     });
     expect(thread.authorId).toBe(STUDENT);
-    // Creating a thread notifies nobody (the only relevant user is the author).
-    expect(emitted).toHaveLength(0);
+    // A new thread reaches subject staff, never its student author.
+    expect(emitted).toEqual([{ userId: TEACHER, type: NotificationType.FORUM_THREAD }]);
 
     // Teacher replies to the thread.
     const reply = await service.addPost(thread.id, TEACHER, {
@@ -130,12 +152,40 @@ describe('ForumsService', () => {
     expect(reply.authorId).toBe(TEACHER);
 
     // Exactly one notification, to the student (thread author), FORUM_REPLY.
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0].userId).toBe(STUDENT);
-    expect(emitted[0].type).toBe(NotificationType.FORUM_REPLY);
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].userId).toBe(STUDENT);
+    expect(emitted[1].type).toBe(NotificationType.FORUM_REPLY);
 
     // The student replying to their own thread must not notify themselves.
     await service.addPost(thread.id, STUDENT, { body: '¡Gracias, funcionó!' });
-    expect(emitted).toHaveLength(1);
+    expect(emitted).toHaveLength(2);
+  });
+
+  it('notifies a thread author when their thread is pinned or deleted', async () => {
+    const prisma = buildPrismaFake();
+    const emitted: Array<{ userId: string; type: NotificationType }> = [];
+    const emitMany = jest.fn(async (loader: any, type: NotificationType) => {
+      const userIds = typeof loader === 'function' ? await loader() : loader;
+      for (const userId of userIds) emitted.push({ userId, type });
+    });
+    const notifications = {
+      emitMany,
+    } as unknown as NotificationsService;
+    const service = new ForumsService(prisma, notifications, accessFromPrisma(prisma));
+    const thread = await service.createThread(COURSE_ID, STUDENT, { title: 'Pregunta para el profesor' });
+    emitted.length = 0;
+    emitMany.mockClear();
+
+    await service.togglePin(thread.id, TEACHER);
+    await service.deleteThread(thread.id, TEACHER);
+
+    expect(emitMany.mock.calls.map(([recipients]) => recipients)).toEqual([
+      [STUDENT],
+      [STUDENT],
+    ]);
+    expect(emitted).toEqual([
+      { userId: STUDENT, type: NotificationType.FORUM_THREAD },
+      { userId: STUDENT, type: NotificationType.FORUM_THREAD },
+    ]);
   });
 });

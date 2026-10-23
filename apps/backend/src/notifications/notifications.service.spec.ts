@@ -2,6 +2,7 @@ import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
 import { NotificationsService, NOTIFICATION_CREATED } from './notifications.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import { Logger } from '@nestjs/common';
 
 /**
  * Happy-path unit test for the notifications service. Uses a tiny in-memory
@@ -84,5 +85,55 @@ describe('NotificationsService', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0].title).toBe('Welcome');
     expect(result.items[0].userId).toBe('user-lucia-001');
+  });
+
+  it('emitMany scopes recipients to the organization, removes the actor, and de-duplicates users', async () => {
+    const create = jest.fn(async ({ data }: any) => ({ id: 'n-1', ...data }));
+    const findMany = jest.fn(async ({ where }: any) =>
+      where.organizationId === 'org-one' && where.id.in.includes('target')
+        ? [{ id: 'target' }]
+        : [],
+    );
+    const service = new NotificationsService(
+      { user: { findMany }, notification: { create } } as unknown as PrismaService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
+    );
+
+    await service.emitMany(
+      ['actor', 'target', 'target', 'other-org-user'],
+      NotificationType.COURSE_CONTENT_CHANGED,
+      { title: 'Nuevo contenido' },
+      { organizationId: 'org-one', actorId: 'actor' },
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['target', 'other-org-user'] }, organizationId: 'org-one' },
+      select: { id: true },
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'target', type: NotificationType.COURSE_CONTENT_CHANGED }),
+    });
+  });
+
+  it('notification persistence failures do not reject emitMany or its caller', async () => {
+    const loggerError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const service = new NotificationsService(
+      {
+        user: { findMany: jest.fn(async () => [{ id: 'target' }]) },
+        notification: { create: jest.fn(async () => { throw new Error('database unavailable'); }) },
+      } as unknown as PrismaService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
+    );
+
+    await expect(service.emitMany(
+      ['target'],
+      NotificationType.USER_CHANGED,
+      { title: 'Cambio de cuenta' },
+      { organizationId: 'org-one' },
+    )).resolves.toBeUndefined();
+
+    expect(loggerError).toHaveBeenCalled();
+    loggerError.mockRestore();
   });
 });

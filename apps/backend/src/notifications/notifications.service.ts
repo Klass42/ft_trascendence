@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +13,13 @@ export interface EmitPayload {
   link?: string;
 }
 
+export interface EmitManyOptions {
+  organizationId?: string;
+  actorId?: string;
+}
+
+export type NotificationRecipientLoader = () => Promise<readonly string[]>;
+
 /** Options for {@link NotificationsService.listMine}. */
 export interface ListMineOptions {
   page?: number;
@@ -26,6 +33,8 @@ export interface ListMineOptions {
  */
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
@@ -36,21 +45,52 @@ export class NotificationsService {
    * can log/inspect it.
    */
   async emit(userId: string, type: NotificationType, payload: EmitPayload) {
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId,
-        type,
-        title: payload.title,
-        body: payload.body,
-        link: payload.link,
-      },
-    });
+    try {
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId,
+          type,
+          title: payload.title,
+          body: payload.body,
+          link: payload.link,
+        },
+      });
 
-    // Epic E: push por socket, sin acoplar módulos. Publicamos en el bus de
-    // eventos; RealtimeGateway lo escucha con @OnEvent y empuja "notification:new"
-    // a user:<id> si está conectado. No-op seguro si nadie escucha / no hay gateway.
-    this.events.emit(NOTIFICATION_CREATED, notification);
-    return notification;
+      // RealtimeGateway escucha el bus y publica en la sala del usuario.
+      this.events.emit(NOTIFICATION_CREATED, notification);
+      return notification;
+    } catch (error) {
+      this.logger.error(`No se pudo emitir ${type} para ${userId}`, error instanceof Error ? error.stack : undefined);
+      return null;
+    }
+  }
+
+  /**
+   * Notify a de-duplicated set of users after the main action has completed.
+   * When an organization is supplied, re-resolve recipients inside that tenant
+   * before emitting so callers cannot accidentally cross organization bounds.
+   */
+  async emitMany(
+    userIds: readonly string[] | NotificationRecipientLoader,
+    type: NotificationType,
+    payload: EmitPayload,
+    options: EmitManyOptions = {},
+  ): Promise<void> {
+    try {
+      const resolvedIds = typeof userIds === 'function' ? await userIds() : userIds;
+      let recipients = [...new Set(resolvedIds.filter(Boolean))];
+      if (options.actorId) recipients = recipients.filter((id) => id !== options.actorId);
+      if (options.organizationId && recipients.length > 0) {
+        const users = await this.prisma.user.findMany({
+          where: { id: { in: recipients }, organizationId: options.organizationId },
+          select: { id: true },
+        });
+        recipients = users.map((user) => user.id);
+      }
+      await Promise.all(recipients.map((userId) => this.emit(userId, type, payload)));
+    } catch (error) {
+      this.logger.error(`No se pudo emitir ${type} a varios usuarios`, error instanceof Error ? error.stack : undefined);
+    }
   }
 
   /**

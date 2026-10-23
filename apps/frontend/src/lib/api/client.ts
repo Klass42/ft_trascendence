@@ -99,7 +99,7 @@ class ApiClient {
     // Note: Don't set Content-Type header - browser sets it with boundary
     return this.request<T>(path, {
       ...options,
-      method: 'POST',
+      method: options?.method ?? 'POST',
       body: formData,
     });
   }
@@ -168,7 +168,7 @@ class ApiClient {
         reject(new ApiError(0, 'Upload timed out'));
       };
 
-      xhr.open('POST', url);
+      xhr.open(options?.method ?? 'POST', url);
       xhr.timeout = 15000; // 15s default timeout
 
       // Add auth headers

@@ -1,14 +1,21 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '@/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
+import { FilesService } from '@/files/files.service';
+import { NotificationsService } from '@/notifications/notifications.service';
 import type { CreatePlatformOrganizationDto } from './dto/create-platform-organization.dto';
 import type { UpdatePlatformOrganizationDto } from './dto/update-platform-organization.dto';
 import type { CreatePlatformOrganizationAdminDto } from './dto/create-platform-organization-admin.dto';
 
 @Injectable()
 export class PlatformService {
- constructor(private readonly prisma: PrismaService) {}
+ constructor(
+  private readonly prisma: PrismaService,
+  private readonly files: FilesService,
+  @Optional()
+  private readonly notifications?: NotificationsService,
+ ) {}
  private token() { const raw = crypto.randomBytes(32).toString('base64url'); return { raw, hash: crypto.createHash('sha256').update(raw).digest('hex') }; }
  async createOrganization(dto: CreatePlatformOrganizationDto, actorId: string) {
   const token = this.token(); const expiresAt = new Date(Date.now() + 7 * 86400000);
@@ -21,18 +28,44 @@ export class PlatformService {
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
  async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: true } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
- async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) { const org = await this.prisma.organization.update({ where: { id }, data: dto }); await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } }); return org; }
- async suspend(id: string, actorId: string) { const org = await this.prisma.$transaction(async tx => { const updated = await tx.organization.update({ where: { id }, data: { status: 'SUSPENDED' } }); const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } }); await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } }); await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } }); return updated; }); return org; }
+ async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) {
+  const org = await this.prisma.organization.update({
+   where: { id },
+   data: dto,
+   include: { _count: { select: { users: true, invitations: true } } },
+  });
+  await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } });
+  await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha actualizado`, 'Se han cambiado sus datos o configuración.');
+  return org;
+ }
+ async suspend(id: string, actorId: string) {
+  const org = await this.prisma.$transaction(async tx => {
+   const updated = await tx.organization.update({
+    where: { id },
+    data: { status: 'SUSPENDED' },
+    include: { _count: { select: { users: true, invitations: true } } },
+   });
+   const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } });
+   await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } });
+   await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } });
+   return updated;
+  });
+  await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha suspendido`, 'El acceso a la organización se ha desactivado.');
+  return org;
+ }
  async deleteOrganization(id: string, actorId: string) {
   const org = await this.prisma.organization.findUnique({ where: { id } });
   if (!org) throw new NotFoundException('Organization not found');
-  await this.prisma.$transaction(async tx => {
+  const objectKeys = await this.prisma.$transaction(async tx => {
+   const files = await tx.file.findMany({ where: { organizationId: id }, select: { objectKey: true } });
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_DELETED', organizationId: id, metadata: { name: org.name, slug: org.slug } } });
    // LearningResource.createdBy and .file are ON DELETE RESTRICT. Remove the
    // catalog rows before the organization cascade deletes users and files.
    await tx.learningResource.deleteMany({ where: { organizationId: id } });
    await tx.organization.delete({ where: { id } });
+   return files.map(file => file.objectKey);
   });
+  await this.files.deleteOrganizationObjects(id, objectKeys);
  }
 
  // Support/recovery flow (issue #18): an org that lost access to its own
@@ -57,5 +90,17 @@ export class PlatformService {
    return created;
   });
   return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt: invitation.expiresAt, invitationToken: token.raw };
+ }
+
+ private async notifyOrganizationMembers(organizationId: string, actorId: string, title: string, body: string) {
+  await this.notifications?.emitMany(
+   async () => {
+    const members = await this.prisma.user.findMany({ where: { organizationId }, select: { id: true } });
+    return members.map(({ id }) => id);
+   },
+   NotificationType.ORGANIZATION_CHANGED,
+   { title, body, link: '/profile' },
+   { organizationId, actorId },
+  );
  }
 }

@@ -58,6 +58,7 @@ const mkPrisma = () =>
       findMany: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
     notification: {
       findFirst: jest.fn(),
@@ -76,12 +77,15 @@ const actor = {
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
   let prisma: ReturnType<typeof mkPrisma>;
-  let notifications: { emit: jest.Mock };
+  let notifications: { emit: jest.Mock; emitMany: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = mkPrisma();
-    notifications = { emit: jest.fn(async () => ({ id: 'notif-1' })) };
+    notifications = {
+      emit: jest.fn(async () => ({ id: 'notif-1' })),
+      emitMany: jest.fn(async () => undefined),
+    };
     service = new OrganizationsService(
       prisma,
       notifications as unknown as NotificationsService,
@@ -119,6 +123,28 @@ describe('OrganizationsService', () => {
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.organization.update).not.toHaveBeenCalled();
     });
+
+    it('notifies organization members except the acting admin', async () => {
+      (prisma.organization.update as jest.Mock).mockResolvedValue({ ...mockOrg, name: 'New Name' });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: actor.userId }, { id: 'user-student-0001' }]);
+      let recipients: string[] = [];
+      notifications.emitMany.mockImplementation(async (...args: any[]) => {
+        const loader = args[0];
+        const resolved = typeof loader === 'function' ? await loader() : loader;
+        recipients = resolved.filter((id: string) => id !== actor.userId);
+      });
+
+      await service.update(ORG_ID, { name: 'New Name' }, ORG_ID, actor.userId);
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID }, select: { id: true } });
+      expect(recipients).toEqual(['user-student-0001']);
+      expect(notifications.emitMany).toHaveBeenCalledWith(
+        expect.any(Function),
+        NotificationType.ORGANIZATION_CHANGED,
+        expect.objectContaining({ title: 'La organización se ha actualizado' }),
+        { organizationId: ORG_ID, actorId: actor.userId },
+      );
+    });
   });
 
   describe('findMembers', () => {
@@ -126,7 +152,66 @@ describe('OrganizationsService', () => {
       (prisma.user.findMany as jest.Mock).mockResolvedValue(mockMembers);
       const result = await service.findMembers(ORG_ID, ORG_ID);
       expect(result).toHaveLength(2);
-      expect(result[0]).not.toHaveProperty('passwordHash');
+      expect(Array.isArray(result) ? result[0] : result.data[0]).not.toHaveProperty('passwordHash');
+    });
+
+    it('keeps the array response when no filters or pagination are supplied', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue(mockMembers);
+      const result = await service.findMembers(ORG_ID, ORG_ID, {});
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { organizationId: ORG_ID },
+        orderBy: { name: 'asc' },
+      }));
+      expect(prisma.user.count).not.toHaveBeenCalled();
+    });
+
+    it('filters by query, role, status and returns server-side pagination', async () => {
+      const pendingMember = { ...mockMembers[0], emailVerifiedAt: null };
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([pendingMember]);
+      (prisma.user.count as jest.Mock).mockResolvedValue(31);
+      const result = await service.findMembers(ORG_ID, ORG_ID, {
+        q: ' ada ', role: 'ADMIN', status: 'pending', page: 2, pageSize: 10,
+      });
+
+      expect(result).toMatchObject({ data: [{ id: pendingMember.id, status: 'pending' }], total: 31, page: 2, pageSize: 10, totalPages: 4 });
+      const where = (prisma.user.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).toMatchObject({
+        organizationId: ORG_ID,
+        role: 'ADMIN',
+        AND: [
+          { OR: [
+            { name: { contains: 'ada', mode: 'insensitive' } },
+            { email: { contains: 'ada', mode: 'insensitive' } },
+          ] },
+          { emailVerifiedAt: null },
+        ],
+      });
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 10, take: 10 }));
+      expect(prisma.user.count).toHaveBeenCalledWith({ where });
+    });
+
+    it('caps page size at 100 even if a query object bypasses DTO validation', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.count as jest.Mock).mockResolvedValue(0);
+      const result = await service.findMembers(ORG_ID, ORG_ID, { page: 1, pageSize: 500 });
+
+      expect(result).toMatchObject({ pageSize: 100 });
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
+    });
+
+    it('filters inactive users to verified accounts without recent presence', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.count as jest.Mock).mockResolvedValue(0);
+      await service.findMembers(ORG_ID, ORG_ID, { status: 'inactive', page: 1, pageSize: 25 });
+
+      const where = (prisma.user.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.organizationId).toBe(ORG_ID);
+      const inactiveFilter = where.AND[0];
+      expect(inactiveFilter.emailVerifiedAt).toEqual({ not: null });
+      expect(inactiveFilter.OR[0]).toEqual({ onlineAt: null });
+      expect(inactiveFilter.OR[1].onlineAt.lt).toBeInstanceOf(Date);
     });
 
     it('uses select to exclude passwordHash at query level', async () => {
@@ -261,6 +346,38 @@ describe('OrganizationsService', () => {
         ServiceUnavailableException,
       );
       expect(notifications.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getDeletionRequestStatus', () => {
+    it('returns pending when a platform superadmin has an unread request', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue({ id: 'notification-1' });
+
+      await expect(service.getDeletionRequestStatus(ORG_ID)).resolves.toEqual({ pending: true });
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: {
+          title: 'Solicitud de borrado: Klass Academy',
+          link: `/platform/organizations/${ORG_ID}`,
+          read: false,
+          user: { platformRole: 'SUPERADMIN' },
+        },
+        select: { id: true },
+      });
+    });
+
+    it('returns not pending when no unread request remains', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.notification.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.getDeletionRequestStatus(ORG_ID)).resolves.toEqual({ pending: false });
+    });
+
+    it('returns 404 when the organization does not exist', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.getDeletionRequestStatus(ORG_ID)).rejects.toThrow(NotFoundException);
+      expect(prisma.notification.findFirst).not.toHaveBeenCalled();
     });
   });
 });

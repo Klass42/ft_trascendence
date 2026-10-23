@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Controller,
   Get,
@@ -12,6 +13,8 @@ import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { AuthUser, CurrentUser } from '@/common/auth';
 import { CourseAccessService } from '../course-access.service';
+import { OrderedIdsDto } from '@/common/dto/ordered-ids.dto';
+import { AttachFileDto } from './dto/attach-file.dto';
 
 @Controller()
 export class LessonsController {
@@ -22,7 +25,7 @@ export class LessonsController {
 
   @Post('sections/:sectionId/lessons')
   async create(
-    @Param('sectionId') sectionId: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateLessonDto,
   ) {
@@ -31,12 +34,12 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    return this.lessonsService.create(sectionId, user.organizationId, dto);
+    return this.lessonsService.create(sectionId, user.organizationId, dto, user.userId);
   }
 
   @Get('sections/:sectionId/lessons')
   async findAll(
-    @Param('sectionId') sectionId: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
     @CurrentUser() user: AuthUser,
   ) {
     const section = await this.lessonsService.findSectionSubjectId(
@@ -49,23 +52,28 @@ export class LessonsController {
 
   @Patch('sections/:sectionId/lessons/reorder')
   async reorder(
-    @Param('sectionId') sectionId: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
     @CurrentUser() user: AuthUser,
-    @Body('orderedIds') orderedIds: string[],
+    @Body() dto: OrderedIdsDto,
   ) {
     const section = await this.lessonsService.findSectionSubjectId(
       sectionId,
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    await this.lessonsService.reorder(sectionId, user.organizationId, orderedIds);
+    await this.lessonsService.reorder(
+      sectionId,
+      user.organizationId,
+      dto.orderedIds,
+      user.userId,
+    );
     return { reordered: true };
   }
 
   @Get('sections/:sectionId/lessons/:id')
   async findOne(
-    @Param('sectionId') sectionId: string,
-    @Param('id') id: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
     const section = await this.lessonsService.findSectionSubjectId(
@@ -78,7 +86,7 @@ export class LessonsController {
 
   @Get('lessons/:id')
   async findById(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
     const lesson = await this.lessonsService.findSubjectId(
@@ -91,8 +99,8 @@ export class LessonsController {
 
   @Patch('sections/:sectionId/lessons/:id')
   async update(
-    @Param('sectionId') sectionId: string,
-    @Param('id') id: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateLessonDto,
   ) {
@@ -101,13 +109,13 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    return this.lessonsService.update(sectionId, id, user.organizationId, dto);
+    return this.lessonsService.update(sectionId, id, user.organizationId, dto, user.userId);
   }
 
   @Delete('sections/:sectionId/lessons/:id')
   async delete(
-    @Param('sectionId') sectionId: string,
-    @Param('id') id: string,
+    @Param('sectionId', ParseIdPipe) sectionId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
     const section = await this.lessonsService.findSectionSubjectId(
@@ -115,28 +123,33 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(section.subjectId, user);
-    await this.lessonsService.delete(sectionId, id, user.organizationId);
+    await this.lessonsService.delete(sectionId, id, user.organizationId, user.userId);
     return { deleted: true };
   }
 
   @Post('lessons/:lessonId/attachments')
   async attachFile(
-    @Param('lessonId') lessonId: string,
+    @Param('lessonId', ParseIdPipe) lessonId: string,
     @CurrentUser() user: AuthUser,
-    @Body('fileId') fileId: string,
+    @Body() dto: AttachFileDto,
   ) {
     const lesson = await this.lessonsService.findSubjectId(
       lessonId,
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
-    return this.lessonsService.attachFile(lessonId, fileId, user.organizationId);
+    return this.lessonsService.attachFile(
+      lessonId,
+      dto.fileId,
+      user.organizationId,
+      user.userId,
+    );
   }
 
   @Delete('lessons/:lessonId/attachments/:fileId')
   async detachFile(
-    @Param('lessonId') lessonId: string,
-    @Param('fileId') fileId: string,
+    @Param('lessonId', ParseIdPipe) lessonId: string,
+    @Param('fileId', ParseIdPipe) fileId: string,
     @CurrentUser() user: AuthUser,
   ) {
     const lesson = await this.lessonsService.findSubjectId(
@@ -144,7 +157,7 @@ export class LessonsController {
       user.organizationId,
     );
     await this.courseAccess.assertSubjectStaff(lesson.section.subjectId, user);
-    await this.lessonsService.detachFile(lessonId, fileId, user.organizationId);
+    await this.lessonsService.detachFile(lessonId, fileId, user.organizationId, user.userId);
     return { deleted: true };
   }
 }

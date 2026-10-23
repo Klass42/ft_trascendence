@@ -6,11 +6,13 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import { NotificationsService } from '@/notifications/notifications.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
 import * as crypto from 'crypto';
+import type { ListMembersQueryDto } from './dto/list-members-query.dto';
 
 export interface Member {
   id: string;
@@ -24,6 +26,8 @@ export interface Member {
   createdAt: Date;
   updatedAt: Date;
 }
+
+type MemberStatus = 'active' | 'inactive' | 'pending';
 
 @Injectable()
 export class OrganizationsService {
@@ -64,26 +68,120 @@ export class OrganizationsService {
     return org;
   }
 
-  async update(id: string, dto: UpdateOrganizationDto, callerOrgId: string) {
+  async update(id: string, dto: UpdateOrganizationDto, callerOrgId: string, callerUserId?: string) {
     if (id !== callerOrgId) {
       throw new ForbiddenException('Cannot edit an organization you do not belong to');
     }
-    return this.prisma.organization.update({ where: { id }, data: dto });
+    const updated = await this.prisma.organization.update({ where: { id }, data: dto });
+    await this.notifications.emitMany(
+      async () => {
+        const members = await this.prisma.user.findMany({
+          where: { organizationId: id },
+          select: { id: true },
+        });
+        return members.map(({ id: memberId }) => memberId);
+      },
+      NotificationType.ORGANIZATION_CHANGED,
+      { title: 'La organización se ha actualizado', body: `Se han actualizado los datos de «${updated.name}».`, link: '/profile' },
+      { organizationId: id, actorId: callerUserId },
+    );
+    return updated;
   }
 
-  async findMembers(id: string, callerOrgId: string): Promise<Member[]> {
+  async findMembers(
+    id: string,
+    callerOrgId: string,
+    query?: ListMembersQueryDto,
+  ): Promise<Member[] | { data: Array<Member & { status: MemberStatus }>; total: number; page: number; pageSize: number; totalPages: number }> {
     if (id !== callerOrgId) {
       throw new ForbiddenException('Cannot list members of another organization');
     }
-    return this.prisma.user.findMany({
-      where: { organizationId: id },
-      select: {
-        id: true, email: true, name: true, avatarUrl: true, role: true,
-        bio: true, onlineAt: true, emailVerifiedAt: true,
-        createdAt: true, updatedAt: true,
-      },
-      orderBy: { name: 'asc' },
+
+    const select = {
+      id: true, email: true, name: true, avatarUrl: true, role: true,
+      bio: true, onlineAt: true, emailVerifiedAt: true,
+      createdAt: true, updatedAt: true,
+    } as const;
+    const hasQuery = !!query && Object.values(query).some((value) => value !== undefined);
+    if (!hasQuery) {
+      return this.prisma.user.findMany({
+        where: { organizationId: id },
+        select,
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    const filters: Prisma.UserWhereInput[] = [];
+    const search = query?.q?.trim();
+    if (search) {
+      filters.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // onlineAt is the persisted last-seen stamp from the realtime gateway.
+    const presenceSince = new Date(Date.now() - 5 * 60 * 1000);
+    if (query?.status === 'pending') {
+      filters.push({ emailVerifiedAt: null });
+    } else if (query?.status === 'active') {
+      filters.push({ emailVerifiedAt: { not: null }, onlineAt: { gte: presenceSince } });
+    } else if (query?.status === 'inactive') {
+      filters.push({
+        emailVerifiedAt: { not: null },
+        OR: [{ onlineAt: null }, { onlineAt: { lt: presenceSince } }],
+      });
+    }
+
+    const where: Prisma.UserWhereInput = {
+      organizationId: id,
+      ...(query?.role && { role: query.role }),
+      ...(filters.length > 0 && { AND: filters }),
+    };
+    const page = query?.page ?? 1;
+    const pageSize = Math.min(query?.pageSize ?? 25, 100);
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select,
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    const members = data.map((member) => ({
+      ...member,
+      status: !member.emailVerifiedAt
+        ? 'pending' as const
+        : member.onlineAt && member.onlineAt >= presenceSince
+          ? 'active' as const
+          : 'inactive' as const,
+    }));
+
+    return { data: members, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  async getDeletionRequestStatus(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true },
     });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const pending = await this.prisma.notification.findFirst({
+      where: {
+        title: `Solicitud de borrado: ${org.name}`,
+        link: `/platform/organizations/${org.id}`,
+        read: false,
+        user: { platformRole: 'SUPERADMIN' },
+      },
+      select: { id: true },
+    });
+    return { pending: Boolean(pending) };
   }
 
   async removeMember(
@@ -95,10 +193,22 @@ export class OrganizationsService {
     if (userId === callerUserId) {
       throw new BadRequestException('Cannot remove yourself');
     }
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, organizationId: true } });
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true } });
     if (!target) throw new NotFoundException('User not found');
     if (target.organizationId !== id) throw new ForbiddenException('User belongs to another organization');
     await this.prisma.user.delete({ where: { id: userId } });
+    await this.notifications.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId: id, role: 'ADMIN' },
+          select: { id: true },
+        });
+        return admins.map(({ id: adminId }) => adminId);
+      },
+      NotificationType.USER_CHANGED,
+      { title: 'Se ha eliminado un miembro', body: `Se ha dado de baja a ${target.name}.`, link: '/admin/users' },
+      { organizationId: id, actorId: callerUserId },
+    );
   }
 
   /**
