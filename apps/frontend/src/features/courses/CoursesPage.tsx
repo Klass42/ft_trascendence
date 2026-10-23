@@ -1,22 +1,23 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, useCourses, useCreateCourse } from '@/lib/api';
-import type { CourseDTO, CohortStatus } from '@/lib/api';
-import { Button, Modal, FormField, useToast } from '@/components/ui';
+import { BookOpen, Plus } from 'lucide-react';
+import { apiClient, useAuth, useCourses, useCreateCourse } from '@/lib/api';
+import type { CohortStatus, CourseDTO, UpdateCourseInput } from '@/lib/api';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  DatePicker,
+  EmptyState,
+  Input,
+  Modal,
+  Select,
+  Spinner,
+  useToast,
+} from '@/components/ui';
+import { CohortEditModal } from './CohortEditModal';
+import { CourseActionsMenu } from './CourseActionsMenu';
 import styles from './CoursesPage.module.css';
-
-const COURSE_COLORS = [
-  '#2563eb', '#0f766e', '#d97706', '#7c3aed',
-  '#dc2626', '#0891b2', '#4f46e5', '#db2777',
-];
-
-function hashToColor(title: string): string {
-  let hash = 0;
-  for (let i = 0; i < title.length; i++) {
-    hash = title.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
-}
 
 function statusLabel(status: CohortStatus): string {
   if (status === 'ACTIVE') return 'En curso';
@@ -24,38 +25,51 @@ function statusLabel(status: CohortStatus): string {
   return 'Planificado';
 }
 
-function CourseGrid({ courses, onOpen }: { courses: CourseDTO[]; onOpen: (id: string) => void }) {
+function statusVariant(status: CohortStatus): 'success' | 'neutral' | 'info' {
+  if (status === 'ACTIVE') return 'success';
+  if (status === 'ARCHIVED') return 'neutral';
+  return 'info';
+}
+
+function formatDateRange(course: CourseDTO): string {
+  const format = (value: string) => new Intl.DateTimeFormat('es-ES', {
+    day: 'numeric', month: 'short', timeZone: 'UTC',
+  }).format(new Date(value));
+  return `${format(course.startsOn)} – ${format(course.endsOn)}`;
+}
+
+interface CourseGridProps {
+  courses: CourseDTO[];
+  isAdmin: boolean;
+  onOpen: (id: string) => void;
+  onEdit: (course: CourseDTO) => void;
+  onToggleArchive: (course: CourseDTO) => void;
+  onDelete: (course: CourseDTO) => void;
+}
+
+function CourseGrid({ courses, isAdmin, onOpen, onEdit, onToggleArchive, onDelete }: CourseGridProps) {
   return (
     <div className={styles.courseGrid}>
-      {courses.map((course) => {
-        const color = hashToColor(course.name + course.academicYear);
-        return (
-          <div
-            key={course.id}
-            onClick={() => onOpen(course.id)}
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border-primary)',
-              borderRadius: 15,
-              overflow: 'hidden',
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ height: 70, background: color, display: 'flex', alignItems: 'flex-end', padding: '12px 16px' }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.7)',
-                background: 'rgba(0,0,0,.15)', padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase',
-              }}>
-                {statusLabel(course.status)}
-              </span>
-            </div>
-            <div style={{ padding: 16 }}>
-              <div style={{ fontWeight: 800, fontSize: 16 }}>{course.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 4 }}>{course.academicYear}</div>
-            </div>
+      {courses.map((course) => (
+        <article className={styles.courseCard} key={course.id}>
+          <div className={styles.cardTop}>
+            <Badge variant={statusVariant(course.status)} dot>{statusLabel(course.status)}</Badge>
+            {isAdmin && (
+              <CourseActionsMenu
+                course={course}
+                onEdit={() => onEdit(course)}
+                onToggleArchive={() => onToggleArchive(course)}
+                onDelete={() => onDelete(course)}
+              />
+            )}
           </div>
-        );
-      })}
+          <button type="button" className={styles.courseLink} onClick={() => onOpen(course.id)}>
+            <strong className={styles.courseName}>{course.name}</strong>
+            <span className={styles.academicYear}>{course.academicYear}</span>
+            <span className={styles.dateRange}>{formatDateRange(course)}</span>
+          </button>
+        </article>
+      ))}
     </div>
   );
 }
@@ -65,121 +79,225 @@ export function CoursesPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isStudent = user?.role === 'STUDENT';
-  const { data: courses, isLoading, error } = useCourses();
+  const { data: courses, isLoading, error, refetch } = useCourses();
   const { create, isLoading: creating } = useCreateCourse();
   const { toast } = useToast();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [courseList, setCourseList] = useState<CourseDTO[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<CourseDTO | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CourseDTO | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState('');
-  const [academicYear, setAcademicYear] = useState('2025-2026');
+  const [academicYear, setAcademicYear] = useState('2026-2027');
   const [startsOn, setStartsOn] = useState('2026-09-01');
   const [endsOn, setEndsOn] = useState('2027-06-30');
   const [status, setStatus] = useState<CohortStatus>('ACTIVE');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const current = useMemo(() => (courses ?? []).filter((course) => course.status === 'ACTIVE'), [courses]);
-  const previous = useMemo(() => (courses ?? []).filter((course) => course.status !== 'ACTIVE'), [courses]);
+  useEffect(() => {
+    if (courses) setCourseList(courses);
+  }, [courses]);
 
-  const resetForm = () => {
+  const current = useMemo(
+    () => courseList.filter((course) => course.status === 'ACTIVE'),
+    [courseList],
+  );
+  const previous = useMemo(
+    () => courseList.filter((course) => course.status !== 'ACTIVE'),
+    [courseList],
+  );
+
+  function resetCreateForm() {
     setName('');
-    setAcademicYear('2025-2026');
+    setAcademicYear('2026-2027');
     setStartsOn('2026-09-01');
     setEndsOn('2027-06-30');
     setStatus('ACTIVE');
     setFieldErrors({});
-  };
+  }
 
-  const handleCreate = async () => {
+  async function handleCreate() {
     const errors: Record<string, string> = {};
-    if (!name.trim()) errors.name = 'El nombre es obligatorio';
-    if (!/^\d{4}-\d{4}$/.test(academicYear.trim())) errors.academicYear = 'Usa el formato 2025-2026';
-    if (!startsOn) errors.startsOn = 'La fecha de inicio es obligatoria';
-    if (!endsOn) errors.endsOn = 'La fecha de fin es obligatoria';
-    if (startsOn && endsOn && endsOn <= startsOn) errors.endsOn = 'Debe ser posterior al inicio';
+    if (!name.trim()) errors.name = 'El nombre es obligatorio.';
+    if (name.trim().length > 120) errors.name = 'Usa 120 caracteres como máximo.';
+    if (!/^\d{4}-\d{4}$/.test(academicYear.trim())) {
+      errors.academicYear = 'Usa el formato 2025-2026.';
+    }
+    if (!startsOn) errors.startsOn = 'La fecha de inicio es obligatoria.';
+    if (!endsOn) errors.endsOn = 'La fecha de fin es obligatoria.';
+    if (startsOn && endsOn && endsOn <= startsOn) errors.endsOn = 'Debe ser posterior al inicio.';
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
+
     try {
-      const course = await create({
-        name: name.trim(),
-        academicYear: academicYear.trim(),
-        startsOn,
-        endsOn,
-        status,
-      });
-      setModalOpen(false);
-      resetForm();
-      toast({ message: 'Curso creado correctamente', variant: 'success' });
+      const course = await create({ name: name.trim(), academicYear: academicYear.trim(), startsOn, endsOn, status });
+      setCourseList((items) => [...items, course]);
+      setCreateOpen(false);
+      resetCreateForm();
+      toast({ message: 'Cohorte creada.', variant: 'success' });
       navigate(`/courses/${course.id}`);
     } catch {
-      toast({ message: 'Error al crear el curso', variant: 'error' });
+      toast({ message: 'No se pudo crear la cohorte.', variant: 'error' });
     }
-  };
+  }
+
+  async function saveCourse(courseId: string, input: UpdateCourseInput) {
+    try {
+      const updated = await apiClient.patch<CourseDTO>(`/courses/${courseId}`, input);
+      setCourseList((items) => items.map((course) => course.id === courseId ? updated : course));
+      setEditTarget(null);
+      toast({ message: 'Cohorte actualizada.', variant: 'success' });
+    } catch {
+      toast({ message: 'No se pudo actualizar la cohorte.', variant: 'error' });
+      throw new Error('No se pudo actualizar la cohorte.');
+    }
+  }
+
+  async function toggleArchive(course: CourseDTO) {
+    const nextStatus: CohortStatus = course.status === 'ARCHIVED' ? 'PLANNED' : 'ARCHIVED';
+    try {
+      const updated = await apiClient.patch<CourseDTO>(`/courses/${course.id}`, { status: nextStatus });
+      setCourseList((items) => items.map((item) => item.id === course.id ? updated : item));
+      toast({
+        message: nextStatus === 'ARCHIVED' ? 'Cohorte archivada.' : 'Cohorte desarchivada como planificada.',
+        variant: 'success',
+      });
+    } catch {
+      toast({ message: 'No se pudo cambiar el estado de la cohorte.', variant: 'error' });
+    }
+  }
+
+  async function deleteCourse() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiClient.delete(`/courses/${deleteTarget.id}`);
+      setCourseList((items) => items.filter((course) => course.id !== deleteTarget.id));
+      toast({ message: 'Cohorte borrada.', variant: 'success' });
+      setDeleteTarget(null);
+    } catch {
+      toast({
+        message: 'No se pudo borrar. Si tiene matrículas o intentos, archívala para conservar el historial.',
+        variant: 'error',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (isLoading) {
-    return <div className={styles.status}>Cargando cursos...</div>;
-  }
-  if (error) {
-    return <div className={styles.status}>Error al cargar cursos: {error.message}</div>;
+    return <div className={styles.status}><Spinner size="lg" label="Cargando cohortes…" /></div>;
   }
 
-  const open = (id: string) => navigate(`/courses/${id}`);
-  const createButton = isAdmin ? (
-    <Button variant="primary" onClick={() => setModalOpen(true)}>+ Crear curso</Button>
-  ) : null;
+  if (error) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.errorState} role="alert">
+          <span>No se pudieron cargar las cohortes.</span>
+          <Button variant="outline" onClick={refetch}>Reintentar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const gridProps = {
+    isAdmin,
+    onOpen: (id: string) => navigate(`/courses/${id}`),
+    onEdit: setEditTarget,
+    onToggleArchive: toggleArchive,
+    onDelete: setDeleteTarget,
+  };
 
   return (
     <div className={styles.page}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>Mis cursos</h1>
-        {createButton}
-      </div>
+      <header className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Mis cursos</h1>
+          <p className={styles.subtitle}>Cohortes y asignaturas de tu organización.</p>
+        </div>
+        {isAdmin && (
+          <Button leftIcon={<Plus size={18} />} onClick={() => setCreateOpen(true)}>Crear cohorte</Button>
+        )}
+      </header>
 
-      {!courses || courses.length === 0 ? (
-        <p style={{ color: 'var(--color-text-secondary)' }}>No hay cursos disponibles</p>
+      {courseList.length === 0 ? (
+        <EmptyState
+          icon={<BookOpen size={22} />}
+          title="Todavía no hay cohortes"
+          description={isAdmin ? 'Crea la primera cohorte para organizar sus asignaturas.' : 'Cuando te asignen a una cohorte, aparecerá aquí.'}
+          action={isAdmin ? <Button onClick={() => setCreateOpen(true)}>Crear cohorte</Button> : undefined}
+        />
       ) : isStudent ? (
         <>
-          <h2 style={{ fontSize: 18, margin: '8px 0 12px' }}>Curso actual</h2>
-          {current.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>No tienes un curso activo</p> : <CourseGrid courses={current} onOpen={open} />}
-          <h2 style={{ fontSize: 18, margin: '28px 0 12px' }}>Cursos anteriores</h2>
-          {previous.length === 0 ? <p style={{ color: 'var(--color-text-secondary)' }}>Todavía no hay cursos anteriores</p> : <CourseGrid courses={previous} onOpen={open} />}
+          <section className={styles.courseSection}>
+            <h2>Curso actual</h2>
+            {current.length === 0 ? (
+              <p className={styles.sectionEmpty}>No tienes una cohorte activa.</p>
+            ) : <CourseGrid courses={current} {...gridProps} />}
+          </section>
+          <section className={styles.courseSection}>
+            <h2>Cursos anteriores</h2>
+            {previous.length === 0 ? (
+              <p className={styles.sectionEmpty}>Todavía no hay cursos anteriores.</p>
+            ) : <CourseGrid courses={previous} {...gridProps} />}
+          </section>
         </>
       ) : (
-        <CourseGrid courses={courses} onOpen={open} />
+        <CourseGrid courses={courseList} {...gridProps} />
       )}
 
       {isAdmin && (
-        <Modal open={modalOpen} onClose={() => { setModalOpen(false); resetForm(); }} title="Crear curso" footer={<Button loading={creating} onClick={handleCreate}>Crear curso</Button>}>
-          <FormField label="Nombre" error={fieldErrors.name} required>
-            {(field) => <input {...field} value={name} onChange={(event) => setName(event.target.value)} placeholder="1º A" style={inputStyle} />}
-          </FormField>
-          <div style={{ height: 12 }} />
-          <FormField label="Año académico" error={fieldErrors.academicYear} required>
-            {(field) => <input {...field} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} placeholder="2025-2026" style={inputStyle} />}
-          </FormField>
-          <div style={{ height: 12 }} />
-          <FormField label="Empieza" error={fieldErrors.startsOn} required>
-            {(field) => <input {...field} type="date" value={startsOn} onChange={(event) => setStartsOn(event.target.value)} style={inputStyle} />}
-          </FormField>
-          <div style={{ height: 12 }} />
-          <FormField label="Termina" error={fieldErrors.endsOn} required>
-            {(field) => <input {...field} type="date" value={endsOn} onChange={(event) => setEndsOn(event.target.value)} style={inputStyle} />}
-          </FormField>
-          <div style={{ height: 12 }} />
-          <FormField label="Estado">
-            {(field) => (
-              <select {...field} value={status} onChange={(event) => setStatus(event.target.value as CohortStatus)} style={inputStyle}>
-                <option value="PLANNED">Planificado</option>
-                <option value="ACTIVE">En curso</option>
-                <option value="ARCHIVED">Archivado</option>
-              </select>
+        <>
+          <Modal
+            open={createOpen}
+            onClose={() => { setCreateOpen(false); resetCreateForm(); }}
+            title="Crear cohorte"
+            footer={(
+              <div className={styles.modalActions}>
+                <Button variant="ghost" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>Cancelar</Button>
+                <Button loading={creating} onClick={handleCreate}>Crear cohorte</Button>
+              </div>
             )}
-          </FormField>
-        </Modal>
+          >
+            <div className={styles.formFields}>
+              <Input label="Nombre" value={name} maxLength={120} error={fieldErrors.name} onChange={(event) => setName(event.target.value)} required />
+              <Input label="Año académico" value={academicYear} maxLength={9} placeholder="2026-2027" error={fieldErrors.academicYear} onChange={(event) => setAcademicYear(event.target.value)} required />
+              <div className={styles.dateFields}>
+                <DatePicker label="Empieza" value={startsOn} error={fieldErrors.startsOn} onChange={(event) => setStartsOn(event.target.value)} required />
+                <DatePicker label="Termina" value={endsOn} error={fieldErrors.endsOn} onChange={(event) => setEndsOn(event.target.value)} required />
+              </div>
+              <Select
+                label="Estado"
+                value={status}
+                onChange={(event) => setStatus(event.target.value as CohortStatus)}
+                options={[
+                  { value: 'PLANNED', label: 'Planificado' },
+                  { value: 'ACTIVE', label: 'En curso' },
+                  { value: 'ARCHIVED', label: 'Archivado' },
+                ]}
+              />
+            </div>
+          </Modal>
+
+          <CohortEditModal
+            course={editTarget}
+            open={editTarget !== null}
+            onClose={() => setEditTarget(null)}
+            onSave={(input) => saveCourse(editTarget!.id, input)}
+          />
+
+          <ConfirmDialog
+            open={deleteTarget !== null}
+            title="Borrar cohorte"
+            message={deleteTarget ? `Se borrará «${deleteTarget.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.` : ''}
+            confirmLabel="Borrar cohorte"
+            variant="danger"
+            loading={deleting}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={deleteCourse}
+          />
+        </>
       )}
     </div>
   );
 }
-
-const inputStyle: CSSProperties = {
-  width: '100%', padding: '8px 12px', borderRadius: 8,
-  border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit',
-};

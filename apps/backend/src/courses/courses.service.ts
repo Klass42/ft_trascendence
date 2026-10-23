@@ -95,7 +95,34 @@ export class CoursesService {
   }
 
   async delete(id: string, user: AuthUser) {
-    await this.requireCourse(id, user.organizationId);
+    const course = await this.prisma.course.findFirst({
+      where: { id, organizationId: user.organizationId },
+      select: { id: true, _count: { select: { memberships: true } } },
+    });
+    if (!course) throw new NotFoundException(`Course ${id} not found`);
+
+    const [attempt, submission] = await Promise.all([
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: { subject: { courseId: id, organizationId: user.organizationId } },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subject: { courseId: id, organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (course._count.memberships > 0 || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a cohort with enrollments or attempts; archive it instead',
+      );
+    }
     await this.prisma.course.delete({ where: { id } });
   }
 
@@ -149,6 +176,39 @@ export class CoursesService {
 
   async deleteSubject(subjectId: string, user: AuthUser) {
     const subject = await this.requireSubject(subjectId, user.organizationId);
+    const [membership, attempt, submission] = await Promise.all([
+      this.prisma.courseMembership.findFirst({
+        where: {
+          courseId: subject.courseId,
+          course: { organizationId: user.organizationId },
+        },
+        select: { id: true },
+      }),
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (membership || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a subject with enrollments or attempts; archive it instead',
+      );
+    }
     await this.prisma.subject.delete({ where: { id: subject.id } });
   }
 

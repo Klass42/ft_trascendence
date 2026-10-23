@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Query,
   UseGuards,
   Post,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
 import { tenantId } from '@/common/auth';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { ListMembersQueryDto } from './dto/list-members-query.dto';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('organizations')
@@ -57,8 +59,19 @@ export class OrganizationsController {
   @Get(':id/members')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async findMembers(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.organizationsService.findMembers(id, user.organizationId);
+  async findMembers(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListMembersQueryDto,
+  ) {
+    return this.organizationsService.findMembers(id, user.organizationId, query);
+  }
+
+  @Get('me/deletion-request')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getDeletionRequestStatus(@CurrentUser() user: AuthUser) {
+    return this.organizationsService.getDeletionRequestStatus(tenantId(user));
   }
 
   @Delete(':id/members/:userId')

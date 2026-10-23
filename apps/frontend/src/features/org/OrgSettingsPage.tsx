@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pencil, Trash2, Users } from 'lucide-react';
 import { apiClient, useIsAdmin } from '@/lib/api';
@@ -24,6 +24,31 @@ export function OrgSettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isRequestingDelete, setIsRequestingDelete] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
+  const [checkingDeleteStatus, setCheckingDeleteStatus] = useState(true);
+  const [deleteStatusError, setDeleteStatusError] = useState<string | null>(null);
+
+  const refreshDeleteStatus = useCallback(async () => {
+    setCheckingDeleteStatus(true);
+    setDeleteStatusError(null);
+    try {
+      const status = await apiClient.get<{ pending: boolean }>(
+        '/organizations/me/deletion-request',
+      );
+      setDeleteRequested(status.pending);
+    } catch {
+      setDeleteStatusError('No se pudo consultar el estado de la solicitud.');
+    } finally {
+      setCheckingDeleteStatus(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setCheckingDeleteStatus(false);
+      return;
+    }
+    void refreshDeleteStatus();
+  }, [isAdmin, refreshDeleteStatus]);
 
   if (isLoading) {
     return (
@@ -237,13 +262,25 @@ export function OrgSettingsPage() {
             Un administrador no puede borrar la organización. La solicitud llega al superadmin,
             que es quien puede eliminarla.
           </p>
+          {deleteStatusError && (
+            <div className={styles.deleteStatusError} role="alert">
+              <span>{deleteStatusError}</span>
+              <Button variant="ghost" size="sm" onClick={() => void refreshDeleteStatus()}>
+                Reintentar
+              </Button>
+            </div>
+          )}
           <Button
             variant="danger"
             leftIcon={<Trash2 size={16} />}
-            disabled={deleteRequested}
+            disabled={deleteRequested || checkingDeleteStatus || isRequestingDelete}
             onClick={() => setConfirmDelete(true)}
           >
-            {deleteRequested ? 'Solicitud enviada' : 'Solicitar borrado'}
+            {checkingDeleteStatus
+              ? 'Consultando solicitud…'
+              : deleteRequested
+                ? 'Solicitud pendiente'
+                : 'Solicitar borrado'}
           </Button>
         </section>
       )}
