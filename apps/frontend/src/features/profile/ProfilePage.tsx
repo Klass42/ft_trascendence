@@ -44,7 +44,7 @@ export function ProfilePage() {
     setIsSavingAvatar(true);
     setAvatarError(undefined);
     try {
-      await apiClient.uploadWithProgress('/users/me/avatar', file);
+      await apiClient.uploadWithProgress('/users/me/avatar', file, { method: 'PATCH' });
       await refreshUser();
       toast({ variant: 'success', message: 'Foto de perfil actualizada' });
     } catch {
