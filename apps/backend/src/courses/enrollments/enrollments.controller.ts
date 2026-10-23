@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Controller,
   Get,
@@ -36,7 +37,7 @@ export class EnrollmentsController {
   @Post('lessons/:lessonId/complete')
   @HttpCode(200)
   async completeLesson(
-    @Param('lessonId') lessonId: string,
+    @Param('lessonId', ParseIdPipe) lessonId: string,
     @CurrentUser() user: AuthUser,
   ) {
     const lesson = await this.enrollmentsService.findLessonSubjectId(
@@ -53,8 +54,8 @@ export class EnrollmentsController {
 
   @Get('subjects/:subjectId/completed-lessons')
   async getCompletedLessons(
-    @Param('subjectId') subjectId: string,
-    @Query('userId') userId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Query('userId', ParseIdPipe) userId: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectReadable(subjectId, user);
@@ -67,8 +68,8 @@ export class EnrollmentsController {
 
   @Get('subjects/:subjectId/progress')
   async getProgress(
-    @Param('subjectId') subjectId: string,
-    @Query('userId') userId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Query('userId', ParseIdPipe) userId: string | undefined,
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectReadable(subjectId, user);

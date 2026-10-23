@@ -1,12 +1,14 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(100, { message: 'El nombre no puede superar los 100 caracteres.' })
   @IsOptional()
   name?: string;
 
   @IsString()
+  @MaxLength(5000, { message: 'La descripción no puede superar los 5000 caracteres.' })
   @IsOptional()
   bio?: string;
 

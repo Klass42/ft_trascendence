@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { FriendshipsService } from './friendships.service';
@@ -15,7 +16,7 @@ export class FriendshipsController {
 
   @Patch(':id')
   async updateStatus(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateFriendshipDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -24,7 +25,7 @@ export class FriendshipsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async remove(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     await this.friendshipsService.remove(id, user.userId, user.organizationId);
   }
 }

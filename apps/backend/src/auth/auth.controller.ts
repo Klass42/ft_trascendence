@@ -1,3 +1,4 @@
+import { ParseAuthTokenPipe } from '@/common/pipes/parse-auth-token.pipe';
 import {
   Body,
   Controller,
@@ -64,12 +65,12 @@ export class AuthController {
 
   @Public()
   @Get('invitations/:token')
-  async invitation(@Param('token') token: string) { return this.authService.invitation(token); }
+  async invitation(@Param('token', ParseAuthTokenPipe) token: string) { return this.authService.invitation(token); }
 
   @Public()
   @AuthRateLimit('acceptInvitation')
   @Post('invitations/:token/accept')
-  async acceptInvitation(@Param('token') token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
+  async acceptInvitation(@Param('token', ParseAuthTokenPipe) token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
 
   @Public()
   @AuthRateLimit('refresh')
@@ -98,6 +99,8 @@ export class AuthController {
   @Public()
   @AuthRateLimit('verifyEmail')
   @Get('verify-email')
+  // The verification link carries a signed JWT, not the opaque hex token of invitations;
+  // the service verifies signature, purpose and expiry and answers 400 in Spanish.
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
   }

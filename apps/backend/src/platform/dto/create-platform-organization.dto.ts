@@ -1,9 +1,9 @@
-import { IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 export class CreatePlatformOrganizationDto {
-  @IsString() @MinLength(1) name: string;
-  @IsString() @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/) slug: string;
-  @IsEmail({ require_tld: false }) adminEmail: string;
-  @IsString() @MinLength(1) adminName: string;
+  @IsString() @MinLength(1) @MaxLength(100, { message: 'El nombre de la organización no puede superar los 100 caracteres.' }) name: string;
+  @IsString() @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { message: 'El código de organización solo puede contener letras minúsculas, números y guiones.' }) @MaxLength(100, { message: 'El código de organización no puede superar los 100 caracteres.' }) slug: string;
+  @IsEmail({ require_tld: false }, { message: 'Introduce un correo electrónico válido.' }) @MaxLength(254, { message: 'El correo electrónico no puede superar los 254 caracteres.' }) adminEmail: string;
+  @IsString() @MinLength(1) @MaxLength(100, { message: 'El nombre no puede superar los 100 caracteres.' }) adminName: string;
   @IsOptional() @IsString() logoUrl?: string;
   @IsOptional() @IsString() primaryColor?: string;
   @IsOptional() @IsString() defaultLanguage?: string;

@@ -1,4 +1,5 @@
 import { CoursesService } from '../courses.service';
+import { ConflictException } from '@nestjs/common';
 import type { AuthUser } from '@/common/auth';
 import type { PrismaService } from '@/prisma/prisma.service';
 
@@ -89,5 +90,82 @@ describe('CoursesService visibility', () => {
     expect(result).toMatchObject({ organizationId: ORG_ID, name: '1º A' });
     expect(result).not.toHaveProperty('ownerId');
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CoursesService membership concurrency', () => {
+  it('allows only one concurrent active-course enrollment for a learner', async () => {
+    const memberships: Array<{ courseId: string; userId: string }> = [];
+    let activeMembershipReads = 0;
+    let releaseReads!: () => void;
+    const bothRead = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    const transactionOptions: unknown[] = [];
+    const tx = {
+      course: {
+        findFirst: jest.fn(async ({ where }: any) => ({
+          id: where.id,
+          organizationId: ORG_ID,
+          status: 'ACTIVE',
+        })),
+      },
+      user: {
+        findFirst: jest.fn(async () => ({ id: STUDENT.userId })),
+      },
+      courseMembership: {
+        findFirst: jest.fn(async ({ where }: any) => {
+          if (typeof where.courseId === 'string') {
+            return memberships.find(
+              (membership) =>
+                membership.courseId === where.courseId &&
+                membership.userId === where.userId,
+            ) ?? null;
+          }
+          const visibleMembership = memberships.find(
+            (membership) =>
+              membership.userId === where.userId &&
+              membership.courseId !== where.courseId.not,
+          ) ?? null;
+          activeMembershipReads += 1;
+          if (activeMembershipReads === 2) releaseReads();
+          await bothRead;
+          return visibleMembership;
+        }),
+        create: jest.fn(async ({ data }: any) => {
+          if (memberships.some((membership) => membership.userId === data.userId)) {
+            throw Object.assign(new Error('serializable write conflict'), { code: 'P2034' });
+          }
+          const membership = { ...data };
+          memberships.push(membership);
+          return { id: `membership-${memberships.length}`, ...membership };
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown, options: unknown) => {
+        transactionOptions.push(options);
+        return callback(tx);
+      }),
+    } as unknown as PrismaService;
+    const service = new CoursesService(prisma, {} as never);
+
+    const results = await Promise.allSettled([
+      service.addMember('course-one', TEACHER, { userId: STUDENT.userId }),
+      service.addMember('course-two', TEACHER, { userId: STUDENT.userId }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((result) => result.status === 'rejected');
+    expect(rejected).toMatchObject({
+      status: 'rejected',
+      reason: expect.any(ConflictException),
+    });
+    expect(memberships).toHaveLength(1);
+    expect(transactionOptions).toEqual([
+      { isolationLevel: 'Serializable' },
+      { isolationLevel: 'Serializable' },
+      { isolationLevel: 'Serializable' },
+    ]);
   });
 });
