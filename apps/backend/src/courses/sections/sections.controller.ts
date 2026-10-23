@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Controller,
   Get,
@@ -12,6 +13,7 @@ import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 import { AuthUser, CurrentUser } from '@/common/auth';
 import { CourseAccessService } from '../course-access.service';
+import { OrderedIdsDto } from '@/common/dto/ordered-ids.dto';
 
 @Controller('subjects/:subjectId/sections')
 export class SectionsController {
@@ -22,7 +24,7 @@ export class SectionsController {
 
   @Post()
   async create(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSectionDto,
   ) {
@@ -32,7 +34,7 @@ export class SectionsController {
 
   @Get()
   async findAll(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectReadable(subjectId, user);
@@ -41,19 +43,24 @@ export class SectionsController {
 
   @Patch('reorder')
   async reorder(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
-    @Body('orderedIds') orderedIds: string[],
+    @Body() dto: OrderedIdsDto,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);
-    await this.sectionsService.reorder(subjectId, user.organizationId, orderedIds, user.userId);
+    await this.sectionsService.reorder(
+      subjectId,
+      user.organizationId,
+      dto.orderedIds,
+      user.userId,
+    );
     return { reordered: true };
   }
 
   @Get(':id')
   async findOne(
-    @Param('subjectId') subjectId: string,
-    @Param('id') id: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectReadable(subjectId, user);
@@ -62,8 +69,8 @@ export class SectionsController {
 
   @Patch(':id')
   async update(
-    @Param('subjectId') subjectId: string,
-    @Param('id') id: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateSectionDto,
   ) {
@@ -73,8 +80,8 @@ export class SectionsController {
 
   @Delete(':id')
   async delete(
-    @Param('subjectId') subjectId: string,
-    @Param('id') id: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @Param('id', ParseIdPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.courseAccess.assertSubjectStaff(subjectId, user);

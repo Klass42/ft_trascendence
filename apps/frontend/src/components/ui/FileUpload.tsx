@@ -9,13 +9,13 @@
  *     organizationId="org-id"
  *     accept="image/*"
  *     maxSizeBytes={5 * 1024 * 1024}
- *     onChange={(files) => console.log(files)}
  *   />
  */
 
 import {
   useState,
   useRef,
+  useEffect,
   forwardRef,
   useCallback,
   type DragEvent,
@@ -48,6 +48,8 @@ export interface FileValue {
   file: File;
   /** Backend download URL (after successful upload) */
   url?: string;
+  /** Local object URL used while a file is being previewed. */
+  previewUrl?: string;
   /** Original filename */
   originalName: string;
   /** MIME type */
@@ -98,12 +100,9 @@ export interface FileUploadProps {
 const DEFAULT_MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const DEFAULT_ACCEPT = [
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-  '.odt', '.ods', '.odp',
-  '.zip', '.rar', '.7z', '.tar', '.gz', '.tgz',
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
-  '.mp4', '.mov', '.webm', '.mp3', '.wav',
-  '.txt', '.csv', '.json',
+  '.pdf', '.epub', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.txt', '.csv', '.jpg', '.jpeg', '.png', '.webp', '.gif',
+  '.mp3', '.wav', '.ogg', '.m4a', '.mp4', '.m4v', '.mov', '.webm',
 ].join(',');
 
 // =============================================================================
@@ -171,16 +170,17 @@ function getFileExtension(fileName: string): string {
 }
 
 function isFileAccepted(file: File, accept: string): boolean {
-  if (!accept) return true;
-  const types = accept.split(',').map((t) => t.trim());
+  const allowedTypes = DEFAULT_ACCEPT.split(',').map((type) => type.trim());
+  const requestedTypes = accept ? accept.split(',').map((type) => type.trim()) : [];
   const ext = getFileExtension(file.name);
   const mime = file.type.toLowerCase();
 
-  return types.some((t) => {
-    if (t.startsWith('.')) return ext === t;
-    if (t.endsWith('/*')) return mime.startsWith(t.replace('/*', '/'));
-    return mime === t;
+  const matches = (types: string[]) => types.some((type) => {
+    if (type.startsWith('.')) return ext === type;
+    if (type.endsWith('/*')) return mime.startsWith(type.replace('/*', '/'));
+    return mime === type;
   });
+  return matches(allowedTypes) && (!requestedTypes.length || matches(requestedTypes));
 }
 
 // =============================================================================
@@ -207,16 +207,34 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
     ref,
   ) => {
     const [dragOver, setDragOver] = useState(false);
+    const [removeError, setRemoveError] = useState<string | null>(null);
     const [internalFiles, setInternalFiles] = useState<FileValue[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
     const xhrMap = useRef<Map<string, XMLHttpRequest>>(new Map());
+    const previewUrls = useRef(new Set<string>());
 
     const abortSet = useRef<Set<string>>(new Set());
+
+    useEffect(() => () => {
+      for (const url of previewUrls.current) URL.revokeObjectURL(url);
+      previewUrls.current.clear();
+    }, []);
 
     const isControlled = value !== undefined;
     const files = isControlled ? value : internalFiles;
     const filesRef = useRef(files);
     filesRef.current = files;
+    const effectiveMaxSize = Math.min(maxSizeBytes, DEFAULT_MAX_SIZE);
+
+    useEffect(() => {
+      const activeUrls = new Set(files.map((file) => file.previewUrl).filter(Boolean));
+      for (const url of previewUrls.current) {
+        if (!activeUrls.has(url)) {
+          URL.revokeObjectURL(url);
+          previewUrls.current.delete(url);
+        }
+      }
+    }, [files]);
 
     const setFiles = useCallback(
       (next: FileValue[] | ((prev: FileValue[]) => FileValue[])) => {
@@ -243,12 +261,12 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
           const ext = getFileExtension(file.name);
           return `Tipo de archivo no permitido (${ext || file.type}). Formatos aceptados: ${accept}`;
         }
-        if (file.size > maxSizeBytes) {
-          return `El archivo excede el tamaño máximo de ${formatFileSize(maxSizeBytes)}`;
+        if (file.size > effectiveMaxSize) {
+          return `El archivo excede el tamaño máximo de ${formatFileSize(effectiveMaxSize)}`;
         }
         return null;
       },
-      [accept, maxSizeBytes],
+      [accept, effectiveMaxSize],
     );
 
     // ---------------------------------------------------------------------------
@@ -288,10 +306,24 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
 
           if (abortSet.current.has(entry.id)) return;
 
+          let url: string | undefined;
+          let originalName = entry.originalName;
+          try {
+            const access = await apiClient.get<{ url: string; originalName: string }>(
+              `/files/${result.id}/url`,
+            );
+            url = access.url;
+            originalName = access.originalName;
+          } catch {
+            // Keep the uploaded file removable if its preview URL cannot be issued.
+          }
+
           updateFile({
             id: result.id,
             status: 'done',
             progress: 100,
+            url,
+            originalName,
           });
         } catch (err: unknown) {
           if (abortSet.current.has(entry.id)) return;
@@ -331,6 +363,8 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
             continue;
           }
 
+          const previewUrl = URL.createObjectURL(file);
+          previewUrls.current.add(previewUrl);
           entries.push({
             id: generateTempId(),
             file,
@@ -338,6 +372,7 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
             contentType: file.type,
             sizeBytes: file.size,
             status: 'pending',
+            previewUrl,
           });
         }
 
@@ -346,12 +381,18 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
         if (maxFiles && maxFiles > 0) {
           updated = updated.slice(0, maxFiles);
         }
+        for (const entry of entries) {
+          if (entry.previewUrl && !updated.includes(entry)) {
+            URL.revokeObjectURL(entry.previewUrl);
+            previewUrls.current.delete(entry.previewUrl);
+          }
+        }
 
         setFiles(updated);
 
         // Auto-upload entries that passed validation
         if (autoUpload) {
-          for (const entry of entries) {
+          for (const entry of entries.filter((item) => updated.includes(item))) {
             if (entry.status === 'pending') {
               startUpload(entry);
             }
@@ -414,13 +455,31 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
     // ---------------------------------------------------------------------------
 
     const handleRemove = useCallback(
-      (fileId: string) => {
+      async (fileEntry: FileValue) => {
+        if (fileEntry.status === 'done') {
+          const confirmed = window.confirm(`¿Eliminar el archivo «${fileEntry.originalName}»?`);
+          if (!confirmed) return;
+          setRemoveError(null);
+          try {
+            await apiClient.delete<{ deleted: boolean }>(`/files/${encodeURIComponent(fileEntry.id)}`);
+          } catch {
+            setRemoveError('No se pudo eliminar. Desvincula el archivo de su recurso o intento y vuelve a intentarlo.');
+            return;
+          }
+        }
+
+        const fileId = fileEntry.id;
         // Abort in-progress upload
         abortSet.current.add(fileId);
         const xhr = xhrMap.current.get(fileId);
         if (xhr) {
           xhr.abort();
           xhrMap.current.delete(fileId);
+        }
+
+        if (fileEntry.previewUrl) {
+          URL.revokeObjectURL(fileEntry.previewUrl);
+          previewUrls.current.delete(fileEntry.previewUrl);
         }
 
         setFiles((prev) => prev.filter((f) => f.id !== fileId));
@@ -523,7 +582,7 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
             )}
             <div className={styles.dropzoneText}>
               {files.length === 0
-                ? `${accept.split(',').slice(0, 4).join(', ')}${accept.split(',').length > 4 ? '...' : ''} — hasta ${formatFileSize(maxSizeBytes)} por archivo`
+                ? `${accept.split(',').slice(0, 4).join(', ')}${accept.split(',').length > 4 ? '...' : ''} — hasta ${formatFileSize(effectiveMaxSize)} por archivo`
                 : 'Añadir más archivos'}
             </div>
           </div>
@@ -535,6 +594,7 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
             {externalError}
           </p>
         )}
+        {removeError && <p className={styles.error} role="alert">{removeError}</p>}
 
         {/* ====== File List ====== */}
         {files.length > 0 && (
@@ -549,15 +609,13 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
 
               return (
                 <div key={fileEntry.id} className={itemClassNames}>
+                  <div className={styles.fileRow}>
                   {/* Icon / Preview */}
                   <span className={styles.fileIcon}>
                     {fileEntry.contentType.startsWith('image/') &&
                     fileEntry.status !== 'error' ? (
                       <img
-                        src={
-                          fileEntry.url ||
-                          URL.createObjectURL(fileEntry.file)
-                        }
+                        src={fileEntry.previewUrl || fileEntry.url}
                         alt={fileEntry.originalName}
                         className={styles.previewImage}
                       />
@@ -607,12 +665,39 @@ export const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
                     className={styles.removeBtn}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleRemove(fileEntry.id);
+                      void handleRemove(fileEntry);
                     }}
+                    disabled={fileEntry.status === 'uploading'}
                     aria-label={`Eliminar ${fileEntry.originalName}`}
                   >
                     <X size={14} />
                   </button>
+                  </div>
+                  {fileEntry.status !== 'error'
+                    && (fileEntry.url || fileEntry.previewUrl)
+                    && (fileEntry.contentType === 'application/pdf'
+                      || fileEntry.contentType.startsWith('audio/')
+                      || fileEntry.contentType.startsWith('video/')) && (
+                      <div className={styles.filePreview}>
+                        {fileEntry.contentType === 'application/pdf' && (
+                          <iframe
+                            src={fileEntry.previewUrl || fileEntry.url}
+                            title={`Vista previa de ${fileEntry.originalName}`}
+                            className={styles.pdfPreview}
+                          />
+                        )}
+                        {fileEntry.contentType.startsWith('audio/') && (
+                          <audio controls preload="metadata" src={fileEntry.previewUrl || fileEntry.url}>
+                            Tu navegador no puede reproducir este audio.
+                          </audio>
+                        )}
+                        {fileEntry.contentType.startsWith('video/') && (
+                          <video controls preload="metadata" src={fileEntry.previewUrl || fileEntry.url}>
+                            Tu navegador no puede reproducir este vídeo.
+                          </video>
+                        )}
+                      </div>
+                    )}
                 </div>
               );
             })}

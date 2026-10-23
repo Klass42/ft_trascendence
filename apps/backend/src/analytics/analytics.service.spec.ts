@@ -1,125 +1,214 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { SubmissionStatus } from '@prisma/client';
-import { AnalyticsService } from './analytics.service';
+import { ForbiddenException } from '@nestjs/common';
+import { AttemptStatus, PublicationStatus } from '@prisma/client';
 import { accessFromPrisma } from '../test/access-from-prisma';
 import type { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from './analytics.service';
 
-/**
- * Happy-path test of the analytics aggregates over a tiny in-memory Prisma fake
- * (no database). Scenario: a course with 2 students × 2 assignments (so 4
- * expected submissions), 3 handed in, 2 graded — one 80/100 (80%), one 5/10
- * (50%). Also covers the staff-only gate.
- */
 describe('AnalyticsService', () => {
-  const COURSE_ID = 'course-web-101';
+  const SUBJECT_ID = 'subject-web-101';
+  const COURSE_ID = 'cohort-web-101';
   const ORG_ID = 'org-klass-0001';
   const TEACHER = 'user-diego-001';
   const STUDENT = 'user-lucia-001';
-  const STRANGER = 'user-nadie-999';
-
-  const ASSIGNMENTS = [
-    { id: 'a1', maxScore: 100 },
-    { id: 'a2', maxScore: 10 },
+  const OTHER_STUDENT = 'user-sam-001';
+  const activities = [
+    { id: 'activity-1', maxScore: 100, status: PublicationStatus.PUBLISHED },
+    { id: 'activity-2', maxScore: 10, status: PublicationStatus.PUBLISHED },
+    { id: 'draft-1', maxScore: 100, status: PublicationStatus.DRAFT },
+  ];
+  const attempts = [
+    {
+      activityId: 'activity-1', userId: STUDENT, status: AttemptStatus.GRADED,
+      score: 80, submittedAt: new Date('2025-06-01T09:00:00.000Z'),
+    },
+    {
+      activityId: 'activity-1', userId: STUDENT, status: AttemptStatus.GRADED,
+      score: 90, submittedAt: new Date('2025-06-02T09:00:00.000Z'),
+    },
+    {
+      activityId: 'activity-2', userId: OTHER_STUDENT, status: AttemptStatus.GRADED,
+      score: 5, submittedAt: new Date('2025-06-03T09:00:00.000Z'),
+    },
+    {
+      activityId: 'activity-2', userId: STUDENT, status: AttemptStatus.SUBMITTED,
+      score: null, submittedAt: new Date('2025-06-03T10:00:00.000Z'),
+    },
   ];
 
-  function buildPrismaFake(): PrismaService {
-    const gradedSubs = [
-      { assignmentId: 'a1', score: 80, status: SubmissionStatus.GRADED },
-      { assignmentId: 'a2', score: 5, status: SubmissionStatus.GRADED },
-    ];
+  function build(title = 'Web 101') {
+    const groupBy = jest.fn(async ({ by, where }: any) => {
+      const selected = attempts.filter((attempt) =>
+        where.activityId.in.includes(attempt.activityId),
+      );
+      if (by.includes('submittedAt')) {
+        const counts = new Map<number, { submittedAt: Date; count: number }>();
+        for (const attempt of selected) {
+          const submittedAt = attempt.submittedAt;
+          if (
+            !submittedAt ||
+            submittedAt < where.submittedAt.gte ||
+            submittedAt > where.submittedAt.lte ||
+            !where.status.in.includes(attempt.status)
+          ) continue;
+          const time = submittedAt.getTime();
+          const current = counts.get(time);
+          counts.set(time, { submittedAt, count: (current?.count ?? 0) + 1 });
+        }
+        return [...counts.values()].map(({ submittedAt, count }) => ({
+          submittedAt,
+          _count: { _all: count },
+        }));
+      }
+      if (by.includes('status')) {
+        return [AttemptStatus.SUBMITTED, AttemptStatus.GRADED]
+          .map((status) => ({
+            status,
+            _count: {
+              _all: selected.filter((attempt) => attempt.status === status).length,
+            },
+          }))
+          .filter((group) => group._count._all > 0);
+      }
 
-    return {
+      const bestByStudentActivity = new Map<string, number>();
+      for (const attempt of selected) {
+        if (attempt.status !== AttemptStatus.GRADED || attempt.score == null) continue;
+        const key = `${attempt.activityId}:${attempt.userId}`;
+        bestByStudentActivity.set(key, Math.max(bestByStudentActivity.get(key) ?? -Infinity, attempt.score));
+      }
+      return [...bestByStudentActivity].map(([key, score]) => {
+        const [activityId, userId] = key.split(':');
+        return { activityId, userId, _max: { score } };
+      });
+    });
+    const prisma: any = {
       course: {
-        findUnique: async ({ where }: any) =>
-          where.id === COURSE_ID
-            ? { id: COURSE_ID, title: 'Web 101', organizationId: ORG_ID }
-            : null,
+        findUnique: async ({ where }: any) => where.id === SUBJECT_ID
+          ? {
+              id: SUBJECT_ID,
+              title,
+              organizationId: ORG_ID,
+              courseId: COURSE_ID,
+              status: PublicationStatus.PUBLISHED,
+            }
+          : null,
       },
       enrollment: {
         findUnique: async ({ where }: any) => {
-          const { courseId, userId } = where.courseId_userId;
-          if (courseId !== COURSE_ID) return null;
-          if (userId === TEACHER)
-            return { courseId, userId, role: 'TEACHER' as never };
-          if (userId === STUDENT)
-            return { courseId, userId, role: 'STUDENT' as never };
-          return null; // STRANGER has no enrollment
+          const userId = where.courseId_userId.userId;
+          if (userId === TEACHER) return { role: 'TEACHER' };
+          if (userId === STUDENT || userId === OTHER_STUDENT) return { role: 'STUDENT' };
+          return null;
         },
-        count: async ({ where }: any) =>
-          where.role === 'STUDENT' as never ? 2 : 3,
+        count: async () => 2,
       },
-      assignment: {
-        findMany: async () => ASSIGNMENTS.map((a) => ({ ...a })),
+      activity: {
+        findMany: async ({ where }: any) => activities.filter((activity) =>
+          activity.status === where.status && where.subjectId === SUBJECT_ID,
+        ),
       },
+      attempt: { groupBy },
       courseMembership: { count: async () => 2 },
       lesson: { count: async () => 4 },
       lessonCompletion: { count: async () => 3 },
       forumThread: { count: async () => 1 },
       forumPost: { count: async () => 2 },
-      submission: {
-        groupBy: async () => [
-          { status: SubmissionStatus.GRADED, _count: { _all: 2 } },
-          { status: SubmissionStatus.SUBMITTED, _count: { _all: 1 } },
-        ],
-        findMany: async ({ where }: any) => {
-          if (where.status === SubmissionStatus.GRADED) {
-            return gradedSubs.map((s) => ({
-              assignmentId: s.assignmentId,
-              score: s.score,
-            }));
-          }
-          return [];
-        },
-      },
-    } as unknown as PrismaService;
+    };
+    return {
+      prisma: prisma as PrismaService,
+      access: accessFromPrisma(prisma),
+      groupBy,
+    };
   }
 
-  it('computes overview KPIs from aggregates', async () => {
-    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
+  it('computes KPIs from published activities and the best normalized attempt per student', async () => {
+    const { prisma, access, groupBy } = build();
+    const service = new AnalyticsService(prisma, access);
 
-    const overview = await service.getOverview(COURSE_ID, TEACHER);
+    const overview = await service.getOverview(SUBJECT_ID, TEACHER);
 
     expect(overview.course.title).toBe('Web 101');
     expect(overview.students).toBe(2);
     expect(overview.assignments).toBe(2);
     expect(overview.lessons).toBe(4);
-
-    // 3 handed in (SUBMITTED + GRADED) of 4 expected (2 students × 2 tasks).
-    expect(overview.submissions.total).toBe(3);
-    expect(overview.submissions.expected).toBe(4);
-    expect(overview.submissions.graded).toBe(2);
-    expect(overview.submissions.pending).toBe(1);
-    expect(overview.submissions.rate).toBeCloseTo(0.75);
-
-    // Grades normalised to maxScore: 80/100 and 5/10 → mean 65%.
-    expect(overview.averageGrade).toBe(65);
-
-    // 3 completions of 2 students × 4 lessons = 8 expected.
-    expect(overview.lessonsCompletion.rate).toBeCloseTo(3 / 8);
+    expect(overview.submissions).toEqual({
+      total: 4,
+      expected: 4,
+      graded: 3,
+      pending: 1,
+      rate: 1,
+    });
+    // The gradebook keeps the best attempt: 90/100 and 5/10 average to 70%.
+    expect(overview.averageGrade).toBe(70);
+    expect(overview.lessonsCompletion).toEqual({ completed: 3, expected: 8, rate: 3 / 8 });
     expect(overview.forum).toEqual({ threads: 1, posts: 2 });
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        activity: { subjectId: SUBJECT_ID, subject: { organizationId: ORG_ID } },
+      }),
+    }));
   });
 
-  it('buckets graded scores into a normalised histogram', async () => {
-    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
+  it('returns the normalized grade distribution', async () => {
+    const { prisma, access } = build();
+    const distribution = await new AnalyticsService(prisma, access)
+      .getGradeDistribution(SUBJECT_ID, TEACHER);
 
-    const dist = await service.getGradeDistribution(COURSE_ID, TEACHER);
-
-    expect(dist.total).toBe(2);
-    expect(dist.buckets).toHaveLength(10);
-    // 80% → 80-90 band (index 8); 50% → 50-60 band (index 5).
-    expect(dist.buckets[8]).toMatchObject({ label: '80-90', count: 1 });
-    expect(dist.buckets[5]).toMatchObject({ label: '50-60', count: 1 });
-    expect(dist.buckets.reduce((sum, b) => sum + b.count, 0)).toBe(2);
+    expect(distribution.total).toBe(2);
+    expect(distribution.buckets).toHaveLength(10);
+    expect(distribution.buckets[8]).toMatchObject({ label: '80-90', count: 0 });
+    expect(distribution.buckets[9]).toMatchObject({ label: '90-100', count: 1 });
+    expect(distribution.buckets[5]).toMatchObject({ label: '50-60', count: 1 });
   });
 
-  it('hides the course from non-members (404) and blocks students (403)', async () => {
-    const service = new AnalyticsService(buildPrismaFake(), accessFromPrisma(buildPrismaFake()));
+  it('fills zero days and includes only submitted attempts in the requested range', async () => {
+    const { prisma, access, groupBy } = build();
+    const result = await new AnalyticsService(prisma, access).getSubmissionsOverTime(
+      SUBJECT_ID,
+      TEACHER,
+      '2025-06-02',
+      '2025-06-04',
+    );
 
-    await expect(service.getOverview(COURSE_ID, STRANGER)).rejects.toBeInstanceOf(
-      ForbiddenException,
+    expect(result.total).toBe(3);
+    expect(result.series).toEqual([
+      { date: '2025-06-02', count: 1 },
+      { date: '2025-06-03', count: 2 },
+      { date: '2025-06-04', count: 0 },
+    ]);
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        submittedAt: {
+          not: null,
+          gte: new Date('2025-06-02T00:00:00.000Z'),
+          lte: new Date('2025-06-04T23:59:59.999Z'),
+        },
+        status: { in: [AttemptStatus.SUBMITTED, AttemptStatus.GRADED] },
+      }),
+    }));
+  });
+
+  it('uses the selected range for CSV export and escapes formula cells', async () => {
+    const { prisma, access } = build('=2+3');
+    const result = await new AnalyticsService(prisma, access).getExportCsv(
+      SUBJECT_ID,
+      TEACHER,
+      '2025-06-03',
+      '2025-06-03',
     );
-    await expect(service.getOverview(COURSE_ID, STUDENT)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+
+    expect(result.csv).toContain("Resumen,Curso,'=2+3");
+    expect(result.csv).toContain('Entregas por día,2025-06-03,2');
+    expect(result.csv).not.toContain('Entregas por día,2025-06-01');
+  });
+
+  it('blocks students and users without subject membership', async () => {
+    const { prisma, access } = build();
+    const service = new AnalyticsService(prisma, access);
+
+    await expect(service.getOverview(SUBJECT_ID, STUDENT))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.getOverview(SUBJECT_ID, 'user-nadie-999'))
+      .rejects.toBeInstanceOf(ForbiddenException);
   });
 });

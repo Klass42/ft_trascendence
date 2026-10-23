@@ -20,7 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 // Resource API responses never disclose the storage bucket or object key. A
 // caller must use GET /files/:id/url, which authorizes the linked resource
-// before it returns a temporary object-storage URL.
+// before issuing a short-lived signed backend streaming URL.
 const RESOURCE_FILE_SELECT = {
   id: true,
   originalName: true,

@@ -371,7 +371,7 @@ export function CourseDetailPage() {
         footer={<Button loading={updating} onClick={handleUpdate}>Guardar cambios</Button>}
       >
         <FormField label="Título" required>
-          {(f) => <input {...f} value={editTitle} onChange={(e) => setEditTitle(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }} />}
+          {(f) => <input {...f} value={editTitle} maxLength={200} onChange={(e) => setEditTitle(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border-primary)', fontSize: 14, fontFamily: 'inherit' }} />}
         </FormField>
         <div style={{ height: 12 }} />
         <FormField label="Descripción">

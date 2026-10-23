@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { AssignmentsService } from '../assignments.service';
 import { GradeSubmissionDto } from './dto/grade-submission.dto';
+import { csvField } from '@/common/csv';
 import {
   computeFinalGrade,
   type FinalAttempt,
@@ -387,17 +388,6 @@ export class GradingService {
     // Prepend a UTF-8 BOM so Excel opens accented names correctly.
     return { filename: `gradebook-${courseId}.csv`, csv: '﻿' + lines.join('\r\n') };
   }
-}
-
-/**
- * Escape a single CSV field: wrap in double quotes and double any embedded
- * quotes when it contains a comma, quote, or newline.
- */
-function csvField(value: string): string {
-  if (/[",\r\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
 }
 
 function toFinalItem(a: {

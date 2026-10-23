@@ -191,4 +191,13 @@ describe('Auth E2E', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('GET /auth/verify-email returns 400 for an invalid token', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/verify-email')
+      .query({ token: 'not-a-jwt' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('El enlace de verificación no es válido o ha caducado.');
+  });
 });

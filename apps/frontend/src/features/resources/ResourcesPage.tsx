@@ -7,10 +7,13 @@ import {
   useMySubjects,
   useResourceMutations,
   useResources,
+  ApiError,
+  subjectSelectorLabel,
   type CreateLearningResourceInput,
   type LearningResourceStatus,
   type LearningResourceType,
 } from '@/lib/api';
+import { mapApiValidationErrors } from '@/lib/form-errors';
 import { ResourceCard } from './ResourceCard';
 import { RESOURCE_STATUSES, RESOURCE_TYPES, splitList } from './resource-helpers';
 
@@ -132,14 +135,17 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
   const [source, setSource] = useState<'url' | 'file'>('url');
   const [files, setFiles] = useState<FileValue[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | undefined>();
   const uploading = files.some((file) => file.status === 'pending' || file.status === 'uploading');
 
   const close = () => { setForm(EMPTY_FORM); setFiles([]); setError(null); onClose(); };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setTitleError(undefined);
     const fileId = files.find((file) => file.status === 'done')?.id;
     if (!form.title.trim()) return setError('El título es obligatorio.');
+    if (form.title.trim().length > 200) return setTitleError('El título no puede superar los 200 caracteres.');
     if (uploading) return setError('Espera a que termine la subida del archivo.');
     if (source === 'file' && !fileId) return setError('Sube un archivo para continuar.');
     if (source === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
@@ -152,13 +158,21 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
         ...(source === 'file' ? { fileId } : { externalUrl: form.externalUrl.trim() }),
       });
       setForm(EMPTY_FORM); setFiles([]);
-    } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo crear el recurso.'); }
+    } catch (err) {
+      if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setTitleError(mapped.fields.title);
+        setError(mapped.form ?? null);
+      } else {
+        setError('No se pudo crear el recurso. Revisa los datos e inténtalo de nuevo.');
+      }
+    }
   };
 
   return (
     <Modal open={open} onClose={close} title="Nuevo recurso" footer={<><Button variant="ghost" onClick={close}>Cancelar</Button><Button form="resource-form" type="submit" loading={loading} disabled={uploading}>Guardar recurso</Button></>}>
       <form id="resource-form" onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
-        <Input label="Título" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <Input label="Título" required maxLength={200} value={form.title} error={titleError} onChange={(e) => { setForm({ ...form, title: e.target.value }); setTitleError(undefined); }} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as LearningResourceType })} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label style={labelStyle}>Estado<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as LearningResourceStatus })} style={selectStyle}>{RESOURCE_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
@@ -178,7 +192,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
           </div>
-          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material. La descarga necesita Garage/S3 configurado." />}
+          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>
@@ -196,7 +210,7 @@ function PublishModal({ resource, courses, open, onClose, onPublish, loading }: 
   const eligible = courses.filter((course) => !resource?.subjects.some((link) => link.subjectId === course.id));
   const submit = async () => { if (courseId) await onPublish(courseId, required); };
   return <Modal open={open} onClose={onClose} title={`Publicar: ${resource?.title ?? ''}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading} disabled={!courseId}>Publicar</Button></>}>
-    {eligible.length ? <div style={{ display: 'grid', gap: 12 }}><label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{`${course.title} · ${course.course.name} · ${course.course.academicYear}`}</option>)}</select></label><label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label></div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
+    {eligible.length ? <div style={{ display: 'grid', gap: 12 }}><label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{subjectSelectorLabel(course)}</option>)}</select></label><label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label></div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
   </Modal>;
 }
 

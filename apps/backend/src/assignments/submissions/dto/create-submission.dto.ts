@@ -6,7 +6,9 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  Matches,
 } from 'class-validator';
+import { ID_PATTERN } from '@/common/validation/id';
 
 /**
  * Body for `POST /assignments/:id/submissions`.
@@ -30,6 +32,10 @@ export class CreateSubmissionDto {
   @IsArray()
   @ArrayUnique()
   @IsString({ each: true })
+  @Matches(ID_PATTERN, {
+    each: true,
+    message: 'Cada identificador de archivo debe tener un formato válido.',
+  })
   @IsOptional()
   fileIds?: string[];
 }

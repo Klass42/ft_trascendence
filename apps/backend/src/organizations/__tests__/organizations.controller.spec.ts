@@ -1,7 +1,9 @@
 import 'reflect-metadata';
+import { ExecutionContext } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
-import { Roles } from '@/common/auth/roles.decorator';
 import { ROLES_KEY } from '@/common/auth/roles.decorator';
+import { RolesGuard } from '@/common/auth/roles.guard';
 import { OrganizationsController } from '../organizations.controller';
 import { OrganizationsService } from '../organizations.service';
 
@@ -12,6 +14,7 @@ const mkService = () =>
     findMembers: jest.fn(),
     removeMember: jest.fn(),
     requestDeletion: jest.fn(),
+    getDeletionRequestStatus: jest.fn(),
   }) as unknown as OrganizationsService;
 
 const adminUser = {
@@ -60,6 +63,15 @@ describe('OrganizationsController', () => {
       expect(roles).toEqual(['ADMIN']);
     });
 
+    it('GET /me/deletion-request requires ADMIN role', () => {
+      const controller = new OrganizationsController(mkService());
+      const roles = reflector.getAllAndOverride(ROLES_KEY, [
+        controller.getDeletionRequestStatus,
+        OrganizationsController,
+      ]);
+      expect(roles).toEqual(['ADMIN']);
+    });
+
     it('DELETE :id/members/:userId requires ADMIN role', () => {
       const controller = new OrganizationsController(mkService());
       const roles = reflector.getAllAndOverride(ROLES_KEY, [
@@ -102,8 +114,16 @@ describe('OrganizationsController', () => {
     it('GET :id/members calls findMembers with id, user.organizationId', async () => {
       const service = mkService();
       const controller = new OrganizationsController(service);
-      await controller.findMembers('org-klass-0001', adminUser);
-      expect(service.findMembers).toHaveBeenCalledWith('org-klass-0001', 'org-klass-0001');
+      const query = { q: 'ada', page: 2, pageSize: 25 };
+      await controller.findMembers('org-klass-0001', adminUser, query);
+      expect(service.findMembers).toHaveBeenCalledWith('org-klass-0001', 'org-klass-0001', query);
+    });
+
+    it('GET /me/deletion-request uses the caller organization', async () => {
+      const service = mkService();
+      const controller = new OrganizationsController(service);
+      await controller.getDeletionRequestStatus(adminUser);
+      expect(service.getDeletionRequestStatus).toHaveBeenCalledWith('org-klass-0001');
     });
 
     it('DELETE :id/members/:userId calls removeMember with all params', async () => {
@@ -128,5 +148,25 @@ describe('OrganizationsController', () => {
         email: 'admin@demo',
       });
     });
+  });
+
+  describe('admin-only endpoints', () => {
+    it.each(['findMembers', 'getDeletionRequestStatus'] as const)(
+      '%s denies teacher and student roles through RolesGuard',
+      (method) => {
+        const controller = new OrganizationsController(mkService());
+        const guard = new RolesGuard(reflector);
+        expect(Reflect.getMetadata(GUARDS_METADATA, controller[method])).toContain(RolesGuard);
+        for (const role of ['TEACHER', 'STUDENT'] as const) {
+          const context = {
+            getHandler: () => controller[method],
+            getClass: () => OrganizationsController,
+            switchToHttp: () => ({ getRequest: () => ({ user: { ...adminUser, role } }) }),
+          } as unknown as ExecutionContext;
+
+          expect(guard.canActivate(context)).toBe(false);
+        }
+      },
+    );
   });
 });

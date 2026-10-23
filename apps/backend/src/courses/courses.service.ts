@@ -107,10 +107,42 @@ export class CoursesService {
   }
 
   async delete(id: string, user: AuthUser) {
-    const course = await this.requireCourse(id, user.organizationId);
-    const recipients = await this.courseRecipients(id, user.organizationId);
+    const course = await this.prisma.course.findFirst({
+      where: { id, organizationId: user.organizationId },
+      select: { id: true, _count: { select: { memberships: true } } },
+    });
+    if (!course) throw new NotFoundException(`Course ${id} not found`);
+
+    const [attempt, submission] = await Promise.all([
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: { subject: { courseId: id, organizationId: user.organizationId } },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subject: { courseId: id, organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (course._count.memberships > 0 || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a cohort with enrollments or attempts; archive it instead',
+      );
+    }
+    const recipients = this.notifications
+      ? await this.courseRecipients(id, user.organizationId)
+      : [];
+    const courseName = this.notifications
+      ? (await this.requireCourse(id, user.organizationId)).name
+      : '';
     await this.prisma.course.delete({ where: { id } });
-    await this.emitUsers(recipients, user.organizationId, user.userId, `Cohorte eliminada: ${course.name}`, `/courses`);
+    await this.emitUsers(recipients, user.organizationId, user.userId, `Cohorte eliminada: ${courseName}`, `/courses`);
   }
 
   async listSubjects(courseId: string, user: AuthUser) {
@@ -175,7 +207,42 @@ export class CoursesService {
 
   async deleteSubject(subjectId: string, user: AuthUser) {
     const subject = await this.requireSubject(subjectId, user.organizationId);
-    const recipients = await this.subjectRecipients(subjectId, user.organizationId, subject.status === 'PUBLISHED');
+    const [membership, attempt, submission] = await Promise.all([
+      this.prisma.courseMembership.findFirst({
+        where: {
+          courseId: subject.courseId,
+          course: { organizationId: user.organizationId },
+        },
+        select: { id: true },
+      }),
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (membership || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a subject with enrollments or attempts; archive it instead',
+      );
+    }
+    const recipients = this.notifications
+      ? await this.subjectRecipients(subjectId, user.organizationId, subject.status === 'PUBLISHED')
+      : [];
     await this.prisma.subject.delete({ where: { id: subject.id } });
     await this.emitUsers(recipients, user.organizationId, user.userId, `Asignatura eliminada: ${subject.title}`, `/courses`);
   }
@@ -192,26 +259,70 @@ export class CoursesService {
   }
 
   async addMember(courseId: string, user: AuthUser, dto: AddMemberDto) {
-    const course = await this.requireCourse(courseId, user.organizationId);
-    const target = await this.prisma.user.findFirst({
-      where: { id: dto.userId, organizationId: user.organizationId },
-      select: { id: true },
-    });
-    if (!target) {
-      throw new NotFoundException('User not found in this organization');
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      let courseName = '';
+      let membership: Prisma.CourseMembershipGetPayload<{}>;
+      try {
+        membership = await this.prisma.$transaction(async (tx) => {
+          const course = await tx.course.findFirst({
+            where: { id: courseId, organizationId: user.organizationId },
+          });
+          if (!course) throw new NotFoundException(`Course ${courseId} not found`);
+
+          const target = await tx.user.findFirst({
+            where: { id: dto.userId, organizationId: user.organizationId },
+            select: { id: true },
+          });
+          if (!target) {
+            throw new NotFoundException('User not found in this organization');
+          }
+
+          const existing = await tx.courseMembership.findFirst({
+            where: {
+              courseId,
+              userId: dto.userId,
+              course: { organizationId: user.organizationId },
+            },
+          });
+          if (existing) {
+            throw new ConflictException('Already a member of this course');
+          }
+
+          await this.assertSingleActiveMembership(
+            dto.userId,
+            user.organizationId,
+            course,
+            tx,
+          );
+          courseName = course.name;
+          return tx.courseMembership.create({
+            data: { courseId, userId: dto.userId },
+          });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch (error) {
+        if (!this.isSerializationConflict(error)) throw error;
+        if (attempt === maxAttempts - 1) {
+          throw new ConflictException(
+            'No se pudo completar el alta por un conflicto concurrente. Inténtalo de nuevo.',
+          );
+        }
+        continue;
+      }
+
+      await this.emitUsers(
+        [dto.userId],
+        user.organizationId,
+        user.userId,
+        `Te has matriculado en ${courseName}`,
+        `/courses`,
+        NotificationType.MEMBERSHIP_CHANGED,
+      );
+      return membership;
     }
-    const existing = await this.prisma.courseMembership.findUnique({
-      where: { courseId_userId: { courseId, userId: dto.userId } },
-    });
-    if (existing) {
-      throw new ConflictException('Already a member of this course');
-    }
-    await this.assertSingleActiveMembership(dto.userId, user.organizationId, course);
-    const membership = await this.prisma.courseMembership.create({
-      data: { courseId, userId: dto.userId },
-    });
-    await this.emitUsers([dto.userId], user.organizationId, user.userId, `Te has matriculado en ${course.name}`, `/courses`, NotificationType.MEMBERSHIP_CHANGED);
-    return membership;
+
+    throw new ConflictException('No se pudo completar el alta. Inténtalo de nuevo.');
   }
 
   async removeMember(courseId: string, memberUserId: string, user: AuthUser) {
@@ -380,9 +491,10 @@ export class CoursesService {
     userId: string,
     organizationId: string,
     course: { id: string; status: CohortStatus },
+    tx: Prisma.TransactionClient,
   ) {
     if (course.status !== 'ACTIVE') return;
-    const other = await this.prisma.courseMembership.findFirst({
+    const other = await tx.courseMembership.findFirst({
       where: {
         userId,
         courseId: { not: course.id },
@@ -392,6 +504,15 @@ export class CoursesService {
     if (other) {
       throw new ConflictException('The user already belongs to an active course');
     }
+  }
+
+  private isSerializationConflict(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2034'
+    );
   }
 
   private async assertMembersHaveNoOtherActiveCourse(courseId: string, organizationId: string) {

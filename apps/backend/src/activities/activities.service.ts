@@ -78,7 +78,11 @@ export class ActivitiesService {
       );
     }
 
-    const blocks = await this.resolveCreateBlocks(subject.organizationId, dto);
+    const blocks = await this.resolveCreateBlocks(
+      subject.organizationId,
+      actingUserId,
+      dto,
+    );
 
     if (dto.status === PublicationStatus.PUBLISHED && blocks.length === 0) {
       throw new BadRequestException('no se puede publicar vacía');
@@ -554,6 +558,7 @@ export class ActivitiesService {
 
   private async resolveCreateBlocks(
     organizationId: string,
+    actingUserId: string,
     dto: CreateActivityDto,
   ): Promise<
     Array<{
@@ -575,14 +580,43 @@ export class ActivitiesService {
     }
 
     if (dto.sourceActivityId) {
-      const source = await this.prisma.activity.findUnique({
-        where: { id: dto.sourceActivityId },
+      const sourceRef = await this.prisma.activity.findFirst({
+        where: {
+          id: dto.sourceActivityId,
+          subject: { organizationId },
+        },
+        select: { subjectId: true },
+      });
+      if (!sourceRef) {
+        throw new NotFoundException(
+          `Activity ${dto.sourceActivityId} not found`,
+        );
+      }
+
+      try {
+        await this.requireSubject(sourceRef.subjectId, actingUserId, true);
+      } catch (error) {
+        // Do not let a caller distinguish an inaccessible source from a
+        // missing one in the same organization.
+        if (error instanceof ForbiddenException) {
+          throw new NotFoundException(
+            `Activity ${dto.sourceActivityId} not found`,
+          );
+        }
+        throw error;
+      }
+
+      const source = await this.prisma.activity.findFirst({
+        where: {
+          id: dto.sourceActivityId,
+          subject: { organizationId },
+        },
         include: {
           subject: true,
           questions: { orderBy: { order: 'asc' } },
         },
       });
-      if (!source || source.subject.organizationId !== organizationId) {
+      if (!source) {
         throw new NotFoundException(
           `Activity ${dto.sourceActivityId} not found`,
         );

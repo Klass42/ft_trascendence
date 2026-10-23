@@ -8,6 +8,7 @@ import {
   notificationIcon,
   notificationTypeLabel,
 } from './display';
+import styles from './NotificationsPage.module.css';
 
 /** Full notification center, sharing live state with the navbar bell. */
 export function NotificationsPage() {
@@ -21,21 +22,13 @@ export function NotificationsPage() {
   }
 
   return (
-    <main style={{ padding: 'clamp(16px, 4vw, 40px)', maxWidth: 760 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 16,
-          marginBottom: 20,
-          flexWrap: 'wrap',
-        }}
-      >
+    <main className={styles.page}>
+      <div className={styles.header}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
           Notificaciones
         </h1>
         <button
+          type="button"
           onClick={markAllRead}
           disabled={unread === 0}
           style={{
@@ -87,17 +80,9 @@ export function NotificationsPage() {
                     if (notification.link) navigate(notification.link);
                   }}
                   aria-label={`${notificationTypeLabel(notification.type)}: ${notification.title}`}
+                  className={styles.item}
                   style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
-                    background: notification.read ? 'transparent' : 'var(--color-accent-muted)',
-                    border: 0,
-                    borderBottom: '1px solid var(--color-border-primary)',
-                    padding: '14px 10px',
-                    display: 'flex',
-                    gap: 12,
-                    alignItems: 'flex-start',
+                    background: notification.read ? 'var(--color-bg-secondary)' : 'var(--color-accent-muted)',
                     cursor: 'pointer',
                   }}
                 >
@@ -106,9 +91,9 @@ export function NotificationsPage() {
                     aria-hidden="true"
                     style={{ color: dotColor(notification.type), flex: 'none', marginTop: 2 }}
                   />
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className={styles.itemBody}>
                     <span style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
+                      <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
                         {notification.title}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
@@ -116,7 +101,7 @@ export function NotificationsPage() {
                       </span>
                     </span>
                     {notification.body && (
-                      <span style={{ display: 'block', fontSize: 13.5, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.45 }}>
+                      <span style={{ display: 'block', fontSize: 13.5, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
                         {notification.body}
                       </span>
                     )}
@@ -125,7 +110,10 @@ export function NotificationsPage() {
                     </span>
                   </span>
                   {!notification.read && (
-                    <span aria-label="Sin leer" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-accent-primary)', flex: 'none', marginTop: 6 }} />
+                    <span
+                      aria-label="Sin leer"
+                      style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-accent-primary)', flex: 'none', marginTop: 6 }}
+                    />
                   )}
                 </button>
               );

@@ -303,6 +303,7 @@ export function PlatformOrganizationDetailPage() {
               label="Email del nuevo admin"
               type="email"
               value={adminEmail}
+              maxLength={254}
               onChange={(e) => setAdminEmail(e.target.value)}
               error={adminEmailError || undefined}
               placeholder="admin@organizacion.demo"

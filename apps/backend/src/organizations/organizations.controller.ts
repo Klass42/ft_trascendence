@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Body,
   Controller,
@@ -7,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Query,
   UseGuards,
   Post,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
 import { tenantId } from '@/common/auth';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { ListMembersQueryDto } from './dto/list-members-query.dto';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('organizations')
@@ -30,7 +33,7 @@ export class OrganizationsController {
   invite(@Body() dto: CreateInvitationDto, @CurrentUser() user: AuthUser) { return this.organizationsService.invite(tenantId(user), user.userId, dto); }
 
   @Post('me/invitations/:id/revoke') @UseGuards(RolesGuard) @Roles('ADMIN')
-  revokeInvitation(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
+  revokeInvitation(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) { return this.organizationsService.revokeInvitation(tenantId(user), id, user.userId); }
 
   @Post('me/deletion-request')
   @UseGuards(RolesGuard)
@@ -47,7 +50,7 @@ export class OrganizationsController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateOrganizationDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -57,8 +60,19 @@ export class OrganizationsController {
   @Get(':id/members')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  async findMembers(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.organizationsService.findMembers(id, user.organizationId);
+  async findMembers(
+    @Param('id', ParseIdPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListMembersQueryDto,
+  ) {
+    return this.organizationsService.findMembers(id, user.organizationId, query);
+  }
+
+  @Get('me/deletion-request')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  getDeletionRequestStatus(@CurrentUser() user: AuthUser) {
+    return this.organizationsService.getDeletionRequestStatus(tenantId(user));
   }
 
   @Delete(':id/members/:userId')
@@ -66,8 +80,8 @@ export class OrganizationsController {
   @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMember(
-    @Param('id') id: string,
-    @Param('userId') userId: string,
+    @Param('id', ParseIdPipe) id: string,
+    @Param('userId', ParseIdPipe) userId: string,
     @CurrentUser() user: AuthUser,
   ) {
     await this.organizationsService.removeMember(

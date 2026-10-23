@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '@/common/auth';
 import { NotificationsService } from './notifications.service';
@@ -16,7 +17,7 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
-  async markRead(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async markRead(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.notifications.markRead(id, user.userId);
   }
 

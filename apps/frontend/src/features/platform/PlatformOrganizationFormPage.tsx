@@ -92,13 +92,13 @@ export function PlatformOrganizationFormPage() {
             {errors.form && <div className={styles.error} role="alert">{errors.form}</div>}
             <div className={styles.formSection}>
               <div className={styles.sectionTitle}><span><Building2 size={18} /></span><div><h2>Identidad de la organización</h2><p>Así la reconocerán sus miembros.</p></div></div>
-              <Input label="Nombre" placeholder="Ej. Academia Horizonte" value={form.name} onChange={(event) => update('name', event.target.value)} error={errors.name} autoFocus required />
+              <Input label="Nombre" placeholder="Ej. Academia Horizonte" value={form.name} maxLength={100} onChange={(event) => update('name', event.target.value)} error={errors.name} autoFocus required />
               <Input label="Código de acceso" placeholder="academia-horizonte" value={form.slug} onChange={(event) => update('slug', event.target.value)} error={errors.slug} hint="Solo minúsculas, números y guiones. Se usará al iniciar sesión." required />
             </div>
             <div className={styles.formSection}>
               <div className={styles.sectionTitle}><span><UserRound size={18} /></span><div><h2>Administrador inicial</h2><p>Recibirá el enlace para activar la organización.</p></div></div>
-              <Input label="Nombre completo" placeholder="Ej. Elena García" value={form.adminName} onChange={(event) => update('adminName', event.target.value)} error={errors.adminName} leftIcon={<UserRound size={18} />} autoComplete="name" required />
-              <Input label="Email de trabajo" type="email" placeholder="elena@academia.es" value={form.adminEmail} onChange={(event) => update('adminEmail', event.target.value)} error={errors.adminEmail} leftIcon={<Mail size={18} />} autoComplete="email" required />
+              <Input label="Nombre completo" placeholder="Ej. Elena García" value={form.adminName} maxLength={100} onChange={(event) => update('adminName', event.target.value)} error={errors.adminName} leftIcon={<UserRound size={18} />} autoComplete="name" required />
+              <Input label="Email de trabajo" type="email" placeholder="elena@academia.es" value={form.adminEmail} maxLength={254} onChange={(event) => update('adminEmail', event.target.value)} error={errors.adminEmail} leftIcon={<Mail size={18} />} autoComplete="email" required />
             </div>
             <div className={styles.formActions}><Button as={Link} to="/platform/organizations" variant="ghost">Cancelar</Button><Button type="submit" loading={isSubmitting} leftIcon={<Clipboard size={18} />}>Crear y generar enlace</Button></div>
           </form>

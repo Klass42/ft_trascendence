@@ -5,23 +5,25 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
 } from 'class-validator';
 import { LearningResourceStatus, LearningResourceType } from '@prisma/client';
+import { ID_PATTERN } from '@/common/validation/id';
 
 /** Partial metadata update. `null` clears an optional scalar/source field. */
 export class UpdateResourceDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(200)
+  @MaxLength(200, { message: 'El título no puede superar los 200 caracteres.' })
   @IsOptional()
   title?: string;
 
   @ValidateIf((_, value) => value !== undefined && value !== null)
   @IsString()
-  @MaxLength(5000)
+  @MaxLength(5000, { message: 'La descripción no puede superar los 5000 caracteres.' })
   description?: string | null;
 
   @IsEnum(LearningResourceType)
@@ -63,7 +65,8 @@ export class UpdateResourceDto {
   tags?: string[];
 
   @ValidateIf((_, value) => value !== undefined && value !== null)
-  @IsString()
+  @IsString({ message: 'El identificador del archivo debe ser texto.' })
+  @Matches(ID_PATTERN, { message: 'El identificador del archivo debe tener un formato válido.' })
   fileId?: string | null;
 
   @ValidateIf((_, value) => value !== undefined && value !== null)

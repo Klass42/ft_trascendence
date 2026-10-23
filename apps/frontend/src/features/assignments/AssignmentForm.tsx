@@ -170,6 +170,7 @@ export function AssignmentForm({
       <Input
         label="Título"
         value={title}
+        maxLength={200}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="p. ej. Práctica 2 — CSS Flexbox"
         required

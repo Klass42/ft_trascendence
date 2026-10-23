@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Controller, Get, GoneException, Param, Patch, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, AuthUser } from '@/common/auth';
@@ -27,18 +28,18 @@ export class GradingController {
   }
 
   @Get('subjects/:subjectId/gradebook')
-  async gradebook(@Param('subjectId') subjectId: string, @CurrentUser() user: AuthUser) {
+  async gradebook(@Param('subjectId', ParseIdPipe) subjectId: string, @CurrentUser() user: AuthUser) {
     return this.grading.getGradebook(subjectId, user.userId);
   }
 
   @Get('subjects/:subjectId/grades/me')
-  async myGrades(@Param('subjectId') subjectId: string, @CurrentUser() user: AuthUser) {
+  async myGrades(@Param('subjectId', ParseIdPipe) subjectId: string, @CurrentUser() user: AuthUser) {
     return this.grading.getMyGrades(subjectId, user.userId);
   }
 
   @Get('subjects/:subjectId/gradebook.csv')
   async gradebookCsv(
-    @Param('subjectId') subjectId: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
     @CurrentUser() user: AuthUser,
     @Res() res: Response,
   ) {

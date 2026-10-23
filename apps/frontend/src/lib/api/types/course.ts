@@ -50,7 +50,10 @@ export interface MeSubjectDTO {
   course: { id: string; name: string; academicYear: string };
 }
 
-export function subjectSelectorLabel(subject: Pick<MeSubjectDTO, 'title' | 'course'>): string {
+export function subjectSelectorLabel(subject: {
+  title: string;
+  course: { name: string; academicYear: string };
+}): string {
   return `${subject.title} · ${subject.course.name} · ${subject.course.academicYear}`;
 }
 

@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import {
   Body,
   Controller,
@@ -18,8 +19,11 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SearchUsersDto } from './dto/search-users.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
 import { MAX_AVATAR_UPLOAD_BYTES } from '@/files/file-validation';
+import { UsersByIdsQueryDto } from './dto/users-by-ids-query.dto';
+import { LookupUserQueryDto } from './dto/lookup-user-query.dto';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('users')
@@ -39,14 +43,24 @@ export class UsersController {
     return this.usersService.uploadAvatar(user, file);
   }
 
+  @Delete('me/avatar')
+  async removeAvatar(@CurrentUser() user: AuthUser) {
+    return this.usersService.removeAvatar(user);
+  }
+
   @Get('me/friends')
   async listFriends(@CurrentUser() user: AuthUser) {
-    return this.usersService.listFriends(user.userId);
+    return this.usersService.listFriends(user.userId, user.organizationId);
   }
 
   @Post(':id/friend')
-  async sendFriendRequest(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async sendFriendRequest(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.usersService.sendFriendRequest(user.userId, id, user.organizationId);
+  }
+
+  @Get('search')
+  async search(@Query() query: SearchUsersDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.searchUsers(query.q, user.userId, user.organizationId);
   }
 
   // ── Roster support routes (A3) ──
@@ -54,16 +68,15 @@ export class UsersController {
   @Get('by-ids')
   @UseGuards(RolesGuard)
   @Roles('TEACHER', 'ADMIN')
-  async findByIds(@Query('ids') ids: string, @CurrentUser() user: AuthUser) {
-    const idList = ids ? ids.split(',').map((s) => s.trim()).filter(Boolean) : [];
-    return this.usersService.findByIds(idList, user.organizationId);
+  async findByIds(@Query() query: UsersByIdsQueryDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.findByIds(query.ids ?? [], user.organizationId);
   }
 
   @Get('lookup')
   @UseGuards(RolesGuard)
   @Roles('TEACHER', 'ADMIN')
-  async lookupByEmail(@Query('email') email: string, @CurrentUser() user: AuthUser) {
-    return this.usersService.lookupByEmail(email, user.organizationId, user.role);
+  async lookupByEmail(@Query() query: LookupUserQueryDto, @CurrentUser() user: AuthUser) {
+    return this.usersService.lookupByEmail(query.email, user.organizationId, user.role);
   }
 
   // ── Admin CRUD routes (Epic 5) ──
@@ -76,7 +89,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async findOne(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.usersService.findOne(id, user.organizationId, user.role);
   }
 
@@ -91,7 +104,7 @@ export class UsersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIdPipe) id: string,
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: AuthUser,
   ) {
@@ -102,7 +115,7 @@ export class UsersController {
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async remove(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
     await this.usersService.remove(id, user.organizationId, user.userId);
   }
 }

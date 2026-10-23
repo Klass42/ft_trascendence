@@ -11,20 +11,21 @@
 export interface AnalyticsOverviewDTO {
   course: { id: string; title: string };
   students: number;
+  /** Published activities; retained under its legacy API key. */
   assignments: number;
   lessons: number;
   submissions: {
-    /** Handed in (SUBMITTED + LATE + GRADED). */
+    /** Submitted attempts (SUBMITTED + GRADED). */
     total: number;
-    /** students × assignments. */
+    /** students × published activities. */
     expected: number;
     graded: number;
-    /** SUBMITTED + LATE, i.e. awaiting a grade. */
+    /** SUBMITTED attempts awaiting final grading. */
     pending: number;
     /** total / expected, in [0,1]. */
     rate: number;
   };
-  /** Mean GRADED score normalised to maxScore, as a percentage; null if none. */
+  /** Mean best GRADED attempt per student/activity, normalised to maxScore. */
   averageGrade: number | null;
   lessonsCompletion: {
     completed: number;
