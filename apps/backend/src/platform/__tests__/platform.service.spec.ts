@@ -23,7 +23,12 @@ function buildFake() {
     create: jest.fn(async ({ data }: any) => ({ ...mockOrg, ...data, id: ORG_ID })),
     findMany: jest.fn(),
     findUnique: jest.fn(async () => mockOrg),
-    update: jest.fn(async ({ where, data }: any) => ({ ...mockOrg, id: where.id, ...data })),
+    update: jest.fn(async ({ where, data, include }: any) => ({
+      ...mockOrg,
+      id: where.id,
+      ...data,
+      ...(include ? { _count: { users: 3, invitations: 2 } } : {}),
+    })),
     delete: jest.fn(async () => mockOrg),
   };
   const learningResource = {
@@ -111,8 +116,10 @@ describe('PlatformService', () => {
       expect(organization.update).toHaveBeenCalledWith({
         where: { id: ORG_ID },
         data: { plan: 'ENTERPRISE', maxUsers: null },
+        include: { _count: { select: { users: true, invitations: true } } },
       });
       expect(result.plan).toBe('ENTERPRISE');
+      expect(result._count).toEqual({ users: 3, invitations: 2 });
       expect(auditLog.create).toHaveBeenCalled();
     });
   });
@@ -125,7 +132,11 @@ describe('PlatformService', () => {
 
       await service.suspend(ORG_ID, ACTOR_ID);
 
-      expect(organization.update).toHaveBeenCalledWith({ where: { id: ORG_ID }, data: { status: 'SUSPENDED' } });
+      expect(organization.update).toHaveBeenCalledWith({
+        where: { id: ORG_ID },
+        data: { status: 'SUSPENDED' },
+        include: { _count: { select: { users: true, invitations: true } } },
+      });
       expect(session.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['user-1', 'user-2'] } } });
       expect(auditLog.create).toHaveBeenCalled();
     });

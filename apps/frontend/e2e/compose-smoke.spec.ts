@@ -41,9 +41,9 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
   test('E2E-AUTH-05: the standard seeded user logs in through Caddy', async ({ page }) => {
     const errors = captureConsoleErrors(page);
     await page.goto('/login');
-    await page.getByLabel('Organization code').fill('klass');
-    await page.getByLabel('Email').fill('student@demo');
-    await page.getByLabel('Password').fill('demo1234');
+    await page.getByLabel('Código de organización').fill('klass');
+    await page.getByLabel('Correo electrónico').fill('student@demo');
+    await page.getByLabel('Contraseña', { exact: true }).fill('demo1234');
     await page.getByRole('button', { name: 'Iniciar sesión' }).click();
 
     await expect(page).toHaveURL(/\/dashboard$/);

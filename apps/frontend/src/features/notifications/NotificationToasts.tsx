@@ -36,10 +36,6 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
         <div
           key={n.id}
           role="alert"
-          onClick={() => {
-            if (n.link) navigate(n.link);
-            onDismiss(n.id);
-          }}
           style={{
             background: 'var(--color-bg-elevated, var(--color-bg-secondary))',
             border: '1px solid var(--color-border-primary)',
@@ -50,34 +46,56 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
             gap: 11,
             alignItems: 'flex-start',
             boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-            cursor: n.link ? 'pointer' : 'default',
             animation: 'notif-toast-in 160ms ease-out',
           }}
         >
-          <span
+          <button
+            type="button"
+            aria-label={n.link ? `Abrir notificación: ${n.title}` : `Descartar notificación: ${n.title}`}
+            onClick={() => {
+              if (n.link) navigate(n.link);
+              onDismiss(n.id);
+            }}
             style={{
-              color: dotColor(n.type),
               display: 'flex',
-              flex: 'none',
-              marginTop: 1,
+              flex: 1,
+              minWidth: 0,
+              gap: 11,
+              alignItems: 'flex-start',
+              padding: 0,
+              color: 'inherit',
+              textAlign: 'left',
+              background: 'transparent',
+              fontFamily: 'inherit',
             }}
           >
-            <Bell size={17} />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
+            <span
               style={{
-                fontSize: 13.5,
-                fontWeight: 700,
-                color: 'var(--color-text-primary)',
-                lineHeight: 1.35,
+                color: dotColor(n.type),
+                display: 'flex',
+                flex: 'none',
+                marginTop: 1,
               }}
             >
-              {n.title}
-            </div>
-            {n.body && (
-              <div
+              <Bell size={17} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span
                 style={{
+                  display: 'block',
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: 'var(--color-text-primary)',
+                  lineHeight: 1.35,
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {n.title}
+              </span>
+              {n.body && (
+              <span
+                style={{
+                  display: 'block',
                   fontSize: 12.5,
                   color: 'var(--color-text-secondary)',
                   marginTop: 2,
@@ -85,10 +103,12 @@ export function NotificationToasts({ toasts, onDismiss }: NotificationToastsProp
                 }}
               >
                 {n.body}
-              </div>
-            )}
-          </div>
+              </span>
+              )}
+            </span>
+          </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDismiss(n.id);

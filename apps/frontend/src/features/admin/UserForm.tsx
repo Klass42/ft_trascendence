@@ -4,6 +4,7 @@ import { Input, Button } from '@/components/ui';
 import { ApiError, type GlobalRole } from '@/lib/api/types';
 import type { UserDTO, UpdateUserInput } from './types';
 import styles from './UserForm.module.css';
+import { mapApiValidationErrors } from '@/lib/form-errors';
 
 export type UserFormMode = 'create' | 'edit';
 
@@ -66,10 +67,13 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = 'El nombre es obligatorio.';
+    else if (name.trim().length > 100) errors.name = 'El nombre no puede superar los 100 caracteres.';
     if (!email.trim()) {
       errors.email = 'El email es obligatorio.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.email = 'Email no válido.';
+    } else if (email.length > 254) {
+      errors.email = 'El correo no puede superar los 254 caracteres.';
     }
     if (isCreate) {
       if (!password) {
@@ -111,18 +115,9 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
       return;
     }
     if (apiError.isValidationError && apiError.errors?.length) {
-      const next: Record<string, string> = {};
-      const leftover: string[] = [];
-      for (const msg of apiError.errors) {
-        const lower = msg.toLowerCase();
-        if (lower.includes('name')) next.name = msg;
-        else if (lower.includes('email')) next.email = msg;
-        else if (lower.includes('password')) next.password = msg;
-        else if (lower.includes('bio')) next.bio = msg;
-        else leftover.push(msg);
-      }
-      setFieldErrors((prev) => ({ ...prev, ...next }));
-      if (leftover.length) setFormError(leftover.join(' '));
+      const mapped = mapApiValidationErrors(apiError.errors);
+      setFieldErrors((prev) => ({ ...prev, ...mapped.fields }));
+      if (mapped.form) setFormError(mapped.form);
       return;
     }
     setFormError(apiError.message || 'Ocurrió un error inesperado.');
@@ -149,6 +144,7 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
       <Input
         label="Nombre completo"
         value={name}
+        maxLength={100}
         onChange={(e) => {
           setName(e.target.value);
           clearFieldError('name');
@@ -162,6 +158,7 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
         label="Email"
         type="email"
         value={email}
+        maxLength={254}
         onChange={(e) => {
           setEmail(e.target.value);
           clearFieldError('email');

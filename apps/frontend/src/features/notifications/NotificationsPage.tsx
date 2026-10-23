@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
+import { EmptyState } from '@/components/ui';
 import { useNotifications } from './NotificationsProvider';
 import { dotColor, formatRelativeTime } from './display';
+import styles from './NotificationsPage.module.css';
 
 /**
  * Full notification center. Reads live state from NotificationsProvider (the
@@ -14,19 +16,13 @@ export function NotificationsPage() {
   const navigate = useNavigate();
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 720 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 20,
-        }}
-      >
+    <div className={styles.page}>
+      <div className={styles.header}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
           Notificaciones
         </h1>
         <button
+          type="button"
           onClick={markAllRead}
           disabled={unread === 0}
           style={{
@@ -57,27 +53,20 @@ export function NotificationsPage() {
       )}
 
       {!isLoading && !error && items.length === 0 && (
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-          No tienes notificaciones.
-        </div>
+        <EmptyState title="No tienes notificaciones" description="Cuando haya novedades de tus cursos, aparecerán aquí." />
       )}
 
       {items.map((n) => (
-        <div
+        <button
           key={n.id}
+          type="button"
           onClick={() => {
             if (!n.read) markRead(n.id);
             if (n.link) navigate(n.link);
           }}
+          className={styles.item}
           style={{
             background: n.read ? 'var(--color-bg-secondary)' : 'var(--color-accent-muted)',
-            border: '1px solid var(--color-border-primary)',
-            borderRadius: 12,
-            padding: '14px 16px',
-            display: 'flex',
-            gap: 13,
-            alignItems: 'flex-start',
-            marginBottom: 10,
             cursor: 'pointer',
           }}
         >
@@ -91,20 +80,20 @@ export function NotificationsPage() {
               marginTop: 5,
             }}
           />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4 }}>
+          <span className={styles.itemBody}>
+            <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
               {n.title}
-            </div>
+            </span>
             {n.body && (
-              <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.45 }}>
+              <span style={{ display: 'block', fontSize: 13.5, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
                 {n.body}
-              </div>
+              </span>
             )}
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 3 }}>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 3 }}>
               {formatRelativeTime(n.createdAt)}
-            </div>
-          </div>
-        </div>
+            </span>
+          </span>
+        </button>
       ))}
     </div>
   );

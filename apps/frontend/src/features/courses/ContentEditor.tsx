@@ -332,6 +332,7 @@ function SectionEditor({
               className={styles.inlineField}
               aria-label="Nuevo título de la sección"
               value={newTitle}
+              maxLength={200}
               onChange={(e) => setNewTitle(e.target.value)}
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenaming(false); }}
@@ -368,6 +369,7 @@ function SectionEditor({
             <Input
               label="Título"
               value={editLessonTitle}
+              maxLength={200}
               onChange={(e) => setEditLessonTitle(e.target.value)}
             />
             <Textarea
@@ -419,6 +421,7 @@ function SectionEditor({
               className={styles.inlineField}
               aria-label="Título de la lección"
               value={lessonTitle}
+              maxLength={200}
               onChange={(e) => setLessonTitle(e.target.value)}
               placeholder="Título de la lección"
               autoFocus
@@ -523,6 +526,7 @@ export function ContentEditor({ courseId }: { courseId: string }) {
               className={styles.sectionTitleField}
               aria-label="Título de la sección"
               value={sectionTitle}
+              maxLength={200}
               onChange={(e) => setSectionTitle(e.target.value)}
               placeholder="Título de la sección"
               autoFocus
