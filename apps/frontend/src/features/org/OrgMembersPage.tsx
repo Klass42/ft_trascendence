@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { apiClient, useAuth } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
-import { Button, Spinner } from '@/components/ui';
+import { Avatar, Button, Spinner } from '@/components/ui';
 import { useOrg, useOrgMembers } from '@/lib/api/hooks';
 import type { GlobalRole } from '@/lib/api/types';
 import type { MemberDTO } from './types';
@@ -131,7 +131,10 @@ export function OrgMembersPage() {
             {visibleMembers.map((m: MemberDTO) => (
               <tr key={m.id} className={styles.tr}>
                 <td className={`${styles.td} ${styles.nameCell}`}>
-                  {m.name}
+                  <div className={styles.memberName}>
+                    <Avatar src={m.avatarUrl} size="sm" />
+                    <span>{m.name}</span>
+                  </div>
                 </td>
                 <td className={`${styles.td} ${styles.emailCell}`}>
                   {m.email}

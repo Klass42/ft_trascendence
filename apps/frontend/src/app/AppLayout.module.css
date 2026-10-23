@@ -121,16 +121,13 @@
 }
 
 .avatar {
-  width: 33px;
-  height: 33px;
-  border-radius: 10px;
-  background: var(--color-accent-primary);
-  color: #fff;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
+  overflow: hidden;
   text-decoration: none;
   cursor: pointer;
 }

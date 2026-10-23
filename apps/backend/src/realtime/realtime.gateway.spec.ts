@@ -39,7 +39,10 @@ describe('RealtimeGateway (integration)', () => {
       }),
     },
     // presence stamp (connect/disconnect) — accept and ignore
-    user: { update: async () => ({}) },
+    user: {
+      update: async () => ({}),
+      findUnique: async () => ({ organizationId: 'org-test' }),
+    },
     friendship: {
       findMany: async ({ where }: { where: any }) => {
         const uid = where.OR?.[0]?.requesterId as string | undefined;

@@ -12,9 +12,11 @@ const mkService = () =>
     update: jest.fn(),
     remove: jest.fn(),
     updateProfile: jest.fn(),
+    removeAvatar: jest.fn(),
     uploadAvatar: jest.fn(),
     listFriends: jest.fn(),
     sendFriendRequest: jest.fn(),
+    searchUsers: jest.fn(),
   }) as unknown as UsersService;
 
 const admin = {
@@ -103,15 +105,27 @@ describe('UsersController', () => {
     expect(svc.updateProfile).toHaveBeenCalledWith('user-admin-0001', { name: 'New' });
   });
 
+  it('removeAvatar calls service with the current user', async () => {
+    const svc = mkService();
+    await new UsersController(svc).removeAvatar(admin);
+    expect(svc.removeAvatar).toHaveBeenCalledWith(admin);
+  });
+
   it('listFriends calls service with userId', async () => {
     const svc = mkService();
     await new UsersController(svc).listFriends(admin);
-    expect(svc.listFriends).toHaveBeenCalledWith('user-admin-0001');
+    expect(svc.listFriends).toHaveBeenCalledWith('user-admin-0001', 'org-klass-0001');
   });
 
   it('sendFriendRequest calls service with callerId, targetId, orgId', async () => {
     const svc = mkService();
     await new UsersController(svc).sendFriendRequest('user-student-0001', admin);
     expect(svc.sendFriendRequest).toHaveBeenCalledWith('user-admin-0001', 'user-student-0001', 'org-klass-0001');
+  });
+
+  it('search passes the validated query, current user and organization', async () => {
+    const svc = mkService();
+    await new UsersController(svc).search({ q: 'alex' }, admin);
+    expect(svc.searchUsers).toHaveBeenCalledWith('alex', 'user-admin-0001', 'org-klass-0001');
   });
 });

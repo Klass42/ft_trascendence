@@ -1,6 +1,7 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
-import { useAuth, useUpdateProfile, useChangePassword } from '@/lib/api';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { apiClient, useAuth, useUpdateProfile, useChangePassword } from '@/lib/api';
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -10,29 +11,62 @@ import {
   Toggle,
   useToast,
 } from '@/components/ui';
-import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import styles from './ProfilePage.module.css';
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 export function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const { updateProfile, isSaving: isSavingProfile } = useUpdateProfile();
   const { changePassword, isSaving: isSavingPassword } = useChangePassword();
 
-  const [avatarFiles, setAvatarFiles] = useState<FileValue[]>([]);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string>();
 
-  const handleAvatarChange = async (files: FileValue[]) => {
-    setAvatarFiles(files);
-    const done = files.find((f) => f.status === 'done' && f.url);
-    if (done?.url) {
-      try {
-        await updateProfile({ avatarUrl: done.url });
-        toast({ variant: 'success', message: 'Foto de perfil actualizada' });
-      } catch {
-        toast({ variant: 'error', message: 'No se pudo guardar la foto de perfil' });
-      }
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+
+    if (!AVATAR_TYPES.has(file.type)) {
+      setAvatarError('Elige una imagen PNG, JPG o WebP.');
+      return;
+    }
+    if (file.size === 0 || file.size > AVATAR_MAX_BYTES) {
+      setAvatarError('La imagen debe ocupar como máximo 2 MB.');
+      return;
+    }
+
+    setIsSavingAvatar(true);
+    setAvatarError(undefined);
+    try {
+      await apiClient.uploadWithProgress('/users/me/avatar', file, { method: 'PATCH' });
+      await refreshUser();
+      toast({ variant: 'success', message: 'Foto de perfil actualizada' });
+    } catch {
+      setAvatarError('No se pudo subir la imagen. Comprueba el formato y el tamaño.');
+      toast({ variant: 'error', message: 'No se pudo guardar la foto de perfil' });
+    } finally {
+      setIsSavingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setIsSavingAvatar(true);
+    setAvatarError(undefined);
+    try {
+      await apiClient.delete('/users/me/avatar');
+      await refreshUser();
+      toast({ variant: 'success', message: 'Foto de perfil eliminada' });
+    } catch {
+      setAvatarError('No se pudo eliminar la foto de perfil. Inténtalo de nuevo.');
+      toast({ variant: 'error', message: 'No se pudo eliminar la foto de perfil' });
+    } finally {
+      setIsSavingAvatar(false);
     }
   };
 
@@ -114,12 +148,6 @@ export function ProfilePage() {
     );
   }
 
-  const initials = user.name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
   const roleLabel =
     user.role === 'STUDENT' ? 'Alumno' : user.role === 'TEACHER' ? 'Profesor' : 'Admin';
 
@@ -129,9 +157,7 @@ export function ProfilePage() {
 
       <Card title="Identidad" className={styles.section}>
         <div className={styles.identityRow}>
-          <div className={styles.avatar}>
-            {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials}
-          </div>
+          <Avatar src={user.avatarUrl} size="lg" />
           <div>
             <div className={styles.displayName}>{user.name}</div>
             <div className={styles.meta}>
@@ -140,20 +166,33 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {user.organizationId && <div className={styles.upload}>
-          <FileUpload
-            accept="image/*"
-            maxSizeBytes={5 * 1024 * 1024}
-            multiple={false}
-            maxFiles={1}
-            organizationId={user.organizationId}
-            uploaderId={user.userId}
-            value={avatarFiles}
+        <div className={styles.upload}>
+          <label className={styles.uploadLabel} htmlFor="profile-avatar-input">Foto de perfil</label>
+          <input
+            ref={avatarInput}
+            id="profile-avatar-input"
+            className={styles.fileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Foto de perfil en PNG, JPG o WebP"
+            aria-describedby="profile-avatar-hint"
             onChange={handleAvatarChange}
-            autoUpload
-            hint="Foto de perfil. Formatos: JPG, PNG, WebP. Máximo 5 MB."
           />
-        </div>}
+          <p className={styles.uploadHint} id="profile-avatar-hint">
+            PNG, JPG o WebP. Máximo 2 MB.
+          </p>
+          <div className={styles.avatarActions}>
+            <Button onClick={() => avatarInput.current?.click()} loading={isSavingAvatar}>
+              Cambiar foto
+            </Button>
+            {user.avatarUrl && (
+              <Button variant="outline" onClick={handleRemoveAvatar} loading={isSavingAvatar}>
+                Quitar foto
+              </Button>
+            )}
+          </div>
+          {avatarError && <p className={styles.uploadError} role="alert">{avatarError}</p>}
+        </div>
 
         <div className={styles.nameForm}>
           <Input

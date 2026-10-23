@@ -10,6 +10,6 @@ export class PresenceController {
   /** The acting user's accepted friends with their current online status. */
   @Get('me/presence/friends')
   async friends(@CurrentUser() user: AuthUser) {
-    return this.presence.getFriendsPresence(user.userId);
+    return this.presence.getFriendsPresence(user.userId, user.organizationId);
   }
 }
