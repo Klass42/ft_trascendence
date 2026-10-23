@@ -20,6 +20,7 @@ interface NotificationsContextValue {
   error: Error | null;
   /** Live socket status (badge/UX hint; the app works without it). */
   connected: boolean;
+  analyticsUpdate: { courseId: string; receivedAt: number } | null;
   refetch: () => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
@@ -45,6 +46,10 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
   const [nonce, setNonce] = useState(0);
   const [toasts, setToasts] = useState<NotificationDTO[]>([]);
+  const [analyticsUpdate, setAnalyticsUpdate] = useState<{
+    courseId: string;
+    receivedAt: number;
+  } | null>(null);
 
   const refetch = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -96,9 +101,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [dismissToast],
   );
 
+  const handleAnalyticsUpdate = useCallback(({ courseId }: { courseId: string }) => {
+    setAnalyticsUpdate({ courseId, receivedAt: Date.now() });
+  }, []);
+
   const { connected } = useNotificationsSocket({
     userId: user?.userId ?? null,
     onNotification: handleIncoming,
+    onAnalyticsUpdate: handleAnalyticsUpdate,
   });
 
   // ── Mutations (optimistic; reconcile with the server on failure) ─────────
@@ -133,11 +143,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       isLoading,
       error,
       connected,
+      analyticsUpdate,
       refetch,
       markRead,
       markAllRead,
     }),
-    [items, unread, isLoading, error, connected, refetch, markRead, markAllRead],
+    [items, unread, isLoading, error, connected, analyticsUpdate, refetch, markRead, markAllRead],
   );
 
   return (

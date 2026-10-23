@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { ANALYTICS_UPDATED } from '../../analytics/analytics.events';
 import {
   AttemptStatus,
   PublicationStatus,
@@ -58,6 +59,10 @@ describe('AttemptsService', () => {
     const answers: any[] = [];
     const emitted: Array<{ userId: string; type: NotificationType; payload: any }> =
       [];
+    const analyticsEvents: Array<{
+      name: string;
+      payload: { courseId: string; organizationId: string };
+    }> = [];
     let seq = 0;
 
     const withIncludes = (a: any, include: any) => {
@@ -66,6 +71,7 @@ describe('AttemptsService', () => {
       if (include?.activity) {
         row.activity = {
           ...activity,
+          subject: { organizationId: 'org-klass-0001' },
           questions: [...opts.questions].sort((p, q) => p.order - q.order),
         };
       }
@@ -193,13 +199,18 @@ describe('AttemptsService', () => {
         return { id: `n-${emitted.length}` };
       },
     } as unknown as NotificationsService;
+    const events = {
+      emit: (name: string, payload: { courseId: string; organizationId: string }) =>
+        analyticsEvents.push({ name, payload }),
+    } as any;
 
     const service = new AttemptsService(
       prisma as PrismaService,
       new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma as never)),
       notifications,
+      events,
     );
-    return { service, attempts, answers, emitted };
+    return { service, attempts, answers, emitted, analyticsEvents };
   }
 
   const mcq = (id: string, correct: number[], order = 0): Q => ({
@@ -252,7 +263,7 @@ describe('AttemptsService', () => {
   });
 
   it('leaves an attempt SUBMITTED (no notification) when it has a subjective question', async () => {
-    const { service, emitted } = build({
+    const { service, emitted, analyticsEvents } = build({
       questions: [
         mcq('q1', [0], 0),
         {
@@ -273,6 +284,12 @@ describe('AttemptsService', () => {
     expect(done.status).toBe(AttemptStatus.SUBMITTED);
     expect(done.score).toBeNull();
     expect(emitted).toHaveLength(0);
+    expect(analyticsEvents).toEqual([
+      {
+        name: ANALYTICS_UPDATED,
+        payload: { courseId: COURSE, organizationId: 'org-klass-0001' },
+      },
+    ]);
   });
 
   it('mixed MCQ+ESSAY submit stays SUBMITTED, auto-awards the MCQ, and skips GRADE_PUBLISHED', async () => {
@@ -306,7 +323,7 @@ describe('AttemptsService', () => {
   });
 
   it('grades subjective answers, sums awarded, emits GRADE_PUBLISHED when complete', async () => {
-    const { service, emitted } = build({
+    const { service, emitted, analyticsEvents } = build({
       questions: [
         {
           id: 'mcq-1',
@@ -340,6 +357,11 @@ describe('AttemptsService', () => {
     expect(emitted[0]).toMatchObject({
       userId: STUDENT,
       type: NotificationType.GRADE_PUBLISHED,
+    });
+    expect(analyticsEvents).toHaveLength(2);
+    expect(analyticsEvents[1]).toEqual({
+      name: ANALYTICS_UPDATED,
+      payload: { courseId: COURSE, organizationId: 'org-klass-0001' },
     });
   });
 

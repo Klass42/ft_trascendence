@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import type { Notification } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
+import { ANALYTICS_UPDATED, AnalyticsUpdatedEvent } from '../analytics/analytics.events';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Same origin the HTTP layer allows (see main.ts). In dev the frontend also
@@ -163,6 +164,38 @@ export class RealtimeGateway
     this.server
       ?.to(userRoom(notification.userId))
       .emit('notification:new', notification);
+  }
+
+  /** Push analytics invalidations only to staff in the subject's organization. */
+  @OnEvent(ANALYTICS_UPDATED)
+  async handleAnalyticsUpdated({ courseId, organizationId }: AnalyticsUpdatedEvent): Promise<void> {
+    try {
+      const [staff, admins] = await Promise.all([
+        this.prisma.subjectStaff.findMany({
+          where: {
+            subjectId: courseId,
+            subject: { organizationId },
+          },
+          select: { userId: true },
+        }),
+        this.prisma.user.findMany({
+          where: { organizationId, role: 'ADMIN' },
+          select: { id: true },
+        }),
+      ]);
+      const userIds = new Set([
+        ...staff.map(({ userId }) => userId),
+        ...admins.map(({ id }) => id),
+      ]);
+
+      for (const userId of userIds) {
+        this.server
+          ?.to(userRoom(userId))
+          .emit('analytics:update', { courseId });
+      }
+    } catch (error) {
+      this.logger.warn(`Analytics update broadcast failed for ${courseId}: ${String(error)}`);
+    }
   }
 
   /**
