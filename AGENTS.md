@@ -166,6 +166,11 @@ Dev-without-compose: frontend `5173`, backend `3000`.
 - No secrets in code. The committed contract is `.env.example` (placeholders only);
   real values live in the gitignored `.env` (`make env` generates them).
 - Conventional-style commit prefixes already in use (`infra:`, `init:`); keep them.
+- Auth rules: public registrations stay unverified in production until a valid verification
+  token is used, and tenant JWTs must enforce that status; platform accounts are separate.
+  Organization admins verify email when creating accounts. Refresh-token reuse may revoke
+  sessions only after signature, refresh purpose, and `jti` validation. Google OAuth state must
+  be signed, bound to an `HttpOnly` `SameSite` cookie, and carry the org slug.
 
 ## 8. Definition of Done (per feature)
 
