@@ -47,6 +47,28 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
+  private verifyRefreshToken(token: string, secret: string): { sub: string; jti: string } {
+    let decoded: unknown;
+    try {
+      decoded = this.jwt.verify(token, { secret });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (typeof decoded !== 'object' || decoded === null) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    const claims = decoded as { sub?: unknown; jti?: unknown; purpose?: unknown };
+    if (
+      typeof claims.sub !== 'string' ||
+      typeof claims.jti !== 'string' ||
+      claims.jti.length === 0 ||
+      claims.purpose !== 'refresh'
+    ) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return { sub: claims.sub, jti: claims.jti };
+  }
+
   /**
    * Session hashes are unique. A refresh token needs the newly-created session
    * ID in its `jti`, so the final hash cannot be calculated until after the
@@ -79,7 +101,7 @@ export class AuthService {
     });
 
     const refreshToken = this.jwt.sign(
-      { sub: userId, jti: session.id },
+      { sub: userId, jti: session.id, purpose: 'refresh' },
       { secret: refreshSecret, expiresIn: '7d' },
     );
 
@@ -125,12 +147,12 @@ export class AuthService {
       },
     });
 
-    if (!isDev) {
-      const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
-      const verifyToken = this.jwt.sign(
-        { sub: user.id, purpose: 'email-verify' },
-        { secret: accessSecret, expiresIn: '30m' },
-      );
+    const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    const verifyToken = this.jwt.sign(
+      { sub: user.id, purpose: 'email-verify' },
+      { secret: accessSecret, expiresIn: '30m' },
+    );
+    if (process.env.NODE_ENV !== 'production') {
       console.log(`[Auth] Email verification link: /api/auth/verify-email?token=${verifyToken}`);
     }
 
@@ -178,6 +200,7 @@ export class AuthService {
   }> {
     const refreshSecret = this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
     const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
+    const claims = this.verifyRefreshToken(refreshToken, refreshSecret);
     const hash = this.hashToken(refreshToken);
 
     const session = await this.prisma.session.findUnique({
@@ -186,10 +209,11 @@ export class AuthService {
     });
 
     if (!session) {
-      const decoded = this.jwt.decode(refreshToken) as { sub?: string; jti?: string } | null;
-      if (decoded?.sub) {
-        await this.prisma.session.deleteMany({ where: { userId: decoded.sub } });
-      }
+      await this.prisma.session.deleteMany({ where: { userId: claims.sub } });
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (claims.sub !== session.userId || claims.jti !== session.id) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -212,7 +236,7 @@ export class AuthService {
     });
 
     const newRefreshToken = this.jwt.sign(
-      { sub: session.userId, jti: newSession.id },
+      { sub: session.userId, jti: newSession.id, purpose: 'refresh' },
       { secret: refreshSecret, expiresIn: '7d' },
     );
     const newRefreshHash = this.hashToken(newRefreshToken);
@@ -270,17 +294,30 @@ export class AuthService {
 
   async verifyEmail(token: string): Promise<{ verified: true }> {
     const accessSecret = this.config.getOrThrow<string>('JWT_ACCESS_SECRET');
-    const decoded = this.jwt.verify(token, { secret: accessSecret }) as {
-      sub: string;
-      purpose?: string;
-    };
-    if (decoded.purpose !== 'email-verify') {
-      throw new UnauthorizedException('Invalid verification token');
+    let payload: unknown;
+    try {
+      payload = this.jwt.verify(token, { secret: accessSecret });
+    } catch {
+      throw new BadRequestException('El enlace de verificación no es válido o ha caducado.');
     }
-    await this.prisma.user.update({
-      where: { id: decoded.sub },
-      data: { emailVerifiedAt: new Date() },
-    });
+    if (typeof payload !== 'object' || payload === null) {
+      throw new BadRequestException('El enlace de verificación no es válido o ha caducado.');
+    }
+    const decoded = payload as { sub?: unknown; purpose?: unknown };
+    if (typeof decoded.sub !== 'string' || decoded.purpose !== 'email-verify') {
+      throw new BadRequestException('El enlace de verificación no es válido o ha caducado.');
+    }
+    try {
+      await this.prisma.user.update({
+        where: { id: decoded.sub },
+        data: { emailVerifiedAt: new Date() },
+      });
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+        throw new BadRequestException('El enlace de verificación no es válido o ha caducado.');
+      }
+      throw error;
+    }
     return { verified: true };
   }
 

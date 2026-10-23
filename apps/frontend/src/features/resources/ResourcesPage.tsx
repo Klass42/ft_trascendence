@@ -192,7 +192,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
           </div>
-          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material. La descarga necesita Garage/S3 configurado." />}
+          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>

@@ -67,6 +67,19 @@
   word-break: break-word;
 }
 
+.memberName {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.memberName > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .roleBadge {
   display: inline-block;
   padding: 3px 10px;

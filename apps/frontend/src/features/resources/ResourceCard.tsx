@@ -1,4 +1,4 @@
-import { ExternalLink, FileText, Link as LinkIcon } from 'lucide-react';
+import { Download, ExternalLink, Link as LinkIcon } from 'lucide-react';
 import { apiClient, type LearningResourceDTO } from '@/lib/api';
 import { resourceStatusLabel, resourceTypeLabel } from './resource-helpers';
 
@@ -14,15 +14,21 @@ export function ResourceCard({ resource, showStatus = false, required = false }:
     if (resource.externalUrl) window.open(resource.externalUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const openFile = async () => {
+  const downloadFile = async () => {
     if (!resource.fileId) return;
     try {
-      // Do not derive an object-storage URL in the browser. This endpoint checks
-      // resource/course access before returning a short-lived storage URL.
-      const { url } = await apiClient.get<{ url: string }>(`/files/${resource.fileId}/url`);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const { url, originalName } = await apiClient.get<{ url: string; originalName: string }>(
+        `/files/${resource.fileId}/url`,
+      );
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = originalName || resource.file?.originalName || 'archivo';
+      link.rel = 'noopener';
+      document.body.append(link);
+      link.click();
+      link.remove();
     } catch {
-      window.alert('No se pudo abrir el archivo. Comprueba que tienes acceso al recurso.');
+      window.alert('No se pudo descargar el archivo. Comprueba que tienes acceso al recurso.');
     }
   };
 
@@ -55,8 +61,8 @@ export function ResourceCard({ resource, showStatus = false, required = false }:
           <LinkIcon size={15} /> Abrir recurso <ExternalLink size={13} />
         </button>
       ) : resource.file ? (
-        <button type="button" onClick={() => void openFile()} style={linkButtonStyle}>
-          <FileText size={15} /> Abrir {resource.file.originalName} <ExternalLink size={13} />
+        <button type="button" onClick={() => void downloadFile()} style={linkButtonStyle}>
+          <Download size={15} /> Descargar {resource.file.originalName}
         </button>
       ) : null}
     </article>

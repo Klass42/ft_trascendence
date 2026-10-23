@@ -332,8 +332,8 @@ test.describe('Content builder (TEACHER)', () => {
     await page.getByRole('button', { name: 'Abrir adjunto apuntes.pdf' }).click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened.length)).toBe(1);
     const [opened] = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
-    // Local driver serves /uploads/…; the S3 driver returns a presigned URL.
-    expect(opened).toMatch(/\/uploads\/|X-Amz-Signature/);
+    // Both storage drivers use a short-lived signed backend content URL.
+    expect(opened).toMatch(/\/api\/files\/[^/]+\/content\?/);
     const file = await page.request.get(new URL(opened, page.url()).toString());
     expect(file.ok()).toBeTruthy();
     expect((await file.body()).equals(PDF.buffer)).toBeTruthy();

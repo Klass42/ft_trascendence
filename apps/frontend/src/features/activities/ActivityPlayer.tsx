@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
-  FileUpload,
   Spinner,
   Textarea,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useActivity, useActivityAttempts, useAuth } from '@/lib/api';
 import type { AttemptDTO, QuestionDTO, SaveAnswersInput } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';

@@ -111,10 +111,16 @@ export function useGradeDistribution(courseId: string | null) {
  */
 export async function downloadAnalyticsCsv(
   courseId: string,
+  from?: string,
+  to?: string,
   filename = `analytics-${courseId}.csv`,
 ): Promise<void> {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const query = params.toString();
   const csv = await apiClient.get<string>(
-    `/subjects/${courseId}/analytics/export.csv`,
+    `/subjects/${courseId}/analytics/export.csv${query ? `?${query}` : ''}`,
   );
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);

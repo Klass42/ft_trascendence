@@ -2,15 +2,14 @@ import { useState } from 'react';
 import {
   Button,
   DatePicker,
-  FileUpload,
   FormField,
   Input,
   Select,
   Textarea,
   Toggle,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useActivityMutations, useAuth } from '@/lib/api';
 import type { ActivityDTO, ActivityStatus } from '@/lib/api';
 import { toDatetimeLocal, toIso } from '../assignments/helpers';

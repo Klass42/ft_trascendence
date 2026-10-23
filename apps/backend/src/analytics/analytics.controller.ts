@@ -45,11 +45,14 @@ export class AnalyticsController {
   async exportCsv(
     @Param('subjectId') subjectId: string,
     @CurrentUser() user: AuthUser,
+    @Query() query: SubmissionsOverTimeDto,
     @Res() res: Response,
   ) {
     const { filename, csv } = await this.analytics.getExportCsv(
       subjectId,
       user.userId,
+      query.from,
+      query.to,
     );
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

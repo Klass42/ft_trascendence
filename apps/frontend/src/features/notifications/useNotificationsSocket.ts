@@ -7,6 +7,8 @@ interface UseNotificationsSocketOptions {
   userId: string | null;
   /** Invoked for every `notification:new` pushed by the backend. */
   onNotification: (notification: NotificationDTO) => void;
+  /** Invalidates course analytics through the existing socket connection. */
+  onAnalyticsUpdate: (event: { courseId: string }) => void;
 }
 
 /**
@@ -23,11 +25,14 @@ interface UseNotificationsSocketOptions {
 export function useNotificationsSocket({
   userId,
   onNotification,
+  onAnalyticsUpdate,
 }: UseNotificationsSocketOptions): { connected: boolean } {
   const [connected, setConnected] = useState(false);
   // Keep the latest callback without forcing a reconnect when it changes.
   const handlerRef = useRef(onNotification);
   handlerRef.current = onNotification;
+  const analyticsHandlerRef = useRef(onAnalyticsUpdate);
+  analyticsHandlerRef.current = onAnalyticsUpdate;
 
   useEffect(() => {
     if (!userId) {
@@ -49,15 +54,22 @@ export function useNotificationsSocket({
     const handleDisconnect = () => setConnected(false);
     const handleNew = (notification: NotificationDTO) =>
       handlerRef.current(notification);
+    const handleAnalyticsUpdate = (event: { courseId?: unknown }) => {
+      if (typeof event?.courseId === 'string') {
+        analyticsHandlerRef.current({ courseId: event.courseId });
+      }
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('notification:new', handleNew);
+    socket.on('analytics:update', handleAnalyticsUpdate);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('notification:new', handleNew);
+      socket.off('analytics:update', handleAnalyticsUpdate);
       socket.disconnect();
     };
   }, [userId]);
