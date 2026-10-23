@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Badge,
@@ -44,9 +44,19 @@ export function ActivitiesPage() {
   const [creating, setCreating] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const linkedSubjectId = searchParams.get('subjectId');
+  const handledLinkedSubjectId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!courseId && courses && courses.length > 0) setCourseId(courses[0].id);
+    if (!courses?.length || !linkedSubjectId || handledLinkedSubjectId.current === linkedSubjectId) return;
+    if (!courses.some((course) => course.id === linkedSubjectId)) return;
+    handledLinkedSubjectId.current = linkedSubjectId;
+    setCourseId(linkedSubjectId);
+    setSelectedId(null);
+  }, [courses, linkedSubjectId]);
+
+  useEffect(() => {
+    if (!courseId && courses?.length) setCourseId(courses[0].id);
   }, [courses, courseId]);
 
   const {

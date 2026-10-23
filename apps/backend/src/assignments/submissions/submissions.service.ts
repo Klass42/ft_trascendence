@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
-import { SubmissionStatus, NotificationType } from '@prisma/client';
+import { SubmissionStatus, NotificationType, type Subject } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { AssignmentsService } from '../assignments.service';
@@ -117,7 +117,7 @@ export class SubmissionsService {
       existing?.status === SubmissionStatus.SUBMITTED ||
       existing?.status === SubmissionStatus.LATE;
     if (!isDraft && !wasSubmitted) {
-      await this.notifyStaff(subject.id, actingUserId, assignment.title, assignment.id);
+      await this.notifyStaff(subject, actingUserId, assignment.title);
     }
 
     return submission;
@@ -158,33 +158,30 @@ export class SubmissionsService {
 
   /** Emit NEW_ASSIGNMENT to every staff member of the course except the author. */
   private async notifyStaff(
-    subjectId: string,
+    subject: Subject,
     authorId: string,
     assignmentTitle: string,
-    assignmentId: string,
   ) {
-    const staff = await this.prisma.subjectStaff.findMany({
-      where: {
-        subjectId,
-        userId: { not: authorId },
+    await this.notifications.emitMany(
+      async () => {
+        const staff = await this.prisma.subjectStaff.findMany({
+          where: {
+            subjectId: subject.id,
+            subject: { organizationId: subject.organizationId },
+            user: { organizationId: subject.organizationId },
+            userId: { not: authorId },
+          },
+          select: { userId: true },
+        });
+        return staff.map(({ userId }) => userId);
       },
-      select: { userId: true },
-    });
-
-    const author = await this.prisma.user.findUnique({
-      where: { id: authorId },
-      select: { name: true },
-    });
-    const who = author?.name ?? 'Un alumno';
-
-    await Promise.all(
-      staff.map((s) =>
-        this.notifications.emit(s.userId, NotificationType.NEW_ASSIGNMENT, {
-          title: 'Nueva entrega',
-          body: `${who} entregó «${assignmentTitle}»`,
-          link: `/assignments?assignmentId=${assignmentId}`,
-        }),
-      ),
+      NotificationType.SUBMISSION_RECEIVED,
+      {
+        title: 'Nueva entrega',
+        body: `Un alumno entregó «${assignmentTitle}»`,
+        link: `/courses/${subject.courseId}/subjects/${subject.id}`,
+      },
+      { organizationId: subject.organizationId, actorId: authorId },
     );
   }
 }

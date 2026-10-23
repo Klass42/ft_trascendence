@@ -77,12 +77,15 @@ const actor = {
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
   let prisma: ReturnType<typeof mkPrisma>;
-  let notifications: { emit: jest.Mock };
+  let notifications: { emit: jest.Mock; emitMany: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = mkPrisma();
-    notifications = { emit: jest.fn(async () => ({ id: 'notif-1' })) };
+    notifications = {
+      emit: jest.fn(async () => ({ id: 'notif-1' })),
+      emitMany: jest.fn(async () => undefined),
+    };
     service = new OrganizationsService(
       prisma,
       notifications as unknown as NotificationsService,
@@ -119,6 +122,28 @@ describe('OrganizationsService', () => {
         service.update(OTHER_ORG, { name: 'Hack' }, ORG_ID),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.organization.update).not.toHaveBeenCalled();
+    });
+
+    it('notifies organization members except the acting admin', async () => {
+      (prisma.organization.update as jest.Mock).mockResolvedValue({ ...mockOrg, name: 'New Name' });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: actor.userId }, { id: 'user-student-0001' }]);
+      let recipients: string[] = [];
+      notifications.emitMany.mockImplementation(async (...args: any[]) => {
+        const loader = args[0];
+        const resolved = typeof loader === 'function' ? await loader() : loader;
+        recipients = resolved.filter((id: string) => id !== actor.userId);
+      });
+
+      await service.update(ORG_ID, { name: 'New Name' }, ORG_ID, actor.userId);
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID }, select: { id: true } });
+      expect(recipients).toEqual(['user-student-0001']);
+      expect(notifications.emitMany).toHaveBeenCalledWith(
+        expect.any(Function),
+        NotificationType.ORGANIZATION_CHANGED,
+        expect.objectContaining({ title: 'La organización se ha actualizado' }),
+        { organizationId: ORG_ID, actorId: actor.userId },
+      );
     });
   });
 

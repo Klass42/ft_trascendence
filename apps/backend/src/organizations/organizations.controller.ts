@@ -54,7 +54,7 @@ export class OrganizationsController {
     @Body() dto: UpdateOrganizationDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.organizationsService.update(id, dto, user.organizationId);
+    return this.organizationsService.update(id, dto, user.organizationId, user.userId);
   }
 
   @Get(':id/members')

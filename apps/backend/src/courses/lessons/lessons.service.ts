@@ -1,11 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 @Injectable()
 export class LessonsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(LessonsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications?: NotificationsService,
+  ) {}
 
   private async findSectionOrThrow(
     sectionId: string,
@@ -64,10 +71,11 @@ export class LessonsService {
     sectionId: string,
     organizationId: string,
     dto: CreateLessonDto,
+    actorId?: string,
   ) {
     await this.findSectionOrThrow(sectionId, organizationId);
 
-    return this.prisma.lesson.create({
+    const lesson = await this.prisma.lesson.create({
       data: {
         sectionId,
         title: dto.title,
@@ -76,6 +84,8 @@ export class LessonsService {
         order: dto.order ?? 0,
       },
     });
+    await this.notifyContent(lesson.id, organizationId, actorId, `Nueva lección: ${lesson.title}`);
+    return lesson;
   }
 
   async findAll(sectionId: string, organizationId: string) {
@@ -125,29 +135,35 @@ export class LessonsService {
     lessonId: string,
     organizationId: string,
     dto: UpdateLessonDto,
+    actorId?: string,
   ) {
     await this.findLessonOrThrow(sectionId, lessonId, organizationId);
 
-    return this.prisma.lesson.update({
+    const updated = await this.prisma.lesson.update({
       where: { id: lessonId },
       data: dto,
     });
+    await this.notifyContent(lessonId, organizationId, actorId, `Lección actualizada: ${updated.title}`);
+    return updated;
   }
 
   async delete(
     sectionId: string,
     lessonId: string,
     organizationId: string,
+    actorId?: string,
   ) {
-    await this.findLessonOrThrow(sectionId, lessonId, organizationId);
+    const lesson = await this.findLessonOrThrow(sectionId, lessonId, organizationId);
 
     await this.prisma.lesson.delete({ where: { id: lessonId } });
+    await this.notifySectionContent(lesson.sectionId, organizationId, actorId, `Lección eliminada: ${lesson.title}`);
   }
 
   async reorder(
     sectionId: string,
     organizationId: string,
     orderedIds: string[],
+    actorId?: string,
   ) {
     if (!orderedIds || orderedIds.length === 0) {
       throw new BadRequestException('orderedIds must not be empty');
@@ -177,12 +193,16 @@ export class LessonsService {
     );
 
     await this.prisma.$transaction(updates);
+    if (orderedIds.length > 0) {
+      await this.notifyContent(orderedIds[0], organizationId, actorId, 'Lecciones reorganizadas');
+    }
   }
 
   async attachFile(
     lessonId: string,
     fileId: string,
     organizationId: string,
+    actorId?: string,
   ) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
@@ -204,16 +224,19 @@ export class LessonsService {
       throw new NotFoundException(`File ${fileId} not found`);
     }
 
-    return this.prisma.lessonAttachment.create({
+    const attachment = await this.prisma.lessonAttachment.create({
       data: { lessonId, fileId },
       include: { file: true },
     });
+    await this.notifyContent(lessonId, organizationId, actorId, `Adjunto añadido a ${lesson.title}`);
+    return attachment;
   }
 
   async detachFile(
     lessonId: string,
     fileId: string,
     organizationId: string,
+    actorId?: string,
   ) {
     const attachment = await this.prisma.lessonAttachment.findUnique({
       where: { lessonId_fileId: { lessonId, fileId } },
@@ -232,5 +255,51 @@ export class LessonsService {
     await this.prisma.lessonAttachment.delete({
       where: { lessonId_fileId: { lessonId, fileId } },
     });
+    await this.notifyContent(lessonId, organizationId, actorId, 'Adjunto eliminado de una lección');
+  }
+
+  private async notifyContent(lessonId: string, organizationId: string, actorId: string | undefined, title: string) {
+    if (!this.notifications) return;
+    try {
+      const lesson = await this.prisma.lesson.findFirst({
+        where: { id: lessonId, section: { subject: { organizationId } } },
+        select: { sectionId: true },
+      });
+      if (!lesson) return;
+      await this.notifySectionContent(lesson.sectionId, organizationId, actorId, title);
+    } catch (error) {
+      this.logger.error('No se pudo preparar la notificación de contenido', error instanceof Error ? error.stack : undefined);
+    }
+  }
+
+  private async notifySectionContent(sectionId: string, organizationId: string, actorId: string | undefined, title: string) {
+    if (!this.notifications) return;
+    try {
+      const section = await this.prisma.section.findFirst({
+        where: { id: sectionId, subject: { organizationId } },
+        include: { subject: true },
+      });
+      if (!section) return;
+      const subject = section.subject;
+      await this.notifications.emitMany(
+        async () => {
+          if (subject.status !== 'PUBLISHED') return [];
+          const memberships = await this.prisma.courseMembership.findMany({
+            where: {
+              courseId: subject.courseId,
+              course: { organizationId },
+              user: { organizationId, role: 'STUDENT' },
+            },
+            select: { userId: true },
+          });
+          return memberships.map(({ userId }) => userId);
+        },
+        NotificationType.COURSE_CONTENT_CHANGED,
+        { title, body: 'Hay nuevo material disponible en una de tus asignaturas.', link: `/courses/${subject.courseId}/subjects/${subject.id}` },
+        { organizationId, actorId },
+      );
+    } catch (error) {
+      this.logger.error('No se pudo preparar la notificación de contenido', error instanceof Error ? error.stack : undefined);
+    }
   }
 }

@@ -68,11 +68,24 @@ export class OrganizationsService {
     return org;
   }
 
-  async update(id: string, dto: UpdateOrganizationDto, callerOrgId: string) {
+  async update(id: string, dto: UpdateOrganizationDto, callerOrgId: string, callerUserId?: string) {
     if (id !== callerOrgId) {
       throw new ForbiddenException('Cannot edit an organization you do not belong to');
     }
-    return this.prisma.organization.update({ where: { id }, data: dto });
+    const updated = await this.prisma.organization.update({ where: { id }, data: dto });
+    await this.notifications.emitMany(
+      async () => {
+        const members = await this.prisma.user.findMany({
+          where: { organizationId: id },
+          select: { id: true },
+        });
+        return members.map(({ id: memberId }) => memberId);
+      },
+      NotificationType.ORGANIZATION_CHANGED,
+      { title: 'La organización se ha actualizado', body: `Se han actualizado los datos de «${updated.name}».`, link: '/profile' },
+      { organizationId: id, actorId: callerUserId },
+    );
+    return updated;
   }
 
   async findMembers(
@@ -180,10 +193,22 @@ export class OrganizationsService {
     if (userId === callerUserId) {
       throw new BadRequestException('Cannot remove yourself');
     }
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, organizationId: true } });
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true } });
     if (!target) throw new NotFoundException('User not found');
     if (target.organizationId !== id) throw new ForbiddenException('User belongs to another organization');
     await this.prisma.user.delete({ where: { id: userId } });
+    await this.notifications.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId: id, role: 'ADMIN' },
+          select: { id: true },
+        });
+        return admins.map(({ id: adminId }) => adminId);
+      },
+      NotificationType.USER_CHANGED,
+      { title: 'Se ha eliminado un miembro', body: `Se ha dado de baja a ${target.name}.`, link: '/admin/users' },
+      { organizationId: id, actorId: callerUserId },
+    );
   }
 
   /**

@@ -11,6 +11,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
@@ -64,11 +65,11 @@ export class UsersService {
     return user;
   }
 
-  async create(dto: CreateUserDto, organizationId: string) {
+  async create(dto: CreateUserDto, organizationId: string, actorId?: string) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
     if (existing) throw new ConflictException('Email already registered in this organization');
     try {
-      return await this.prisma.user.create({
+      const created = await this.prisma.user.create({
         data: {
           organizationId,
           email: dto.email,
@@ -80,6 +81,13 @@ export class UsersService {
         },
         select: selectUser,
       });
+      await this.notifications?.emitMany(
+        [created.id],
+        NotificationType.USER_CHANGED,
+        { title: 'Tu cuenta ya está lista', body: `Se ha creado tu cuenta en la organización.`, link: '/profile' },
+        { organizationId, actorId },
+      );
+      return created;
     } catch (err) {
       if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
       throw err;
@@ -96,7 +104,16 @@ export class UsersService {
       if (clash) throw new ConflictException('Email already registered in this organization');
     }
     try {
-      return await this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
+      const updated = await this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
+      if (dto.role !== undefined && dto.role !== user.role) {
+        await this.notifications?.emitMany(
+          [id],
+          NotificationType.USER_CHANGED,
+          { title: 'Tu rol ha cambiado', body: `Tu nuevo rol es ${this.roleLabel(dto.role)}.`, link: '/profile' },
+          { organizationId, actorId: callerUserId },
+        );
+      }
+      return updated;
     } catch (err) {
       if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
       throw err;
@@ -109,6 +126,18 @@ export class UsersService {
     if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
     if (id === callerUserId) throw new BadRequestException('Cannot delete yourself');
     await this.prisma.user.delete({ where: { id } });
+    await this.notifications?.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId, role: 'ADMIN' },
+          select: { id: true },
+        });
+        return admins.map(({ id: adminId }) => adminId);
+      },
+      NotificationType.USER_CHANGED,
+      { title: 'Se ha eliminado una cuenta de la organización', link: '/admin/users' },
+      { organizationId, actorId: callerUserId },
+    );
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
@@ -171,11 +200,14 @@ export class UsersService {
     });
     if (existing) throw new ConflictException('Friendship already exists');
     const friendship = await this.prisma.friendship.create({ data: { requesterId: callerId, addresseeId: targetId, status: 'PENDING' } });
-    await this.notifications?.emit(targetId, 'FRIEND_REQUEST', {
-      title: 'Nueva solicitud de amistad',
-      body: 'Tienes una nueva solicitud de amistad.',
-      link: '/friends',
-    });
+    // Persist + push over socket via the real contract (David's NotificationsService).
+    // No-op if the module isn't wired (optional dep), so friend requests never block.
+    await this.notifications?.emitMany(
+      [targetId],
+      NotificationType.FRIEND_REQUEST,
+      { title: 'Tienes una nueva solicitud de amistad', body: 'Puedes revisar las amistades desde tu perfil.', link: '/profile' },
+      { organizationId: callerOrgId, actorId: callerId },
+    );
     return friendship;
   }
 
@@ -252,5 +284,11 @@ export class UsersService {
       throw new ForbiddenException('Cannot look up admin users');
     }
     return { userId: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl };
+  }
+
+  private roleLabel(role: string) {
+    if (role === 'ADMIN') return 'administrador';
+    if (role === 'TEACHER') return 'profesor';
+    return 'estudiante';
   }
 }

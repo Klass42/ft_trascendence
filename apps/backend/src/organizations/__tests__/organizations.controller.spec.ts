@@ -107,6 +107,7 @@ describe('OrganizationsController', () => {
         'org-klass-0001',
         { name: 'New' },
         'org-klass-0001',
+        adminUser.userId,
       );
     });
 
