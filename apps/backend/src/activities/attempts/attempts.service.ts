@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   Activity,
   AttemptStatus,
@@ -14,6 +15,7 @@ import {
   QuestionKind,
   Prisma,
 } from '@prisma/client';
+import { ANALYTICS_UPDATED } from '../../analytics/analytics.events';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ActivitiesService } from '../activities.service';
@@ -33,6 +35,7 @@ export class AttemptsService {
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
     private readonly notifications: NotificationsService,
+    private readonly events: EventEmitter2,
   ) {}
 
   // ─── Student: start / save / submit ───────────────────────────────────────
@@ -176,6 +179,10 @@ export class AttemptsService {
       ...answerUpdates,
       this.prisma.attempt.update({ where: { id: attemptId }, data: attemptData }),
     ]);
+    this.events.emit(ANALYTICS_UPDATED, {
+      courseId: activity.subjectId,
+      organizationId: activity.subject.organizationId,
+    });
 
     if (!hasManual) {
       await this.notifyGraded(
@@ -228,7 +235,12 @@ export class AttemptsService {
       where: { id: attemptId },
       include: {
         answers: true,
-        activity: { include: { questions: { orderBy: { order: 'asc' } } } },
+        activity: {
+          include: {
+            questions: { orderBy: { order: 'asc' } },
+            subject: { select: { organizationId: true } },
+          },
+        },
       },
     });
     if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
@@ -306,6 +318,10 @@ export class AttemptsService {
             }
           : { status: AttemptStatus.SUBMITTED }),
       },
+    });
+    this.events.emit(ANALYTICS_UPDATED, {
+      courseId: attempt.activity.subjectId,
+      organizationId: attempt.activity.subject.organizationId,
     });
 
     if (allAwarded) {

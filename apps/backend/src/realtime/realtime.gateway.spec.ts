@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Test } from '@nestjs/testing';
@@ -8,6 +8,7 @@ import { NotificationType } from '@prisma/client';
 import { io, type Socket } from 'socket.io-client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ANALYTICS_UPDATED } from '../analytics/analytics.events';
 import { RealtimeGateway } from './realtime.gateway';
 
 // Same secret the gateway verifies with (ConfigService mock returns it below).
@@ -23,6 +24,7 @@ const TEST_ACCESS_SECRET = 'test-access-secret';
 describe('RealtimeGateway (integration)', () => {
   let app: INestApplication;
   let notifications: NotificationsService;
+  let events: EventEmitter2;
   let jwt: JwtService;
   let port: number;
   const clients: Socket[] = [];
@@ -41,7 +43,11 @@ describe('RealtimeGateway (integration)', () => {
     // presence stamp (connect/disconnect) — accept and ignore
     user: {
       update: async () => ({}),
+      findMany: jest.fn(async () => [{ id: 'analytics-admin' }]),
       findUnique: async () => ({ organizationId: 'org-test' }),
+    },
+    subjectStaff: {
+      findMany: jest.fn(async () => [{ userId: 'analytics-teacher' }]),
     },
     friendship: {
       findMany: async ({ where }: { where: any }) => {
@@ -78,6 +84,7 @@ describe('RealtimeGateway (integration)', () => {
     const address = (app.getHttpServer() as { address(): { port: number } }).address();
     port = address.port;
     notifications = moduleRef.get(NotificationsService);
+    events = moduleRef.get(EventEmitter2);
     jwt = moduleRef.get(JwtService);
   });
 
@@ -118,6 +125,42 @@ describe('RealtimeGateway (integration)', () => {
     expect(payload.title).toBe('Hi Alice');
     expect(payload.userId).toBe('user-alice');
     alice.close();
+  });
+
+  it('pushes analytics:update only to course staff and organization admins', async () => {
+    const teacher = await connect('analytics-teacher');
+    const admin = await connect('analytics-admin');
+    const student = await connect('analytics-student');
+    let studentReceived = false;
+    const teacherReceived = new Promise<{ courseId: string }>((resolve) =>
+      teacher.on('analytics:update', resolve),
+    );
+    const adminReceived = new Promise<{ courseId: string }>((resolve) =>
+      admin.on('analytics:update', resolve),
+    );
+    student.on('analytics:update', () => {
+      studentReceived = true;
+    });
+
+    events.emit(ANALYTICS_UPDATED, {
+      courseId: 'subject-web-101',
+      organizationId: 'org-klass-0001',
+    });
+
+    await expect(teacherReceived).resolves.toEqual({ courseId: 'subject-web-101' });
+    await expect(adminReceived).resolves.toEqual({ courseId: 'subject-web-101' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(studentReceived).toBe(false);
+    expect(prismaMock.subjectStaff.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        subjectId: 'subject-web-101',
+        subject: { organizationId: 'org-klass-0001' },
+      },
+    }));
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith({
+      where: { organizationId: 'org-klass-0001', role: 'ADMIN' },
+      select: { id: true },
+    });
   });
 
   it('broadcasts presence:update online to a friend when a user connects', async () => {

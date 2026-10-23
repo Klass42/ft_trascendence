@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { ANALYTICS_UPDATED } from '../../analytics/analytics.events';
 import {
   AttemptStatus,
   PublicationStatus,
@@ -63,6 +64,10 @@ describe('AttemptsService', () => {
     const files: any[] = [];
     const emitted: Array<{ userId: string; type: NotificationType; payload: any }> =
       [];
+    const analyticsEvents: Array<{
+      name: string;
+      payload: { courseId: string; organizationId: string };
+    }> = [];
     let seq = 0;
     let member = true;
     let transactionQueue = Promise.resolve();
@@ -232,17 +237,23 @@ describe('AttemptsService', () => {
         return { id: `n-${emitted.length}` };
       },
     } as unknown as NotificationsService;
+    const events = {
+      emit: (name: string, payload: { courseId: string; organizationId: string }) =>
+        analyticsEvents.push({ name, payload }),
+    } as any;
 
     const service = new AttemptsService(
       prisma as PrismaService,
       new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma as never)),
       notifications,
+      events,
     );
     return {
       service,
       attempts,
       answers,
       emitted,
+      analyticsEvents,
       files,
       activity,
       setMember: (value: boolean) => {
@@ -301,7 +312,7 @@ describe('AttemptsService', () => {
   });
 
   it('leaves an attempt SUBMITTED (no notification) when it has a subjective question', async () => {
-    const { service, emitted } = build({
+    const { service, emitted, analyticsEvents } = build({
       questions: [
         mcq('q1', [0], 0),
         {
@@ -325,6 +336,12 @@ describe('AttemptsService', () => {
     expect(done.answers[0]).not.toHaveProperty('awarded');
     expect(done.answers[0]).not.toHaveProperty('feedback');
     expect(emitted).toHaveLength(0);
+    expect(analyticsEvents).toEqual([
+      {
+        name: ANALYTICS_UPDATED,
+        payload: { courseId: COURSE, organizationId: 'org-klass-0001' },
+      },
+    ]);
   });
 
   it('hides per-answer results and feedback until a graded attempt allows solutions', async () => {
@@ -558,7 +575,7 @@ describe('AttemptsService', () => {
   });
 
   it('grades subjective answers, sums awarded, emits GRADE_PUBLISHED when complete', async () => {
-    const { service, emitted } = build({
+    const { service, emitted, analyticsEvents } = build({
       questions: [
         {
           id: 'mcq-1',
@@ -592,6 +609,11 @@ describe('AttemptsService', () => {
     expect(emitted[0]).toMatchObject({
       userId: STUDENT,
       type: NotificationType.GRADE_PUBLISHED,
+    });
+    expect(analyticsEvents).toHaveLength(2);
+    expect(analyticsEvents[1]).toEqual({
+      name: ANALYTICS_UPDATED,
+      payload: { courseId: COURSE, organizationId: 'org-klass-0001' },
     });
   });
 
