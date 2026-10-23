@@ -15,7 +15,7 @@ const windowEnv = 'AUTH_RATE_LIMIT_WINDOW_MS';
 const defaultWindow = 60_000;
 
 const policies = {
-  loginIp: { name: 'auth-login-ip', env: 'AUTH_RATE_LIMIT_LOGIN_IP', limit: 10 },
+  loginIp: { name: 'auth-login-ip', env: 'AUTH_RATE_LIMIT_LOGIN_IP', limit: 30 },
   loginEmail: { name: 'auth-login-email', env: 'AUTH_RATE_LIMIT_LOGIN_EMAIL', limit: 10 },
   register: { name: 'auth-register', env: 'AUTH_RATE_LIMIT_REGISTER', limit: 5 },
   refresh: { name: 'auth-refresh', env: 'AUTH_RATE_LIMIT_REFRESH', limit: 30 },
@@ -60,7 +60,8 @@ class AuthThrottlerGuard extends ThrottlerGuard {
 
 /**
  * Auth limits can be tuned with AUTH_RATE_LIMIT_WINDOW_MS (default 60000),
- * AUTH_RATE_LIMIT_LOGIN_IP / AUTH_RATE_LIMIT_LOGIN_EMAIL (10 each),
+ * AUTH_RATE_LIMIT_LOGIN_IP (30, generous because a campus or classroom can
+ * share one address) / AUTH_RATE_LIMIT_LOGIN_EMAIL (10, per account),
  * AUTH_RATE_LIMIT_REGISTER (5), AUTH_RATE_LIMIT_REFRESH (30),
  * AUTH_RATE_LIMIT_PLATFORM_LOGIN (10), AUTH_RATE_LIMIT_VERIFY_EMAIL (10), and
  * AUTH_RATE_LIMIT_ACCEPT_INVITATION (10). Values are requests per window.
