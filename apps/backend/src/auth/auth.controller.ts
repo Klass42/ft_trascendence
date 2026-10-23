@@ -27,6 +27,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ResolveOrganizationDto } from './dto/resolve-organization.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { PlatformLoginDto } from './dto/platform-login.dto';
+import { AuthRateLimit } from './auth-rate-limit';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
 @Controller('auth')
@@ -37,18 +38,21 @@ export class AuthController {
   ) {}
 
   @Public()
+  @AuthRateLimit('register')
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
   @Public()
+  @AuthRateLimit('login')
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
   @Public()
+  @AuthRateLimit('platformLogin')
   @Post('platform-login')
   async platformLogin(@Body() dto: PlatformLoginDto) {
     return this.authService.platformLogin(dto);
@@ -63,10 +67,12 @@ export class AuthController {
   async invitation(@Param('token') token: string) { return this.authService.invitation(token); }
 
   @Public()
+  @AuthRateLimit('acceptInvitation')
   @Post('invitations/:token/accept')
   async acceptInvitation(@Param('token') token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
 
   @Public()
+  @AuthRateLimit('refresh')
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto) {
     return this.authService.refresh(dto.refreshToken);
@@ -90,6 +96,7 @@ export class AuthController {
   }
 
   @Public()
+  @AuthRateLimit('verifyEmail')
   @Get('verify-email')
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
@@ -106,13 +113,19 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   async googleCallback(
-    @Req() req: { user: GoogleProfile; query: { state?: string | string[] } },
+    @Req() req: { user: GoogleProfile; googleOrganizationSlug?: string },
     @Res() res: Response,
   ) {
     const frontendUrl = this.frontendUrl();
-    const state = Array.isArray(req.query.state) ? req.query.state[0] : req.query.state;
+    if (!req.googleOrganizationSlug) {
+      res.redirect(`${frontendUrl}/auth/callback#error=invalid_state`);
+      return;
+    }
     try {
-      const { accessToken, refreshToken } = await this.authService.googleLogin(req.user, state ?? '');
+      const { accessToken, refreshToken } = await this.authService.googleLogin(
+        req.user,
+        req.googleOrganizationSlug,
+      );
       const hash = new URLSearchParams({ accessToken, refreshToken }).toString();
       res.redirect(`${frontendUrl}/auth/callback#${hash}`);
     } catch (error) {

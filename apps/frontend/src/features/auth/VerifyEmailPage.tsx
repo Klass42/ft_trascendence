@@ -25,7 +25,12 @@ export function VerifyEmailPage() {
       .catch((err: unknown) => {
         if (cancelled) return;
         setStatus('error');
-        setErrorMsg(err instanceof ApiError ? err.message : 'Token inválido o expirado.');
+        const message = err instanceof ApiError ? err.message.trim() : '';
+        setErrorMsg(
+          message && message !== 'Bad Request Exception'
+            ? message
+            : 'El enlace de verificación no es válido o ha caducado.',
+        );
       });
     return () => { cancelled = true; };
   }, [token]);
@@ -61,9 +66,9 @@ export function VerifyEmailPage() {
               <>
                 <XCircle size={48} color="var(--color-error)" />
                 <h3 style={{ margin: 'var(--space-4) 0 var(--space-2)', color: 'var(--color-text-primary)' }}>
-                  Error
+                  No se pudo verificar el correo
                 </h3>
-                <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
+                <p role="alert" style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                   {errorMsg}
                 </p>
                 <Link to="/login" className={styles.link}>

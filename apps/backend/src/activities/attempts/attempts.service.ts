@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,15 +10,24 @@ import {
   Activity,
   AttemptStatus,
   NotificationType,
+  PublicationStatus,
+  Question,
+  QuestionKind,
   Prisma,
 } from '@prisma/client';
 import { ANALYTICS_UPDATED } from '../../analytics/analytics.events';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ActivitiesService } from '../activities.service';
+import { getAdapter } from '../blocks/registry';
 import { gradeQuestion, isAutoGradable } from '../grading/graders';
 import { SaveAnswersDto } from './dto/save-answers.dto';
 import { GradeAttemptDto } from './dto/grade-attempt.dto';
+
+type AttemptWithAnswers = Prisma.AttemptGetPayload<{
+  include: { answers: true };
+}>;
+type ActivityWithQuestions = Activity & { questions: Question[] };
 
 @Injectable()
 export class AttemptsService {
@@ -34,46 +44,12 @@ export class AttemptsService {
    * per-activity attempt cap. Returns the attempt plus the student-safe activity
    * (answer keys stripped) so the client can render the quiz. */
   async start(activityId: string, actingUserId: string) {
-    const { activity } = await this.activities.requireActivity(
+    const { activity } = await this.requireStudentActivity(
       activityId,
       actingUserId,
+      true,
     );
-
-    const now = new Date();
-    if (activity.openAt && now < activity.openAt) {
-      throw new BadRequestException('La actividad aún no está abierta');
-    }
-    if (activity.closeAt && now > activity.closeAt) {
-      throw new BadRequestException('La actividad está cerrada');
-    }
-
-    // Resume an in-progress attempt instead of opening a second one.
-    const inProgress = await this.prisma.attempt.findFirst({
-      where: {
-        activityId,
-        userId: actingUserId,
-        status: AttemptStatus.IN_PROGRESS,
-      },
-    });
-    if (inProgress) return this.studentView(inProgress.id, actingUserId);
-
-    const used = await this.prisma.attempt.count({
-      where: { activityId, userId: actingUserId },
-    });
-    if (activity.attemptsAllowed > 0 && used >= activity.attemptsAllowed) {
-      throw new BadRequestException(
-        'No quedan intentos disponibles para esta actividad',
-      );
-    }
-
-    const attempt = await this.prisma.attempt.create({
-      data: {
-        activityId,
-        userId: actingUserId,
-        attemptNo: used + 1,
-        status: AttemptStatus.IN_PROGRESS,
-      },
-    });
+    const attempt = await this.startOrResumeAttempt(activity, actingUserId);
     return this.studentView(attempt.id, actingUserId);
   }
 
@@ -89,11 +65,25 @@ export class AttemptsService {
       throw new BadRequestException('El intento ya fue enviado');
     }
 
-    const validIds = new Set(attempt.activity.questions.map((q) => q.id));
+    const questions = new Map(
+      attempt.activity.questions.map((question) => [question.id, question]),
+    );
     for (const a of dto.answers) {
-      if (!validIds.has(a.questionId)) {
+      const question = questions.get(a.questionId);
+      if (!question) {
         throw new BadRequestException(
           `La pregunta ${a.questionId} no pertenece a esta actividad`,
+        );
+      }
+      const adapter = getAdapter(question.kind);
+      adapter.validateContent(question.content);
+      adapter.validateResponse(a.response);
+      if (question.kind === QuestionKind.FILE_UPLOAD) {
+        await this.validateFileUploadResponse(
+          question,
+          a.response,
+          attempt.activity.subject.organizationId,
+          actingUserId,
         );
       }
     }
@@ -208,13 +198,19 @@ export class AttemptsService {
    * results. Correct answer keys are only revealed when the author opted in
    * (`config.showSolutions`). */
   async listMine(activityId: string, actingUserId: string) {
-    await this.activities.requireActivity(activityId, actingUserId);
+    const { activity } = await this.requireStudentActivity(
+      activityId,
+      actingUserId,
+      false,
+    );
     const attempts = await this.prisma.attempt.findMany({
       where: { activityId, userId: actingUserId },
       orderBy: { attemptNo: 'asc' },
       include: { answers: true },
     });
-    return attempts;
+    return attempts.map((attempt) =>
+      this.projectStudentAttempt(attempt, activity),
+    );
   }
 
   // ─── Staff: view all attempts / manual grade ──────────────────────────────
@@ -347,8 +343,8 @@ export class AttemptsService {
         answers: true,
         activity: {
           include: {
-            questions: { orderBy: { order: 'asc' } },
             subject: { select: { organizationId: true } },
+            questions: { orderBy: { order: 'asc' } },
           },
         },
       },
@@ -357,36 +353,260 @@ export class AttemptsService {
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
+    await this.requireStudentActivity(attempt.activityId, actingUserId, true);
     return attempt;
   }
 
-  /** Attempt + student-safe activity view (answer keys stripped unless the
-   * activity is configured to show solutions and the attempt is graded). */
+  /** Attempt + explicit student projection; answer results are only revealed
+   * when the attempt is graded and the activity allows showing solutions. */
   private async studentView(attemptId: string, actingUserId: string) {
     const attempt = await this.prisma.attempt.findUnique({
       where: { id: attemptId },
       include: {
         answers: true,
-        activity: { include: { questions: { orderBy: { order: 'asc' } } } },
+        activity: {
+          include: {
+            subject: { select: { organizationId: true } },
+            questions: { orderBy: { order: 'asc' } },
+          },
+        },
       },
     });
     if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (attempt.userId !== actingUserId) {
+      throw new ForbiddenException('No es tu intento');
+    }
+    await this.requireStudentActivity(attempt.activityId, actingUserId, false);
 
-    const cfg = (attempt.activity.config ?? {}) as Record<string, unknown>;
+    return this.projectStudentAttempt(
+      attempt,
+      attempt.activity,
+      attempt.activity,
+    );
+  }
+
+  private projectStudentAttempt(
+    attempt: AttemptWithAnswers,
+    activity: Activity,
+    activityWithQuestions?: ActivityWithQuestions,
+  ) {
+    const cfg = (activity.config ?? {}) as Record<string, unknown>;
     const reveal =
       cfg.showSolutions === true && attempt.status === AttemptStatus.GRADED;
 
-    const questions = attempt.activity.questions.map((q) => ({
-      ...q,
-      content: reveal
-        ? q.content
-        : ActivitiesService.stripAnswerKey(q.kind, q.content),
-    }));
-
-    return {
-      ...attempt,
-      activity: { ...attempt.activity, questions },
+    const studentAttempt = {
+      id: attempt.id,
+      activityId: attempt.activityId,
+      userId: attempt.userId,
+      attemptNo: attempt.attemptNo,
+      status: attempt.status,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+      score: attempt.status === AttemptStatus.GRADED ? attempt.score : null,
+      gradedAt: attempt.gradedAt,
+      // The teacher's comment is shown as soon as the attempt is graded; only
+      // the per-answer verdicts depend on `showSolutions`.
+      ...(attempt.status === AttemptStatus.GRADED && {
+        feedback: attempt.feedback,
+      }),
+      answers: attempt.answers.map((answer) => ({
+        id: answer.id,
+        attemptId: answer.attemptId,
+        questionId: answer.questionId,
+        response: answer.response,
+        ...(reveal && {
+          correct: answer.correct,
+          awarded: answer.awarded,
+        }),
+      })),
     };
+
+    if (!activityWithQuestions) return studentAttempt;
+    return {
+      ...studentAttempt,
+      activity: {
+        id: activityWithQuestions.id,
+        subjectId: activityWithQuestions.subjectId,
+        type: activityWithQuestions.type,
+        title: activityWithQuestions.title,
+        description: activityWithQuestions.description,
+        openAt: activityWithQuestions.openAt,
+        dueAt: activityWithQuestions.dueAt,
+        closeAt: activityWithQuestions.closeAt,
+        maxScore: activityWithQuestions.maxScore,
+        attemptsAllowed: activityWithQuestions.attemptsAllowed,
+        timeLimitSec: activityWithQuestions.timeLimitSec,
+        config: activityWithQuestions.config,
+        status: activityWithQuestions.status,
+        countsTowardFinal: activityWithQuestions.countsTowardFinal,
+        templateId: activityWithQuestions.templateId,
+        createdAt: activityWithQuestions.createdAt,
+        updatedAt: activityWithQuestions.updatedAt,
+        questions: activityWithQuestions.questions.map((question) => ({
+          id: question.id,
+          activityId: question.activityId,
+          kind: question.kind,
+          prompt: question.prompt,
+          points: question.points,
+          order: question.order,
+          content: reveal
+            ? question.content
+            : ActivitiesService.stripAnswerKey(question.kind, question.content),
+          createdAt: question.createdAt,
+          updatedAt: question.updatedAt,
+        })),
+      },
+    };
+  }
+
+  private async requireStudentActivity(
+    activityId: string,
+    actingUserId: string,
+    checkWindow: boolean,
+  ) {
+    const required = await this.activities.requireActivity(
+      activityId,
+      actingUserId,
+    );
+    if (!required.access.isMember) {
+      throw new ForbiddenException('Debes estar matriculado en este curso');
+    }
+    if (required.activity.status !== PublicationStatus.PUBLISHED) {
+      throw new NotFoundException(`Activity ${activityId} not found`);
+    }
+    if (checkWindow) this.assertOpenWindow(required.activity);
+    return required;
+  }
+
+  private assertOpenWindow(activity: Activity) {
+    const now = new Date();
+    if (activity.openAt && now < activity.openAt) {
+      throw new BadRequestException('La actividad aún no está abierta');
+    }
+    if (activity.closeAt && now > activity.closeAt) {
+      throw new BadRequestException('La actividad está cerrada');
+    }
+  }
+
+  private async startOrResumeAttempt(activity: Activity, actingUserId: string) {
+    const maxRetries = 3;
+    for (let retry = 0; retry <= maxRetries; retry += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const inProgress = await tx.attempt.findFirst({
+              where: {
+                activityId: activity.id,
+                userId: actingUserId,
+                status: AttemptStatus.IN_PROGRESS,
+              },
+            });
+            if (inProgress) return inProgress;
+
+            const used = await tx.attempt.count({
+              where: { activityId: activity.id, userId: actingUserId },
+            });
+            if (activity.attemptsAllowed > 0 && used >= activity.attemptsAllowed) {
+              throw new BadRequestException(
+                'No quedan intentos disponibles para esta actividad',
+              );
+            }
+
+            return tx.attempt.create({
+              data: {
+                activityId: activity.id,
+                userId: actingUserId,
+                attemptNo: used + 1,
+                status: AttemptStatus.IN_PROGRESS,
+              },
+            });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (!this.isStartConflict(error)) throw error;
+
+        const inProgress = await this.prisma.attempt.findFirst({
+          where: {
+            activityId: activity.id,
+            userId: actingUserId,
+            status: AttemptStatus.IN_PROGRESS,
+          },
+        });
+        if (inProgress) return inProgress;
+        if (retry === maxRetries) {
+          throw new ConflictException(
+            'No se pudo abrir el intento de forma concurrente',
+          );
+        }
+      }
+    }
+    throw new ConflictException('No se pudo abrir el intento');
+  }
+
+  private isStartConflict(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      ['P2002', 'P2034'].includes(String((error as { code: unknown }).code))
+    );
+  }
+
+  private async validateFileUploadResponse(
+    question: Question,
+    response: Record<string, unknown>,
+    organizationId: string,
+    actingUserId: string,
+  ) {
+    const content = question.content as Record<string, unknown>;
+    const fileIds = response.fileIds as string[];
+    const maxFiles = content.maxFiles as number;
+    if (fileIds.length > maxFiles) {
+      throw new BadRequestException(
+        `No puedes adjuntar más de ${maxFiles} fichero(s)`,
+      );
+    }
+
+    const files = fileIds.length
+      ? await this.prisma.file.findMany({
+          where: {
+            id: { in: fileIds },
+            organizationId,
+            uploaderId: actingUserId,
+          },
+          select: { id: true, originalName: true, contentType: true },
+        })
+      : [];
+    if (files.length !== fileIds.length) {
+      throw new BadRequestException('Uno o más ficheros no son válidos');
+    }
+
+    const acceptedTypes = Array.isArray(content.accept)
+      ? content.accept.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    if (
+      acceptedTypes.length > 0 &&
+      files.some((file) => !this.isAcceptedFile(file, acceptedTypes))
+    ) {
+      throw new BadRequestException(
+        'Uno o más ficheros no cumplen el tipo permitido',
+      );
+    }
+  }
+
+  private isAcceptedFile(
+    file: { originalName: string; contentType: string | null },
+    acceptedTypes: string[],
+  ) {
+    const mimeType = file.contentType?.toLowerCase() ?? '';
+    const fileName = file.originalName.toLowerCase();
+    return acceptedTypes.some((accepted) => {
+      const rule = accepted.trim().toLowerCase();
+      if (rule.startsWith('.')) return fileName.endsWith(rule);
+      if (rule.endsWith('/*')) return mimeType.startsWith(rule.slice(0, -1));
+      return mimeType === rule;
+    });
   }
 
   private async notifyGraded(

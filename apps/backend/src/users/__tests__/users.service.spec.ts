@@ -65,6 +65,17 @@ describe('UsersService', () => {
       expect(cd.role).toBe('STUDENT');
       expect(cd.emailVerifiedAt).toBeInstanceOf(Date);
     });
+    it('marks an admin-created account verified in production', async () => {
+      process.env.NODE_ENV = 'production';
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.user.create as jest.Mock).mockResolvedValue(mockUser);
+
+      await service.create({ email: 'n@demo', password: 'Password1', name: 'N' }, ORG_ID);
+
+      const cd = (prisma.user.create as jest.Mock).mock.calls[0][0].data;
+      expect(cd.emailVerifiedAt).toBeInstanceOf(Date);
+      process.env.NODE_ENV = 'development';
+    });
     it('accepts custom role', async () => {
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.user.create as jest.Mock).mockResolvedValue({ ...mockUser, role: 'TEACHER' });
