@@ -5,6 +5,7 @@ import type { MyGradeDTO } from '@/lib/api';
 import { formatDate } from '@/features/assignments/helpers';
 import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
 import { GradebookPage } from '@/features/gradebook';
+import styles from './GradesPage.module.css';
 
 /**
  * Grades route. Staff get the full gradebook; a student sees their own
@@ -34,30 +35,14 @@ function StudentGrades() {
   const grades = data?.items ?? null;
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 820 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          flexWrap: 'wrap',
-          marginBottom: 20,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 'var(--text-2xl)',
-            fontWeight: 'var(--font-bold)',
-            margin: 0,
-          }}
-        >
-          Mis notas
-        </h1>
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Mis notas</h1>
 
         {courses && courses.length > 0 && (
-          <div style={{ marginLeft: 'auto', minWidth: 220 }}>
+          <div className={styles.courseSelector}>
             <Select
-              aria-label="Curso"
+              aria-label="Asignatura"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
               options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))}
@@ -85,30 +70,12 @@ function StudentGrades() {
 
       {grades && !isLoading && (
         <div
-          style={{
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border-primary)',
-            borderRadius: 13,
-            overflow: 'hidden',
-          }}
+          className={styles.gradeList}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1.6fr .8fr .6fr',
-              gap: 8,
-              padding: '12px 18px',
-              background: 'var(--color-bg-primary)',
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--color-text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '.04em',
-            }}
-          >
+          <div className={styles.gradeHeader}>
             <span>Tarea</span>
             <span>Estado</span>
-            <span style={{ textAlign: 'right' }}>Nota</span>
+            <span>Nota</span>
           </div>
 
           {grades.length === 0 && (
@@ -123,13 +90,7 @@ function StudentGrades() {
           ))}
 
           <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '14px 18px',
-              borderTop: '1px solid var(--color-border-primary)',
-              fontWeight: 700,
-            }}
+              className={styles.finalGrade}
           >
             <span>Nota final</span>
             <span>{formatFinalPercent(data?.final ?? null)}</span>
@@ -146,20 +107,10 @@ function GradeRow({ grade }: { grade: MyGradeDTO }) {
 
   return (
     <div
-      style={{
-        borderTop: '1px solid var(--color-border-primary)',
-        padding: '14px 18px',
-      }}
+      className={styles.gradeRow}
     >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1.6fr .8fr .6fr',
-          gap: 8,
-          alignItems: 'center',
-        }}
-      >
-        <div>
+      <div className={styles.gradeCells}>
+        <div className={styles.gradeTitle}>
           <div style={{ fontSize: 14.5, fontWeight: 600 }}>
             {grade.title}{' '}
             {grade.countsTowardFinal === false && (
@@ -177,14 +128,7 @@ function GradeRow({ grade }: { grade: MyGradeDTO }) {
         ) : (
           <Badge variant="neutral">Sin entregar</Badge>
         )}
-        <span
-          style={{
-            textAlign: 'right',
-            fontSize: 16,
-            fontWeight: 800,
-            color: isGraded ? 'var(--color-success)' : 'var(--color-text-muted)',
-          }}
-        >
+        <span className={`${styles.gradeScore} ${isGraded ? styles.graded : ''}`}>
           {isGraded ? `${grade.score}/${grade.maxScore}` : '—'}
         </span>
       </div>

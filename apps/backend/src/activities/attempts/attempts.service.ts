@@ -29,6 +29,16 @@ type AttemptWithAnswers = Prisma.AttemptGetPayload<{
 }>;
 type ActivityWithQuestions = Activity & { questions: Question[] };
 
+function responseFileIds(response: unknown): string[] {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    return [];
+  }
+  const fileIds = (response as Record<string, unknown>).fileIds;
+  return Array.isArray(fileIds)
+    ? fileIds.filter((fileId): fileId is string => typeof fileId === 'string')
+    : [];
+}
+
 @Injectable()
 export class AttemptsService {
   constructor(
@@ -217,15 +227,55 @@ export class AttemptsService {
 
   /** Every attempt for an activity (course staff only), with student + answers. */
   async listForActivity(activityId: string, actingUserId: string) {
-    await this.activities.requireActivity(activityId, actingUserId, true);
-    return this.prisma.attempt.findMany({
-      where: { activityId },
+    const { subject } = await this.activities.requireActivity(
+      activityId,
+      actingUserId,
+      true,
+    );
+    const attempts = await this.prisma.attempt.findMany({
+      where: {
+        activityId,
+        activity: {
+          is: { subject: { is: { organizationId: subject.organizationId } } },
+        },
+      },
       orderBy: [{ userId: 'asc' }, { attemptNo: 'asc' }],
       include: {
-        answers: true,
+        answers: { include: { question: { select: { kind: true } } } },
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
     });
+    const fileIds = [
+      ...new Set(
+        attempts.flatMap((attempt) =>
+          attempt.answers.flatMap((answer) =>
+            answer.question.kind === QuestionKind.FILE_UPLOAD
+              ? responseFileIds(answer.response)
+              : [],
+          ),
+        ),
+      ),
+    ];
+    const files = fileIds.length
+      ? await this.prisma.file.findMany({
+          where: { id: { in: fileIds }, organizationId: subject.organizationId },
+          select: { id: true, originalName: true },
+        })
+      : [];
+    const filesById = new Map(files.map((file) => [file.id, file]));
+
+    return attempts.map((attempt) => ({
+      ...attempt,
+      answers: attempt.answers.map((answer) => {
+        const { question, ...answerData } = answer;
+        if (question.kind !== QuestionKind.FILE_UPLOAD) return answerData;
+        const answerFiles = responseFileIds(answer.response).flatMap((id) => {
+          const file = filesById.get(id);
+          return file ? [file] : [];
+        });
+        return { ...answerData, files: answerFiles };
+      }),
+    }));
   }
 
   /** Staff awards points on subjective answers. GRADED only when every

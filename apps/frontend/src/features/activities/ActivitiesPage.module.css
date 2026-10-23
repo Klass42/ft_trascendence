@@ -10,6 +10,13 @@
   margin-left: auto;
 }
 
+.courseSelector :global(select) {
+  min-width: 0;
+  padding-right: 32px;
+  padding-left: 8px;
+  font-size: 13px;
+}
+
 .columns {
   display: flex;
   gap: var(--space-5);

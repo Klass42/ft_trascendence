@@ -54,7 +54,14 @@ export function subjectSelectorLabel(subject: {
   title: string;
   course: { name: string; academicYear: string };
 }): string {
-  return `${subject.title} · ${subject.course.name} · ${subject.course.academicYear}`;
+  const title = subject.title.trim();
+  const cohort = subject.course.name.trim();
+  const academicYear = subject.course.academicYear.trim();
+  const alreadyIncludesYear = academicYear.length > 0 &&
+    (title.includes(academicYear) || cohort.includes(academicYear));
+  return [title, cohort, !alreadyIncludesYear && academicYear ? academicYear : '']
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export interface SectionDTO {

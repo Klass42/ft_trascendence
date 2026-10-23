@@ -58,7 +58,7 @@ export function ForumsPage() {
         {courses && courses.length > 0 && (
           <select
             className={styles.courseSelect}
-            aria-label="Curso"
+            aria-label="Asignatura"
             value={courseId ?? ''}
             onChange={(e) => {
               setCourseId(e.target.value);

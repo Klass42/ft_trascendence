@@ -47,9 +47,12 @@ export function ProfilePage() {
       await apiClient.uploadWithProgress('/users/me/avatar', file, { method: 'PATCH' });
       await refreshUser();
       toast({ variant: 'success', message: 'Foto de perfil actualizada' });
-    } catch {
-      setAvatarError('No se pudo subir la imagen. Comprueba el formato y el tamaño.');
-      toast({ variant: 'error', message: 'No se pudo guardar la foto de perfil' });
+    } catch (err) {
+      const message = err instanceof Error && err.message
+        ? err.message
+        : 'No se pudo subir la imagen. Comprueba el formato y el tamaño.';
+      setAvatarError(message);
+      toast({ variant: 'error', message });
     } finally {
       setIsSavingAvatar(false);
     }

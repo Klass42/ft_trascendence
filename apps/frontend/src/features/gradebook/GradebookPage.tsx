@@ -18,6 +18,7 @@ import {
 import type { GradebookCellDTO, GradebookItemDTO, GradebookRowDTO } from '@/lib/api';
 import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
 import { GradePanel, type GradeTarget } from './GradePanel';
+import styles from './GradebookPage.module.css';
 
 /**
  * Staff gradebook: students × activities, CSV export, grading modal on a
@@ -66,30 +67,15 @@ export function GradebookPage() {
   }
 
   return (
-    <div style={{ padding: '30px 40px', maxWidth: 1100 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          flexWrap: 'wrap',
-          marginBottom: 22,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 'var(--text-2xl)',
-            fontWeight: 'var(--font-bold)',
-            margin: 0,
-          }}
-        >
-          Calificaciones
-        </h1>
+    <div className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>Calificaciones</h1>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div className={styles.actions}>
           {courses && courses.length > 0 && (
             <Select
-              aria-label="Curso"
+              className={styles.courseSelect}
+              aria-label="Asignatura"
               value={courseId ?? ''}
               onChange={(e) => setCourseId(e.target.value)}
               options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))}

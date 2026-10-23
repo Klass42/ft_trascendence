@@ -74,7 +74,22 @@ describe('AttemptsService', () => {
 
     const withIncludes = (a: any, include: any) => {
       const row = { ...a };
-      if (include?.answers) row.answers = answers.filter((x) => x.attemptId === a.id);
+      if (include?.answers) {
+        row.answers = answers
+          .filter((x) => x.attemptId === a.id)
+          .map((answer) => {
+            if (!include.answers.include?.question) return answer;
+            return {
+              ...answer,
+              question: {
+                kind: opts.questions.find((question) => question.id === answer.questionId)?.kind,
+              },
+            };
+          });
+      }
+      if (include?.user) {
+        row.user = { id: a.userId, name: 'Lucía', email: 'lucia@example.test', avatarUrl: null };
+      }
       if (include?.activity) {
         row.activity = {
           ...activity,
@@ -212,7 +227,7 @@ describe('AttemptsService', () => {
           files.filter((file) =>
             where.id.in.includes(file.id) &&
             file.organizationId === where.organizationId &&
-            file.uploaderId === where.uploaderId,
+            (where.uploaderId === undefined || file.uploaderId === where.uploaderId),
           ),
       },
     };
@@ -421,6 +436,57 @@ describe('AttemptsService', () => {
 
     const staffAttempts = await service.listForActivity('act-1', TEACHER);
     expect(staffAttempts[0].answers[0]).toMatchObject({ correct: true, awarded: 1 });
+  });
+
+  it('projects original upload names only on the tenant-scoped staff attempt list', async () => {
+    const { service, attempts, answers, files } = build({
+      questions: [
+        {
+          id: 'upload-1',
+          kind: QuestionKind.FILE_UPLOAD,
+          content: { maxFiles: 2, accept: ['.pdf'] },
+          points: 0,
+          order: 0,
+        },
+      ],
+    });
+    attempts.push({
+      id: 'att-upload',
+      activityId: 'act-1',
+      userId: STUDENT,
+      attemptNo: 1,
+    });
+    answers.push({
+      id: 'answer-upload',
+      attemptId: 'att-upload',
+      questionId: 'upload-1',
+      response: { fileIds: ['file-owned', 'file-other-org'] },
+      correct: null,
+      awarded: null,
+    });
+    files.push(
+      {
+        id: 'file-owned',
+        organizationId: 'org-klass-0001',
+        uploaderId: STUDENT,
+        originalName: 'informe-original.pdf',
+      },
+      {
+        id: 'file-other-org',
+        organizationId: 'org-otro',
+        uploaderId: STUDENT,
+        originalName: 'archivo-ajeno.pdf',
+      },
+    );
+
+    const staffAttempts = await service.listForActivity('act-1', TEACHER);
+    expect(staffAttempts[0].answers[0]).toMatchObject({
+      response: { fileIds: ['file-owned', 'file-other-org'] },
+      files: [{ id: 'file-owned', originalName: 'informe-original.pdf' }],
+    });
+
+    const studentAttempts = await service.listMine('act-1', STUDENT);
+    expect(studentAttempts[0].answers[0]).not.toHaveProperty('files');
   });
 
   it('does not allow attempt operations after course membership is removed', async () => {
