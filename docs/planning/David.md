@@ -4,8 +4,8 @@
 > for the methodology. Work on branch **`david`** (based on `master`); merge to `staging` before
 > `master`.
 >
-> Note: DevOps/infra is now **Ale's** job. You are a full-stack app developer — you no longer own
-> Docker/CI/monitoring. Focus on the interaction features below.
+> Note: DevOps/infra is now **Viacheslav's** job (`vtrofyme.md`). You are a full-stack app developer —
+> you no longer own Docker/CI/monitoring. Focus on the interaction features below.
 >
 > **Estado 2026-09-19 (Fase B plantillas, landed):** el ciclo de tareas es uno, sobre `Activity`
 > (copy «Tarea»). Gradebook lee `Attempt`; writes de `Assignment`/`Submission` → 410. Guía:
@@ -89,4 +89,4 @@ framework back (part of 2) · Analytics dashboard (2, stretch).
 - Real-time must **handle connect/disconnect gracefully** and broadcast efficiently (module req).
 - Submission files go through Aloiki's `FilesService` — don't write your own storage.
 - You don't own infra anymore: need a queue, a port, an env var, or a socket-friendly proxy config?
-  **Ask Ale.**
+  **Ask Viacheslav.**

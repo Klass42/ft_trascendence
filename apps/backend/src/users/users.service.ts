@@ -67,7 +67,6 @@ export class UsersService {
   async create(dto: CreateUserDto, organizationId: string) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
     if (existing) throw new ConflictException('Email already registered in this organization');
-    const isDev = process.env.NODE_ENV !== 'production';
     try {
       return await this.prisma.user.create({
         data: {
@@ -76,7 +75,8 @@ export class UsersService {
           name: dto.name,
           passwordHash: await argon2.hash(dto.password),
           role: dto.role ?? 'STUDENT',
-          emailVerifiedAt: isDev ? new Date() : null,
+          // La cuenta la crea un admin de la organización y este avala el correo.
+          emailVerifiedAt: new Date(),
         },
         select: selectUser,
       });

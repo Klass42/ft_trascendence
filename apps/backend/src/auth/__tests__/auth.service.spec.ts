@@ -39,6 +39,9 @@ const mkJwtService = () => ({
     return 'access-token-mock';
   }),
   decode: jest.fn(),
+  verify: jest.fn(() => {
+    throw new Error('Invalid token');
+  }),
 }) as unknown as JwtService;
 
 let mockOrganizationFindUnique: jest.Mock;
@@ -82,6 +85,7 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
     mockOrganizationFindUnique = jest.fn().mockResolvedValue({
       id: SEED_ORG_ID,
       slug: 'klass',
@@ -161,6 +165,7 @@ describe('AuthService', () => {
       await service.register({ email: 'new@demo', password: 'Password1', name: 'New', organizationSlug: 'klass' });
       const createData = (mockUserCreate.mock.calls[0][0] as { data: { emailVerifiedAt?: Date | null } }).data;
       expect(createData.emailVerifiedAt).toBeNull();
+      expect(console.log).not.toHaveBeenCalled();
       process.env.NODE_ENV = 'development';
     });
   });
@@ -237,7 +242,11 @@ describe('AuthService', () => {
           return 'access:user-student-0001';
         }),
         decode: jest.fn(),
-        verify: jest.fn(),
+        verify: jest.fn(() => ({
+          sub: mockUser.id,
+          jti: 'old-session',
+          purpose: 'refresh',
+        })),
       } as unknown as JwtService;
 
       const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
@@ -258,15 +267,65 @@ describe('AuthService', () => {
       expect(result.refreshToken).toBe('refresh:new-session');
     });
 
-    it('revokes all sessions and throws 401 on token reuse', async () => {
+    it('revokes sessions after validly signed refresh-token reuse', async () => {
+      const jwtService = {
+        sign: jest.fn(),
+        decode: jest.fn(),
+        verify: jest.fn(() => ({
+          sub: mockUser.id,
+          jti: 'old-session',
+          purpose: 'refresh',
+        })),
+      } as unknown as JwtService;
+      const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
       mockSessionFindUnique.mockResolvedValue(null);
       mockSessionDeleteMany.mockResolvedValue({});
 
-      await expect(service.refresh('some-old-token')).rejects.toThrow(UnauthorizedException);
+      await expect(service2.refresh('some-old-token')).rejects.toThrow(UnauthorizedException);
+      expect(mockSessionDeleteMany).toHaveBeenCalledWith({ where: { userId: mockUser.id } });
+    });
+
+    it('does not revoke the forged subject from a token with an invalid signature', async () => {
+      const jwtService = mkJwtService();
+      (jwtService.decode as jest.Mock).mockReturnValue({
+        sub: 'victim-user-id',
+        jti: 'victim-session-id',
+        purpose: 'refresh',
+      });
+      const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
+      const forgedToken = `eyJhbGciOiJub25lIn0.${Buffer.from(
+        JSON.stringify({ sub: 'victim-user-id', jti: 'victim-session-id', purpose: 'refresh' }),
+      ).toString('base64url')}.invalid-signature`;
+
+      await expect(service2.refresh(forgedToken)).rejects.toThrow(UnauthorizedException);
+      expect(mockSessionDeleteMany).not.toHaveBeenCalled();
+      expect(jwtService.verify).toHaveBeenCalledWith(forgedToken, { secret: 'test-refresh-secret' });
+    });
+
+    it('does not revoke sessions when a signed token has the wrong purpose or no jti', async () => {
+      const jwtService = {
+        sign: jest.fn(),
+        decode: jest.fn(),
+        verify: jest.fn()
+          .mockReturnValueOnce({ sub: 'victim-user-id', jti: 'session-1', purpose: 'access' })
+          .mockReturnValueOnce({ sub: 'victim-user-id', purpose: 'refresh' }),
+      } as unknown as JwtService;
+      const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
+
+      await expect(service2.refresh('wrong-purpose')).rejects.toThrow(UnauthorizedException);
+      await expect(service2.refresh('missing-jti')).rejects.toThrow(UnauthorizedException);
+      expect(mockSessionFindUnique).not.toHaveBeenCalled();
+      expect(mockSessionDeleteMany).not.toHaveBeenCalled();
     });
 
     it('throws 401 on expired refresh token', async () => {
       const crypto = require('crypto');
+      const jwtService = {
+        sign: jest.fn(),
+        decode: jest.fn(),
+        verify: jest.fn(() => ({ sub: mockUser.id, jti: 'expired-session', purpose: 'refresh' })),
+      } as unknown as JwtService;
+      const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
       mockSessionFindUnique.mockResolvedValue({
         id: 'expired-session',
         userId: mockUser.id,
@@ -275,7 +334,7 @@ describe('AuthService', () => {
         user: { organization: { status: 'ACTIVE' } },
       });
 
-      await expect(service.refresh('expired')).rejects.toThrow(UnauthorizedException);
+      await expect(service2.refresh('expired')).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -405,7 +464,24 @@ describe('AuthService', () => {
       } as unknown as JwtService;
 
       const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
-      await expect(service2.verifyEmail('bad-token')).rejects.toThrow(UnauthorizedException);
+      await expect(service2.verifyEmail('bad-token')).rejects.toThrow(BadRequestException);
+    });
+
+    it.each(['invalid signature', 'expired'])('returns 400 for an %s verification token', async () => {
+      const jwtService = {
+        sign: jest.fn(),
+        decode: jest.fn(),
+        verify: jest.fn(() => {
+          throw new Error('TokenExpiredError');
+        }),
+      } as unknown as JwtService;
+      const service2 = new AuthService(mkPrisma(), jwtService, mkConfig());
+
+      await expect(service2.verifyEmail('bad-token')).rejects.toMatchObject({
+        status: 400,
+        response: { message: 'El enlace de verificación no es válido o ha caducado.' },
+      });
+      expect(mockUserUpdate).not.toHaveBeenCalled();
     });
   });
 
