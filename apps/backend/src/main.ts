@@ -14,6 +14,8 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Caddy is the single trusted reverse proxy; preserve the originating client IP for rate limits.
+  app.set('trust proxy', 1);
 
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',

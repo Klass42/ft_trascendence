@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { EmptyState, Spinner } from '@/components/ui';
+import { Avatar, EmptyState, Spinner } from '@/components/ui';
 import { useEnrollments, useUsersByIds } from '@/lib/api';
+import styles from './RosterPage.module.css';
 
 /** Read-only roster: students of the parent cohort. Teachers cannot add members. */
 export function RosterPage({ courseId }: { courseId: string }) {
@@ -17,6 +18,7 @@ export function RosterPage({ courseId }: { courseId: string }) {
         id: enrollment.id,
         name: user?.name ?? enrollment.userId,
         email: user?.email ?? '',
+        avatarUrl: user?.avatarUrl ?? null,
         progress: enrollment.progress ?? 0,
       };
     });
@@ -27,14 +29,17 @@ export function RosterPage({ courseId }: { courseId: string }) {
   if (rows.length === 0) return <EmptyState title="Sin alumnos" description="Nadie está matriculado en este curso." />;
 
   return (
-    <div style={{ padding: '8px 0' }}>
+    <div className={styles.roster}>
       {rows.map((row) => (
-        <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-border-primary)' }}>
-          <div>
-            <div style={{ fontWeight: 700 }}>{row.name}</div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{row.email}</div>
+        <div key={row.id} className={styles.rosterRow}>
+          <div className={styles.userCell}>
+            <Avatar src={row.avatarUrl} size="sm" />
+            <div className={styles.userDetails}>
+              <div className={styles.name}>{row.name}</div>
+              <div className={styles.email}>{row.email}</div>
+            </div>
           </div>
-          <div style={{ fontSize: 13 }}>{row.progress}%</div>
+          <div className={styles.progressValue}>{row.progress}%</div>
         </div>
       ))}
     </div>

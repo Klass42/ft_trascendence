@@ -19,14 +19,13 @@ function legacyObjectKey(url: string): string | null {
   return null;
 }
 
-interface ProtectedAvatarProps {
-  url: string | null | undefined;
-  fallback: string;
-  alt?: string;
-}
-
-/** Refreshes app file URLs through the authenticated API before using them in an img. */
-export function ProtectedAvatar({ url, fallback, alt = '' }: ProtectedAvatarProps) {
+/**
+ * Turns a stored file URL into one an `<img>` can load. Our own file URLs
+ * (`/files/:id/content`, legacy `/uploads/…` and expired presigned links) are
+ * refreshed through the authenticated API because they are short-lived;
+ * anything else is used as is. Returns null while resolving or on failure.
+ */
+export function useProtectedImageUrl(url: string | null | undefined): string | null {
   const fileId = url?.match(FILE_CONTENT_PATH)?.[1];
   const objectKey = url ? legacyObjectKey(url) : null;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -57,6 +56,5 @@ export function ProtectedAvatar({ url, fallback, alt = '' }: ProtectedAvatarProp
     return () => { active = false; };
   }, [url, fileId, objectKey]);
 
-  if (!imageUrl) return <>{fallback}</>;
-  return <img src={imageUrl} alt={alt} onError={() => setImageUrl(null)} />;
+  return imageUrl;
 }

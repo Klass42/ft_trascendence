@@ -16,6 +16,7 @@ export { Input, type InputProps } from './Input';
 export { Card, type CardProps } from './Card';
 export { Spinner, type SpinnerProps } from './Spinner';
 export { Badge, type BadgeProps } from './Badge';
+export { Avatar, type AvatarProps } from './Avatar';
 
 // Form controls
 export { FormField, type FormFieldProps, type FieldControlProps } from './FormField';

@@ -16,8 +16,10 @@ interface PresenceContextValue {
   friends: PresenceFriendDTO[];
   onlineCount: number;
   isLoading: boolean;
+  hasError: boolean;
   /** Live socket status (the widget still works from the initial fetch). */
   connected: boolean;
+  refresh: () => Promise<void>;
 }
 
 const PresenceContext = createContext<PresenceContextValue | null>(null);
@@ -38,6 +40,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [friends, setFriends] = useState<PresenceFriendDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [connected, setConnected] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,13 +49,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         '/me/presence/friends',
       );
       setFriends(data);
+      setHasError(false);
     } catch {
       // Best-effort widget: a failed load just shows no friends.
       setFriends([]);
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    await load();
+  }, [load]);
 
   // Keep the latest loader for the socket's connect handler without reconnecting.
   const loadRef = useRef(load);
@@ -94,15 +104,20 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         prev.map((f) => (f.id === userId ? { ...f, online } : f)),
       );
     };
+    const handleFriendNotification = (notification: { type?: string }) => {
+      if (notification.type === 'FRIEND_REQUEST') loadRef.current();
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('presence:update', handlePresence);
+    socket.on('notification:new', handleFriendNotification);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('presence:update', handlePresence);
+      socket.off('notification:new', handleFriendNotification);
       socket.disconnect();
     };
   }, [user]);
@@ -113,8 +128,8 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<PresenceContextValue>(
-    () => ({ friends, onlineCount, isLoading, connected }),
-    [friends, onlineCount, isLoading, connected],
+    () => ({ friends, onlineCount, isLoading, hasError, connected, refresh }),
+    [friends, onlineCount, isLoading, hasError, connected, refresh],
   );
 
   return (

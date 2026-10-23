@@ -136,6 +136,13 @@ test.describe('Google sign-in client', () => {
     await expect(page).toHaveURL(/\/auth\/callback/);
   });
 
+  test('shows a clear message when OAuth state is missing or invalid', async ({ page }) => {
+    await page.goto('/auth/callback#error=invalid_state');
+    await expect(
+      page.getByText('La solicitud de Google no es válida o ha caducado. Vuelve a intentarlo.'),
+    ).toBeVisible();
+  });
+
   test('shows the generic Google error for oauth_failed and any other error', async ({ page }) => {
     await page.goto('/auth/callback#error=oauth_failed');
     await expect(

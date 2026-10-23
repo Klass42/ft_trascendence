@@ -33,6 +33,10 @@ export function OAuthCallbackPage() {
       setError('Esta cuenta de Google ya está vinculada a otra organización.');
       return;
     }
+    if (oauthError === 'invalid_state') {
+      setError('La solicitud de Google no es válida o ha caducado. Vuelve a intentarlo.');
+      return;
+    }
     if (oauthError) {
       setError('Error al iniciar sesión con Google. Inténtalo de nuevo.');
       return;
