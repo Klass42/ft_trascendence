@@ -101,6 +101,12 @@ describe('AttemptsService', () => {
     };
 
     const prisma: any = {
+      subjectStaff: {
+        findMany: async () => [{ userId: TEACHER }],
+      },
+      user: {
+        findUnique: async ({ where }: any) => ({ id: where.id, name: 'Alumno de prueba' }),
+      },
       activity: {
         findUnique: async ({ where, include }: any) => {
           if (where.id !== activity.id) return null;
@@ -251,6 +257,18 @@ describe('AttemptsService', () => {
         emitted.push({ userId, type, payload });
         return { id: `n-${emitted.length}` };
       },
+      emitMany: async (
+        userIds: readonly string[] | (() => Promise<readonly string[]>),
+        type: NotificationType,
+        payload: any,
+        options: { actorId?: string } = {},
+      ) => {
+        const ids = typeof userIds === 'function' ? await userIds() : userIds;
+        for (const userId of ids) {
+          if (userId === options.actorId) continue;
+          emitted.push({ userId, type, payload });
+        }
+      },
     } as unknown as NotificationsService;
     const events = {
       emit: (name: string, payload: { courseId: string; organizationId: string }) =>
@@ -326,7 +344,7 @@ describe('AttemptsService', () => {
     expect(done.score).toBe(5);
   });
 
-  it('leaves an attempt SUBMITTED (no notification) when it has a subjective question', async () => {
+  it('leaves an attempt SUBMITTED and tells the staff when it has a subjective question', async () => {
     const { service, emitted, analyticsEvents } = build({
       questions: [
         mcq('q1', [0], 0),
@@ -350,7 +368,12 @@ describe('AttemptsService', () => {
     expect(done.answers[0]).not.toHaveProperty('correct');
     expect(done.answers[0]).not.toHaveProperty('awarded');
     expect(done.answers[0]).not.toHaveProperty('feedback');
-    expect(emitted).toHaveLength(0);
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      userId: TEACHER,
+      type: NotificationType.SUBMISSION_RECEIVED,
+    });
+    expect(emitted[0].payload.body).toContain('Alumno de prueba');
     expect(analyticsEvents).toEqual([
       {
         name: ANALYTICS_UPDATED,
@@ -635,7 +658,9 @@ describe('AttemptsService', () => {
 
     expect(done.status).toBe(AttemptStatus.SUBMITTED);
     expect(done.score).toBeNull();
-    expect(emitted).toHaveLength(0);
+    expect(
+      emitted.filter((notification) => notification.type === NotificationType.GRADE_PUBLISHED),
+    ).toHaveLength(0);
     expect(answers.find((a) => a.questionId === 'mcq-1')?.awarded).toBe(4);
     expect(answers.find((a) => a.questionId === 'essay-1')?.awarded ?? null).toBeNull();
   });
@@ -671,11 +696,11 @@ describe('AttemptsService', () => {
     expect(graded.status).toBe(AttemptStatus.GRADED);
     expect(graded.score).toBe(9);
     expect((graded as any).feedback).toBe('bien');
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0]).toMatchObject({
-      userId: STUDENT,
-      type: NotificationType.GRADE_PUBLISHED,
-    });
+    const gradeNotifications = emitted.filter(
+      (notification) => notification.type === NotificationType.GRADE_PUBLISHED,
+    );
+    expect(gradeNotifications).toHaveLength(1);
+    expect(gradeNotifications[0]).toMatchObject({ userId: STUDENT });
     expect(analyticsEvents).toHaveLength(2);
     expect(analyticsEvents[1]).toEqual({
       name: ANALYTICS_UPDATED,
@@ -724,7 +749,9 @@ describe('AttemptsService', () => {
 
     expect(partial.status).toBe(AttemptStatus.SUBMITTED);
     expect(partial.score).toBe(4);
-    expect(emitted).toHaveLength(0);
+    expect(
+      emitted.filter((notification) => notification.type === NotificationType.GRADE_PUBLISHED),
+    ).toHaveLength(0);
   });
 
   it('enforces the open/close window on start', async () => {

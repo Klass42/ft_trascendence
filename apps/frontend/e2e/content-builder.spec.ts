@@ -305,7 +305,7 @@ test.describe('Content builder (TEACHER)', () => {
       },
     });
     expect(spoofed.status()).toBe(400);
-    expect((await spoofed.json()).message).toBe('File content does not match its type');
+    expect((await spoofed.json()).message).toBe('El contenido del archivo no coincide con su tipo.');
 
     expect(await attachmentsOf(request, lessonId)).toEqual([]);
   });

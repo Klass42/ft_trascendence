@@ -28,6 +28,7 @@ type AttemptWithAnswers = Prisma.AttemptGetPayload<{
   include: { answers: true };
 }>;
 type ActivityWithQuestions = Activity & { questions: Question[] };
+type ActivityWithSubject = Activity & { subject: { organizationId: string } };
 
 function responseFileIds(response: unknown): string[] {
   if (!response || typeof response !== 'object' || Array.isArray(response)) {
@@ -200,6 +201,8 @@ export class AttemptsService {
         activity,
         round2(scaledObjective),
       );
+    } else {
+      await this.notifySubmitted(actingUserId, activity);
     }
     return this.studentView(attemptId, actingUserId);
   }
@@ -657,6 +660,32 @@ export class AttemptsService {
       if (rule.endsWith('/*')) return mimeType.startsWith(rule.slice(0, -1));
       return mimeType === rule;
     });
+  }
+
+  /** Tell the subject's staff that an attempt is waiting for manual grading. */
+  private async notifySubmitted(studentId: string, activity: ActivityWithSubject) {
+    const student = await this.prisma.user
+      .findUnique({ where: { id: studentId }, select: { name: true } })
+      .catch(() => null);
+    await this.notifications.emitMany(
+      async () =>
+        (
+          await this.prisma.subjectStaff.findMany({
+            where: {
+              subjectId: activity.subjectId,
+              subject: { organizationId: activity.subject.organizationId },
+            },
+            select: { userId: true },
+          })
+        ).map((staff) => staff.userId),
+      NotificationType.SUBMISSION_RECEIVED,
+      {
+        title: 'Nueva entrega para corregir',
+        body: `${student?.name ?? 'Un alumno'} ha entregado «${activity.title}»`,
+        link: `/grades?subjectId=${activity.subjectId}&activityId=${activity.id}`,
+      },
+      { organizationId: activity.subject.organizationId, actorId: studentId },
+    );
   }
 
   private async notifyGraded(

@@ -58,16 +58,16 @@ export function validateUpload(
   const maxBytes = purpose === 'AVATAR' ? MAX_AVATAR_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
   if (file.size > maxBytes || file.buffer.length > maxBytes) {
     throw new PayloadTooLargeException(
-      `File exceeds the ${maxBytes / (1024 * 1024)} MB upload limit`,
+      `El archivo supera el límite de ${maxBytes / (1024 * 1024)} MB.`,
     );
   }
 
   const allowedTypes = purpose === 'AVATAR'
     ? AVATAR_CONTENT_TYPES
     : GENERAL_CONTENT_TYPES;
-  const label = purpose === 'AVATAR' ? 'Avatar' : 'File';
+  const ofNoun = purpose === 'AVATAR' ? 'de la imagen' : 'del archivo';
   if (!allowedTypes.has(file.mimetype)) {
-    throw new BadRequestException(`${label} type is not allowed`);
+    throw new BadRequestException(`El tipo ${ofNoun} no está permitido.`);
   }
 
   // The declared MIME type comes from the client and can be anything. The
@@ -75,10 +75,10 @@ export function validateUpload(
   // renamed executable or script is rejected however it is labelled.
   const format = FORMATS_BY_EXTENSION.get(fileExtension(file.originalname));
   if (!format || !format.mimeTypes.includes(file.mimetype)) {
-    throw new BadRequestException(`${label} extension does not match its type`);
+    throw new BadRequestException(`La extensión ${ofNoun} no coincide con su tipo.`);
   }
   if (!format.matches(file.buffer)) {
-    throw new BadRequestException(`${label} content does not match its type`);
+    throw new BadRequestException(`El contenido ${ofNoun} no coincide con su tipo.`);
   }
 }
 
