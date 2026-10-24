@@ -81,7 +81,7 @@ export class AuthService {
 
   private async activeOrganization(slug: string) {
     const organization = await this.prisma.organization.findUnique({ where: { slug } });
-    if (!organization || organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid organization or credentials');
+    if (!organization || organization.status !== 'ACTIVE') throw new UnauthorizedException('Organización o credenciales no válidas.');
     return organization;
   }
 

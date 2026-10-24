@@ -60,16 +60,16 @@ describe('validateUpload', () => {
   });
 
   it('rejects an executable disguised as a PDF', () => {
-    expect(() => validateUpload(file({ buffer: EXE_BYTES }))).toThrow('File content does not match its type');
+    expect(() => validateUpload(file({ buffer: EXE_BYTES }))).toThrow('El contenido del archivo no coincide con su tipo.');
   });
 
   it('rejects an extension that disagrees with the declared type', () => {
     expect(() => validateUpload(file({ originalname: 'payload.exe' })))
-      .toThrow('File extension does not match its type');
+      .toThrow('La extensión del archivo no coincide con su tipo.');
     expect(() => validateUpload(file({ originalname: 'no-extension' })))
-      .toThrow('File extension does not match its type');
+      .toThrow('La extensión del archivo no coincide con su tipo.');
     expect(() => validateUpload(file({ originalname: 'image.png' })))
-      .toThrow('File extension does not match its type');
+      .toThrow('La extensión del archivo no coincide con su tipo.');
   });
 
   it('accepts .m4a however the browser labels it', () => {
@@ -78,13 +78,13 @@ describe('validateUpload', () => {
     expect(() => validateUpload(m4a('audio/x-m4a'))).not.toThrow();
     expect(() => validateUpload(file({
       originalname: 'lecture.m4a', mimetype: 'audio/x-m4a', buffer: EXE_BYTES,
-    }))).toThrow('File content does not match its type');
+    }))).toThrow('El contenido del archivo no coincide con su tipo.');
   });
 
   it('rejects binary content declared as plain text', () => {
     expect(() => validateUpload(file({
       originalname: 'notes.txt', mimetype: 'text/plain', buffer: EXE_BYTES,
-    }))).toThrow('File content does not match its type');
+    }))).toThrow('El contenido del archivo no coincide con su tipo.');
   });
 
   it('enforces the general size limit in the service validation', () => {
@@ -105,7 +105,7 @@ describe('validateUpload', () => {
     expect(() => validateUpload(file({ mimetype: 'application/pdf' }), 'AVATAR')).toThrow(BadRequestException);
     expect(() => validateUpload(file({
       originalname: 'me.png', mimetype: 'image/png', buffer: PDF_BYTES,
-    }), 'AVATAR')).toThrow('Avatar content does not match its type');
+    }), 'AVATAR')).toThrow('El contenido de la imagen no coincide con su tipo.');
     expect(() => validateUpload(file({
       originalname: 'me.jpg',
       mimetype: 'image/jpeg',
