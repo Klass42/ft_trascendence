@@ -198,8 +198,13 @@ reacts to them, so no service imports the gateway and nothing breaks when nobody
 
 ### Database
 
-<!-- TODO(Jorge): PostgreSQL 16 and why it was chosen (relational data with many relations,
-     transactions, concurrent users; MongoDB rejected on licence and data shape). -->
+PostgreSQL 16. *Why:* Klass is relational by nature — organizations own users, courses, subjects,
+files and templates; memberships and staff link people to cohorts; activities nest questions,
+attempts and answers. We need real transactions (session rotation, concurrent attempt start,
+consistent cascades) and concurrent readers/writers without inventing our own joins. MongoDB was
+rejected: the SSPL licence is awkward for a school project, and forcing a document store onto
+strongly related entities would have pushed integrity into application code. Prisma talks to
+Postgres through a connection pool; `postgres-exporter` scrapes it for the monitoring stack.
 
 ### Infrastructure and observability
 
@@ -243,13 +248,22 @@ requests and pushes to `staging` / `master`:
 
 ## Database schema
 
-<!-- TODO(Jorge): description of the structure, main tables and relationships, key fields.
-     Diagrams already in the repo: docs/diagrams.md §1 (domain map + two ER diagrams, Mermaid)
-     and docs/diagrams/ERD.md. Facts: Prisma schema with 31 models, 8 migrations
-     (apps/backend/prisma). -->
+Klass is multi-tenant around **Organization**. Every user belongs to exactly one organization
+(`organizationId`, email unique per org). Identity lives in `User`, `Session` (refresh tokens),
+`OAuthAccount` (Google) and `Friendship`. Platform admins use `platformRole` and a separate
+`/platform` login; inside a tenant, `GlobalRole` is `ADMIN`, `TEACHER` or `STUDENT`.
 
-The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/prisma/schema.prisma)
-(31 models) and versioned as Prisma migrations in `apps/backend/prisma/migrations`. ER diagrams:
+Content hangs off the org: `Course` (cohort) → `Subject` → `Section` / `Lesson`, plus
+`CourseMembership` and `SubjectStaff`. Materials also use `LearningResource` / `SubjectResource`
+(library) and `File` (uploads, avatars). The current task engine is `TaskTemplate` → `Activity` →
+`Question` / `Attempt` / `Answer`; the older `Assignment` / `Submission` tables stay for
+read/legacy (writes return 410). Side domains: `ForumThread` / `ForumPost`, `Notification`,
+`AuditLog`, `OrganizationInvitation`.
+
+Tenancy is enforced in Nest services (queries scoped by organization or course membership), not
+with Postgres RLS. The schema is defined in
+[`apps/backend/prisma/schema.prisma`](apps/backend/prisma/schema.prisma) (31 models) and versioned
+as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diagrams:
 [`docs/diagrams.md`](docs/diagrams.md) (domain map, core ER, assignments ER) and
 [`docs/diagrams/ERD.md`](docs/diagrams/ERD.md).
 
@@ -262,6 +276,13 @@ The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/pris
 
 | Feature | Description | Member(s) |
 |---|---|---|
+| Email/password auth | Register, login, refresh (single-use rotation with reuse detection), logout, email verification, change password; argon2 hashes; JWT access 15m / refresh 7d | Jorge |
+| Google OAuth 2.0 | Sign-in with Google, auto-create or link by email, signed single-use `state` | Jorge |
+| Organizations and roles | Multi-tenant orgs, invitations, member management, org settings; `ADMIN` / `TEACHER` / `STUDENT` inside the tenant | Jorge |
+| Platform back-office | Separate `/platform` login for platform admins; create and manage organizations | Jorge |
+| Admin user CRUD | Organization admins list, create, update and deactivate users in their tenant | Jorge |
+| Profile and account | Edit name, avatar, notification preference and preferred language; change password | Jorge |
+| Database schema and seed | Prisma schema stewardship, migrations and deterministic demo seed | Jorge |
 | One-command deployment | `make` builds and starts the whole stack over HTTPS from a clean clone, generates secrets, applies migrations and seeds demo data | Viacheslav |
 | HTTPS everywhere | Caddy terminates TLS for the app and Grafana; HTTP redirects to HTTPS; security headers | Viacheslav |
 | Monitoring | Prometheus with 10 targets and 11 alerting rules, 3 Grafana dashboards, password-protected Grafana | Viacheslav |
@@ -285,14 +306,14 @@ The schema is defined in [`apps/backend/prisma/schema.prisma`](apps/backend/pris
 |---|---|---|---|---|
 | Use a framework for both frontend and backend | Major | 2 | <!-- TODO --> | React 19 (Vite) + NestJS 10 <!-- TODO: justify --> |
 | Real-time features with WebSocket | Major | 2 | David | Socket.io gateway with JWT handshake, per-user rooms, live notifications, presence to friends and live analytics; connect/disconnect handled; efficient targeted broadcasting (see below) |
-| Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 <!-- TODO --> |
-| Standard user management | Major | 2 | Jorge | <!-- TODO --> |
-| Advanced permissions / RBAC | Major | 2 | Jorge | <!-- TODO --> |
-| Organization system | Major | 2 | Jorge | <!-- TODO --> |
+| Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 over PostgreSQL 16 (typed client, migrations, seed) — see below |
+| Standard user management | Major | 2 | Jorge | register/login/refresh/logout, profile, admin user CRUD, seed — see below |
+| Advanced permissions / RBAC | Major | 2 | Jorge | `GlobalRole` + `PlatformRole`, guards, tenant-scoped queries — see below |
+| Organization system | Major | 2 | Jorge | orgs, invitations, members, platform back-office — see below |
 | Notification system | Minor | 1 | David | Persisted, real-time notifications for the create/update/delete actions of tasks, content, subjects, enrolments, forum, library and users (see below) |
 | Advanced analytics dashboard | Major | 2 | David | Interactive line/bar charts, live refresh, date range filter, CSV and PDF export (see below) |
 | File upload | Minor | 1 | Aloiki | <!-- TODO --> |
-| OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | <!-- TODO --> |
+| OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | Passport Google strategy, link-by-email, signed `state` — see below |
 | **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
 | **Total** | | **18** | | |
 
@@ -339,14 +360,62 @@ monitoring stack is published. Configuration: [`infra/monitoring/`](infra/monito
 *Demo:* `docker compose stop backend` → the `ServiceProbeFailed` alert fires in about 90 seconds;
 `docker compose start backend` → it resolves.
 
+**Use an ORM for the database (Minor).** *Justification:* hand-written SQL across 30+ models would
+have been slow and error-prone for a team that ships features in parallel. *Implementation:* Prisma 6
+(`apps/backend/prisma`) owns the schema, migrations and a typed client injected into Nest services;
+the seed is idempotent (`make db-seed`) so every developer and CI start from the same rows. I keep
+the schema consistent when others need new models (activities, library, …) so migrations stay ordered.
+
+**Standard user management (Major).** *Justification:* an LMS without accounts, profiles and admin
+user tools is a demo, not a product. *Implementation:* `apps/backend/src/auth` and `users` cover
+register/login/refresh/logout, email verification, change password, `GET/PATCH /users/me`, admin
+user CRUD and the friends API surface that David’s presence UI consumes. Passwords are argon2; DTOs
+are validated with class-validator; the seed ships a demo org with admin/teacher/student so the rest
+of the team is never blocked. Frontend: auth pages, admin users and profile/account flows under
+`apps/frontend/src/features/{auth,admin}`.
+
+**Advanced permissions / RBAC (Major).** *Justification:* the same API must serve platform admins,
+org admins, teachers and students without leaking another tenant’s data. *Implementation:*
+`apps/backend/src/common/auth` exports `AuthUser`, `@CurrentUser()`, `AppAuthGuard` (global JWT with
+a prod-blocked `DevAuthGuard` fallback), `@Roles()` / `RolesGuard` for `GlobalRole`, and platform
+role guards for `/platform`. Every sensitive query is scoped by `organizationId` or course/subject
+membership; services refuse cross-tenant ids instead of trusting the client.
+
+**Organization system (Major).** *Justification:* Klass sells to academies, not to a single school,
+so tenancy is a first-class module. *Implementation:* `apps/backend/src/organizations` — create/read
+org settings, invitations, member list and role changes; platform back-office creates and manages
+orgs. Frontend: `/org` settings and members, plus the platform admin shell. Invitations accept into
+the right tenant without sharing passwords in chat.
+
+**OAuth 2.0 authentication (Google) (Minor).** *Justification:* students already have Google
+accounts; forcing a second password raises drop-off. *Implementation:* Passport Google strategy
+(`apps/backend/src/auth/google.strategy.ts`), start at `/api/auth/google`, callback with a signed
+single-use `state`, auto-create or link by email to an existing local user, then issue the same JWT
+pair as password login. Credentials stay in env; with empty client id/secret the routes stay off.
+
 ## Individual contributions
 
-<!-- TODO(Jorge, David, Aloiki): what each of you built, which modules, and the challenges you
-     hit and how you solved them. Be specific (the subject asks for honesty here). -->
+<!-- TODO(Aloiki): what you built, which modules, and the challenges you hit and how you solved
+     them. Be specific (the subject asks for honesty here). David's section is done. -->
 
 ### Jorge
 
-<!-- TODO -->
+I owned identity and access end to end: the Prisma schema (steward), email/password auth, Google
+OAuth, sessions and refresh rotation, organizations and invitations, RBAC (`GlobalRole` +
+`PlatformRole`), admin user CRUD, profile/account (including change password), the platform
+back-office login, and the matching frontend under auth/admin/org. Modules I carry: ORM (Minor),
+Standard user management (Major), Advanced permissions / RBAC (Major), Organization system (Major)
+and OAuth 2.0 (Minor). I also unblocked the team in week one with `common/auth` contracts
+(`AuthUser`, guards, `@Roles()`) and a deterministic seed so nobody waited on JWT.
+
+*Challenges.* (1) **Contracts before features**: the frontend expected a six-field `AuthUser` and
+specific auth response shapes before the backend existed; aligning the type and `GET /auth/me` early
+avoided a rewrite later. (2) **Refresh reuse**: treating refresh tokens as single-use and revoking
+the whole session family on reuse closed a theft window we would have missed with a naive rotate.
+(3) **Tenant isolation**: every list/get had to filter by org (or course membership); reviews and
+tests caught places that trusted a client-supplied `organizationId`. (4) **Unblocking others**:
+`DevAuthGuard` (`x-dev-user`, prod-blocked) let Aloiki and David build against real guards before
+password login was finished, then disappear once JWT was global.
 
 ### David
 
@@ -420,7 +489,13 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ### Use of AI
 
-<!-- TODO(Jorge, Aloiki): your part. -->
+<!-- TODO(Aloiki): your part. -->
+
+- **Jorge:** Coding assistants (Claude Code and Grok) were used as a pair-programmer for Nest
+  modules, Prisma schema/migrations, specs under `docs/superpowers/`, and the unit/E2E tests around
+  auth and organizations. Rules: write the design/acceptance criteria first; read and adjust every
+  diff by hand; keep the backend suite green before merging; agents never touched infrastructure,
+  secrets, or someone else’s module without a human review.
 
 - **David:** Claude Code (Anthropic) was used as an orchestrator that reads the code base, writes
   design notes and reviews diffs, and OpenAI Codex agents (several in parallel, each in its own git
