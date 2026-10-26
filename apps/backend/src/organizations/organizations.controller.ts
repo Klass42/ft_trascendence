@@ -75,6 +75,16 @@ export class OrganizationsController {
     return this.organizationsService.getDeletionRequestStatus(tenantId(user));
   }
 
+
+  @Delete('me/deletion-request')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  cancelDeletionRequest(@CurrentUser() user: AuthUser) {
+    return this.organizationsService.cancelDeletionRequest(tenantId(user), {
+      userId: user.userId,
+    });
+  }
+
   @Delete(':id/members/:userId')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

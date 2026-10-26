@@ -108,6 +108,12 @@
   font-weight: 700;
 }
 
+.dangerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .dangerText {
   margin: 0 0 14px;
   color: var(--color-text-secondary);

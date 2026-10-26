@@ -62,6 +62,8 @@ const mkPrisma = () =>
     },
     notification: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     auditLog: {
       create: jest.fn(),
@@ -380,4 +382,64 @@ describe('OrganizationsService', () => {
       expect(prisma.notification.findFirst).not.toHaveBeenCalled();
     });
   });
+
+  describe('cancelDeletionRequest', () => {
+    const title = 'Solicitud de borrado: Klass Academy';
+    const link = `/platform/organizations/${ORG_ID}`;
+
+    it('marks unread superadmin requests as read and writes an audit log', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([
+        { id: 'n-1' },
+        { id: 'n-2' },
+      ]);
+      (prisma.notification.updateMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      const result = await service.cancelDeletionRequest(ORG_ID, { userId: actor.userId });
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: {
+          title,
+          link,
+          read: false,
+          user: { platformRole: 'SUPERADMIN' },
+        },
+        select: { id: true },
+      });
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['n-1', 'n-2'] } },
+        data: { read: true },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorId: actor.userId,
+          action: 'ORGANIZATION_DELETION_REQUEST_CANCELLED',
+          organizationId: ORG_ID,
+          metadata: { cancelled: 2 },
+        }),
+      });
+      expect(result).toEqual({ cancelled: 2, wasPending: true });
+    });
+
+    it('returns wasPending false without audit when nothing is unread', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(mockOrg);
+      (prisma.notification.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.cancelDeletionRequest(ORG_ID, { userId: actor.userId });
+
+      expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ cancelled: 0, wasPending: false });
+    });
+
+    it('throws NotFoundException when the organization does not exist', async () => {
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.cancelDeletionRequest(ORG_ID, { userId: actor.userId }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.notification.findMany).not.toHaveBeenCalled();
+    });
+  });
+
 });

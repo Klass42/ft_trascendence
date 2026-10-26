@@ -15,6 +15,7 @@ const mkService = () =>
     removeMember: jest.fn(),
     requestDeletion: jest.fn(),
     getDeletionRequestStatus: jest.fn(),
+    cancelDeletionRequest: jest.fn(),
   }) as unknown as OrganizationsService;
 
 const adminUser = {
@@ -89,6 +90,15 @@ describe('OrganizationsController', () => {
       ]);
       expect(roles).toEqual(['ADMIN']);
     });
+
+    it('DELETE /me/deletion-request requires ADMIN role', () => {
+      const controller = new OrganizationsController(mkService());
+      const roles = reflector.getAllAndOverride(ROLES_KEY, [
+        controller.cancelDeletionRequest,
+        OrganizationsController,
+      ]);
+      expect(roles).toEqual(['ADMIN']);
+    });
   });
 
   describe('endpoint behavior', () => {
@@ -146,6 +156,15 @@ describe('OrganizationsController', () => {
         userId: 'user-admin-0001',
         name: 'Ada Admin',
         email: 'admin@demo',
+      });
+    });
+
+    it('DELETE /me/deletion-request uses the caller tenant and identity', async () => {
+      const service = mkService();
+      const controller = new OrganizationsController(service);
+      await controller.cancelDeletionRequest(adminUser);
+      expect(service.cancelDeletionRequest).toHaveBeenCalledWith('org-klass-0001', {
+        userId: 'user-admin-0001',
       });
     });
   });
