@@ -6,6 +6,7 @@ import type {
   LearningResourceDTO,
   LearningResourceStatus,
   LearningResourceType,
+  ResourceFolderDTO,
 } from '../types';
 
 export interface ResourceFilters {
@@ -77,6 +78,30 @@ export function useCourseResources(courseId: string | undefined, filters: Omit<R
       setIsLoading(false);
     }
   }, [courseId, search, type, user?.organizationId]);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+  return { data, isLoading, error, refresh };
+}
+
+/** All library folders of the organization (flat; the UI builds the tree). */
+export function useResourceFolders() {
+  const { user } = useAuth();
+  const [data, setData] = useState<ResourceFolderDTO[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!user?.organizationId) { setData(null); setIsLoading(false); return; }
+    setIsLoading(true);
+    setError(null);
+    try {
+      setData(await apiClient.get<ResourceFolderDTO[]>('/resource-folders'));
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.organizationId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   return { data, isLoading, error, refresh };

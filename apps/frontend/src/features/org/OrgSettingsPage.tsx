@@ -23,6 +23,7 @@ export function OrgSettingsPage() {
   const [localData, setLocalData] = useState<OrgDTO | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isRequestingDelete, setIsRequestingDelete] = useState(false);
+  const [isCancellingDelete, setIsCancellingDelete] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState(false);
   const [checkingDeleteStatus, setCheckingDeleteStatus] = useState(true);
   const [deleteStatusError, setDeleteStatusError] = useState<string | null>(null);
@@ -154,6 +155,31 @@ export function OrgSettingsPage() {
     }
   }
 
+
+  async function handleCancelDeletionRequest() {
+    setIsCancellingDelete(true);
+    try {
+      const result = await apiClient.delete<{ cancelled: number; wasPending: boolean }>(
+        '/organizations/me/deletion-request',
+      );
+      setDeleteRequested(false);
+      toast({
+        message: result.wasPending
+          ? 'Solicitud de borrado cancelada.'
+          : 'No había ninguna solicitud pendiente.',
+        variant: 'success',
+      });
+    } catch (err) {
+      toast({
+        message: err instanceof ApiError ? err.message : 'No se pudo cancelar la solicitud.',
+        variant: 'error',
+      });
+    } finally {
+      setIsCancellingDelete(false);
+    }
+  }
+
+
   return (
     <div className={styles.page}>
       <h1 className={styles.title}>Organización</h1>
@@ -271,18 +297,29 @@ export function OrgSettingsPage() {
               </Button>
             </div>
           )}
-          <Button
-            variant="danger"
-            leftIcon={<Trash2 size={16} />}
-            disabled={deleteRequested || checkingDeleteStatus || isRequestingDelete}
-            onClick={() => setConfirmDelete(true)}
-          >
-            {checkingDeleteStatus
-              ? 'Consultando solicitud…'
-              : deleteRequested
-                ? 'Solicitud pendiente'
-                : 'Solicitar borrado'}
-          </Button>
+          <div className={styles.dangerActions}>
+            <Button
+              variant="danger"
+              leftIcon={<Trash2 size={16} />}
+              disabled={deleteRequested || checkingDeleteStatus || isRequestingDelete || isCancellingDelete}
+              onClick={() => setConfirmDelete(true)}
+            >
+              {checkingDeleteStatus
+                ? 'Consultando solicitud…'
+                : deleteRequested
+                  ? 'Solicitud pendiente'
+                  : 'Solicitar borrado'}
+            </Button>
+            {deleteRequested && !checkingDeleteStatus && (
+              <Button
+                variant="secondary"
+                disabled={isCancellingDelete || isRequestingDelete}
+                onClick={() => void handleCancelDeletionRequest()}
+              >
+                {isCancellingDelete ? 'Cancelando…' : 'Cancelar solicitud'}
+              </Button>
+            )}
+          </div>
         </section>
       )}
 

@@ -69,7 +69,7 @@ export class FilesController {
 
   @Delete(':id')
   async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    await this.filesService.delete(id, user.organizationId, user.userId);
+    await this.filesService.delete(id, user);
     return { deleted: true };
   }
 }

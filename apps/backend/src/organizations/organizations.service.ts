@@ -265,4 +265,52 @@ export class OrganizationsService {
 
     return { notified, alreadyPending: notified === 0 };
   }
+  /**
+   * Org admin withdraws a pending deletion request: mark the unread
+   * SUPERADMIN notifications as read so getDeletionRequestStatus clears.
+   */
+  async cancelDeletionRequest(
+    organizationId: string,
+    actor: { userId: string },
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const title = `Solicitud de borrado: ${org.name}`;
+    const link = `/platform/organizations/${org.id}`;
+
+    const pending = await this.prisma.notification.findMany({
+      where: {
+        title,
+        link,
+        read: false,
+        user: { platformRole: 'SUPERADMIN' },
+      },
+      select: { id: true },
+    });
+
+    if (pending.length === 0) {
+      return { cancelled: 0, wasPending: false };
+    }
+
+    await this.prisma.notification.updateMany({
+      where: { id: { in: pending.map((n) => n.id) } },
+      data: { read: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: actor.userId,
+        action: 'ORGANIZATION_DELETION_REQUEST_CANCELLED',
+        organizationId: org.id,
+        metadata: { cancelled: pending.length },
+      },
+    });
+
+    return { cancelled: pending.length, wasPending: true };
+  }
+
 }

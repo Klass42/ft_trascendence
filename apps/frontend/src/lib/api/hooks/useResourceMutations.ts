@@ -5,6 +5,8 @@ import type {
   LearningResourceDTO,
   PublishResourceInput,
   UpdateLearningResourceInput,
+  ResourceFolderDTO,
+  BatchDeleteInput,
 } from '../types';
 
 export function useResourceMutations() {
@@ -37,5 +39,15 @@ export function useResourceMutations() {
       run(() => apiClient.post(`/resources/${id}/subjects`, input)),
     removeFromCourse: (id: string, subjectId: string) =>
       run(() => apiClient.delete<void>(`/resources/${id}/subjects/${subjectId}`)),
+    // Folders (#26)
+    createFolder: (input: { name: string; parentId?: string }) =>
+      run(() => apiClient.post<ResourceFolderDTO>('/resource-folders', input)),
+    updateFolder: (id: string, input: { name?: string; parentId?: string | null }) =>
+      run(() => apiClient.patch<ResourceFolderDTO>(`/resource-folders/${id}`, input)),
+    removeFolder: (id: string) => run(() => apiClient.delete<void>(`/resource-folders/${id}`)),
+    publishFolderToCourse: (id: string, input: { subjectId: string; required?: boolean }) =>
+      run(() => apiClient.post(`/resource-folders/${id}/subjects`, input)),
+    batchDelete: (input: BatchDeleteInput) =>
+      run(() => apiClient.post<{ deletedResources: number; deletedFolders: number }>('/resources/batch-delete', input)),
   };
 }

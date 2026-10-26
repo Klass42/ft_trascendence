@@ -76,4 +76,10 @@ export class UpdateResourceDto {
   @IsEnum(LearningResourceStatus)
   @IsOptional()
   status?: LearningResourceStatus;
+
+  /** Move to a library folder (#26); `null` moves it to the root. */
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsString({ message: 'El identificador de la carpeta debe ser texto.' })
+  @Matches(ID_PATTERN, { message: 'El identificador de la carpeta debe tener un formato válido.' })
+  folderId?: string | null;
 }

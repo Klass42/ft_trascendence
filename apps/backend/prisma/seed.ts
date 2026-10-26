@@ -148,7 +148,7 @@ async function clearApplicationData(): Promise<void> {
   });
 }
 
-async function createPlatformSuperadmin(): Promise<string> {
+async function createPlatformSuperadmin(): Promise<{ email: string; password: string }> {
   const email = requiredEnvironment('PLATFORM_SUPERADMIN_EMAIL').toLowerCase();
   const password = requiredEnvironment('PLATFORM_SUPERADMIN_PASSWORD');
   const name = process.env.PLATFORM_SUPERADMIN_NAME?.trim() || 'Platform Administrator';
@@ -166,7 +166,7 @@ async function createPlatformSuperadmin(): Promise<string> {
       platformRole: PlatformRole.SUPERADMIN,
     },
   });
-  return email;
+  return { email, password };
 }
 
 async function createInstitution(options: InstitutionOptions, passwordHash: string): Promise<void> {
@@ -482,46 +482,88 @@ async function seedStandard(passwordHash: string): Promise<void> {
   });
 }
 
-/**
- * Small, deterministic fixture for acceptance tests which need to prove that
- * IDs from one tenant are rejected by another tenant. Keep the explicit IDs:
- * they make a failing HTTP trace immediately understandable. Generic demo
- * seeds intentionally contain richer data and are not a substitute for this.
- */
-async function seedE2e(passwordHash: string): Promise<void> {
-  await createInstitution({
-    id: 'org-e2e-a', slug: 'e2e-a', name: 'E2E Academy A', students: 2, teachers: 1, courses: 1,
-  }, passwordHash);
-  await createInstitution({
-    id: 'org-e2e-b', slug: 'e2e-b', name: 'E2E Academy B', students: 2, teachers: 1, courses: 1,
-  }, passwordHash);
+function numberedEmail(prefix: string, slug: string, index: number): string {
+  return prefix + String(index).padStart(3, '0') + '@' + slug + '.demo';
+}
+
+function roleAccounts(prefix: string, slug: string, count: number): string {
+  const first = numberedEmail(prefix, slug, 1);
+  if (count <= 1) return first;
+  return first + ' … ' + numberedEmail(prefix, slug, count);
+}
+
+function institutionLogins(slug: string, students: number, teachers: number): string[] {
+  return [
+    '   organization code    ' + slug,
+    '   admin                admin@' + slug + '.demo',
+    '   teacher              ' + roleAccounts('teacher', slug, teachers),
+    '   student              ' + roleAccounts('student', slug, students),
+    '   password             ' + DEMO_PASSWORD,
+  ];
+}
+
+function printSeedSummary(
+  scenario: Scenario,
+  superadmin: { email: string; password: string },
+  institutions: readonly InstitutionOptions[],
+): void {
+  const lines = [
+    '',
+    '✅ Seed scenario "' + scenario + '" complete.',
+    '   platform login       /platform/login  (no organization code)',
+    '   email                ' + superadmin.email,
+    '   password             ' + superadmin.password,
+  ];
+  if (scenario === 'standard') {
+    lines.push(
+      '   organization code    klass',
+      '   admin                admin@demo',
+      '   teacher              teacher@demo',
+      '   student              student@demo',
+      '   password             ' + DEMO_PASSWORD,
+      '   also                 admin@example.com (admin), diego@example.com (teacher), dev@example.com (student)',
+    );
+  } else if (institutions.length > 0) {
+    for (const institution of institutions) {
+      lines.push(...institutionLogins(institution.slug, institution.students, institution.teachers));
+    }
+  } else {
+    lines.push('   application data     removed (only the platform superadmin remains)');
+  }
+  console.log(lines.join('\n'));
 }
 
 async function main(): Promise<void> {
   const scenario = scenarioFromEnvironment();
   await clearApplicationData();
-  const superadminEmail = await createPlatformSuperadmin();
+  const superadmin = await createPlatformSuperadmin();
+  const institutions: InstitutionOptions[] = [];
   if (scenario !== 'platform') {
     const passwordHash = await argon2.hash(DEMO_PASSWORD);
     if (scenario === 'standard') {
       await seedStandard(passwordHash);
     } else if (scenario === 'small') {
-      await createInstitution({ id: 'org-demo-small', slug: 'demo-small', name: 'Academia Demo', students: 8, teachers: 3, courses: 3 }, passwordHash);
+      institutions.push({ id: 'org-demo-small', slug: 'demo-small', name: 'Academia Demo', students: 8, teachers: 3, courses: 3 });
     } else if (scenario === 'e2e') {
-      await seedE2e(passwordHash);
+      // Two tenants with explicit IDs so an acceptance test can show that an
+      // ID from one organization is rejected by the other. Generic demos are
+      // not a substitute: their IDs are harder to read in a failing trace.
+      institutions.push(
+        { id: 'org-e2e-a', slug: 'e2e-a', name: 'E2E Academy A', students: 2, teachers: 1, courses: 1 },
+        { id: 'org-e2e-b', slug: 'e2e-b', name: 'E2E Academy B', students: 2, teachers: 1, courses: 1 },
+      );
     } else {
-      await createInstitution({ id: 'org-demo-large', slug: 'demo-large', name: 'Academia Horizonte', students: 160, teachers: 30, courses: 6 }, passwordHash);
-      await createInstitution({ id: 'org-demo-medium', slug: 'demo-medium', name: 'Instituto Atlas', students: 120, teachers: 24, courses: 5 }, passwordHash);
-      await createInstitution({ id: 'org-demo-compact', slug: 'demo-compact', name: 'Centro Nexo', students: 100, teachers: 20, courses: 4 }, passwordHash);
+      institutions.push(
+        { id: 'org-demo-large', slug: 'demo-large', name: 'Academia Horizonte', students: 160, teachers: 30, courses: 6 },
+        { id: 'org-demo-medium', slug: 'demo-medium', name: 'Instituto Atlas', students: 120, teachers: 24, courses: 5 },
+        { id: 'org-demo-compact', slug: 'demo-compact', name: 'Centro Nexo', students: 100, teachers: 20, courses: 4 },
+      );
+    }
+    for (const institution of institutions) {
+      await createInstitution(institution, passwordHash);
     }
   }
-  console.log('\n✅ Seed scenario "' + scenario + '" complete.');
-  console.log('   platform superadmin  ' + superadminEmail + ' (password: PLATFORM_SUPERADMIN_PASSWORD)');
-  if (scenario === 'standard') console.log('   organization          klass\n   demo users            student@demo / teacher@demo / admin@demo  ·  password: demo1234');
-  if (scenario === 'small') console.log('   organization          demo-small\n   users                 8 students, 3 teachers, 1 admin  ·  password: demo1234');
-  if (scenario === 'large') console.log('   organizations         demo-large, demo-medium, demo-compact\n   users per organization 100+ students, 20+ teachers  ·  password: demo1234');
-  if (scenario === 'e2e') console.log('   organizations         e2e-a, e2e-b\n   users per organization 2 students, 1 teacher, 1 admin  ·  password: demo1234');
-  if (scenario === 'platform') console.log('   application data      removed (only the platform superadmin remains)');
+  printSeedSummary(scenario, superadmin, institutions);
 }
 
 main()
