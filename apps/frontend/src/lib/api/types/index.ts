@@ -30,6 +30,8 @@ export type {
   CreateLearningResourceInput,
   UpdateLearningResourceInput,
   PublishResourceInput,
+  ResourceFolderDTO,
+  BatchDeleteInput,
 } from './resource';
 export type {
   ActivityType,

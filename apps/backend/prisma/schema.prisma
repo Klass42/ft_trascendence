@@ -57,6 +57,7 @@ model Organization {
   subjects Subject[]
   files    File[]
   learningResources LearningResource[]
+  resourceFolders   ResourceFolder[]
   invitations OrganizationInvitation[]
   auditLogs AuditLog[]
   taskTemplates TaskTemplate[]
@@ -97,6 +98,7 @@ model User {
   notifications     Notification[]
   uploadedFiles     File[]             @relation("FileUploader")
   createdLearningResources LearningResource[] @relation("LearningResourceCreator")
+  createdResourceFolders   ResourceFolder[]   @relation("ResourceFolderCreator")
   lessonCompletions LessonCompletion[]
   friendsInitiated  Friendship[]       @relation("FriendRequester")
   friendsReceived   Friendship[]       @relation("FriendAddressee")
@@ -254,6 +256,7 @@ model Subject {
   activities   Activity[]
   forumThreads ForumThread[]
   resources    SubjectResource[]
+  folders      SubjectFolder[]
 
   @@index([organizationId])
   @@index([courseId])
@@ -365,6 +368,8 @@ model LearningResource {
   externalUrl    String?
   status         LearningResourceStatus @default(DRAFT)
   publishedAt    DateTime?
+  folderId       String?
+  folder         ResourceFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
@@ -374,10 +379,48 @@ model LearningResource {
   @@index([organizationId, type])
   @@index([createdById])
   @@index([fileId])
+  @@index([folderId])
 }
 
 /// A resource can be published once and reused by multiple subjects. It stays
 /// subject-level; use LessonAttachment for material tied to a specific lesson.
+/// Real library folder (#26). Deleting a folder moves its children to the root
+/// (parentId/folderId -> null) and removes only the folder itself.
+model ResourceFolder {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User             @relation("ResourceFolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  parentId       String?
+  parent         ResourceFolder?  @relation("ResourceFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       ResourceFolder[] @relation("ResourceFolderTree")
+  name           String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  resources LearningResource[]
+  subjects  SubjectFolder[]
+
+  @@index([organizationId, parentId])
+  @@index([createdById])
+}
+
+/// Live link between a folder and a subject (#26): every resource inside the
+/// folder or any descendant folder, now or in the future, appears in the
+/// subject's resource tab without being linked one by one.
+model SubjectFolder {
+  folderId  String
+  folder    ResourceFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  required  Boolean        @default(false)
+  createdAt DateTime       @default(now())
+
+  @@id([folderId, subjectId])
+  @@index([subjectId])
+}
+
 model SubjectResource {
   resourceId String
   resource   LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)

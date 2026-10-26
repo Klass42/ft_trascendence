@@ -36,6 +36,7 @@ export interface LearningResourceDTO {
   externalUrl: string | null;
   status: LearningResourceStatus;
   publishedAt: string | null;
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
   subjects: ResourceSubjectDTO[];
@@ -46,6 +47,8 @@ export interface SubjectResourceDTO {
   subjectId: string;
   order: number;
   required: boolean;
+  /** Set when the row comes from a live-published folder (#26). */
+  viaFolderId?: string;
   resource: LearningResourceDTO;
 }
 
@@ -62,9 +65,10 @@ export interface CreateLearningResourceInput {
   fileId?: string;
   externalUrl?: string;
   status?: LearningResourceStatus;
+  folderId?: string;
 }
 
-export type UpdateLearningResourceInput = Partial<CreateLearningResourceInput> & {
+export type UpdateLearningResourceInput = Partial<Omit<CreateLearningResourceInput, 'folderId'>> & {
   fileId?: string | null;
   externalUrl?: string | null;
   description?: string | null;
@@ -72,10 +76,29 @@ export type UpdateLearningResourceInput = Partial<CreateLearningResourceInput> &
   isbn?: string | null;
   language?: string | null;
   license?: string | null;
+  folderId?: string | null;
 };
 
 export interface PublishResourceInput {
   subjectId: string;
   order?: number;
   required?: boolean;
+}
+
+/** Real library folder (#26). */
+export interface ResourceFolderDTO {
+  id: string;
+  organizationId: string;
+  createdById: string;
+  parentId: string | null;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  subjects: { folderId: string; subjectId: string; required: boolean; subject: { id: string; title: string; courseId: string } }[];
+  _count: { resources: number; children: number };
+}
+
+export interface BatchDeleteInput {
+  resourceIds?: string[];
+  folderIds?: string[];
 }

@@ -88,6 +88,7 @@ export {
   useUsersByIds,
   useResources,
   useCourseResources,
+  useResourceFolders,
   useResourceMutations,
 } from './hooks';
 
@@ -177,6 +178,7 @@ export {
   type LearningResourceStatus,
   type LearningResourceDTO,
   type SubjectResourceDTO,
+  type ResourceFolderDTO,
   type CreateLearningResourceInput,
   type UpdateLearningResourceInput,
   type PublishResourceInput,

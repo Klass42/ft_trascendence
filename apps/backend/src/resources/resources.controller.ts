@@ -6,10 +6,61 @@ import { ListResourcesDto } from './dto/list-resources.dto';
 import { PublishResourceDto } from './dto/publish-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { ResourcesService } from './resources.service';
+import { ResourceFoldersService } from './resource-folders.service';
+import { BatchDeleteDto, CreateFolderDto, PublishFolderDto, UpdateFolderDto } from './dto/folder.dto';
 
 @Controller()
 export class ResourcesController {
-  constructor(private readonly resources: ResourcesService) {}
+  constructor(
+    private readonly resources: ResourcesService,
+    private readonly folders: ResourceFoldersService,
+  ) {}
+
+  // --- Folders (#26) -------------------------------------------------------
+
+  @Get('resource-folders')
+  findFolders(@CurrentUser() user: AuthUser) {
+    return this.folders.findAll(user);
+  }
+
+  @Post('resource-folders')
+  createFolder(@Body() dto: CreateFolderDto, @CurrentUser() user: AuthUser) {
+    return this.folders.create(dto, user);
+  }
+
+  @Patch('resource-folders/:id')
+  updateFolder(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateFolderDto, @CurrentUser() user: AuthUser) {
+    return this.folders.update(id, dto, user);
+  }
+
+  @Delete('resource-folders/:id')
+  async removeFolder(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
+    await this.folders.remove(id, user);
+    return { deleted: true };
+  }
+
+  @Post('resource-folders/:id/subjects')
+  publishFolder(@Param('id', ParseIdPipe) id: string, @Body() dto: PublishFolderDto, @CurrentUser() user: AuthUser) {
+    return this.folders.publishToSubject(id, dto, user);
+  }
+
+  @Delete('resource-folders/:id/subjects/:subjectId')
+  async unpublishFolder(
+    @Param('id', ParseIdPipe) id: string,
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.folders.removeFromSubject(id, subjectId, user);
+    return { deleted: true };
+  }
+
+  /** Declared before `resources/:id` routes; POST avoids DELETE-with-body proxies. */
+  @Post('resources/batch-delete')
+  batchDelete(@Body() dto: BatchDeleteDto, @CurrentUser() user: AuthUser) {
+    return this.folders.batchDelete(dto, user);
+  }
+
+  // --- Resources -----------------------------------------------------------
 
   @Get('resources')
   findAll(@Query() query: ListResourcesDto, @CurrentUser() user: AuthUser) {

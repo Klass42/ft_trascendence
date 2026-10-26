@@ -223,4 +223,6 @@ export type {
   CreateLearningResourceInput,
   UpdateLearningResourceInput,
   PublishResourceInput,
+  ResourceFolderDTO,
+  BatchDeleteInput,
 } from './types/resource';

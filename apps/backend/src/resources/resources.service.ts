@@ -7,6 +7,7 @@ import {
 import {
   LearningResourceStatus,
   NotificationType,
+  PublicationStatus,
   Prisma,
 } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
@@ -17,6 +18,7 @@ import { ListResourcesDto } from './dto/list-resources.dto';
 import { PublishResourceDto } from './dto/publish-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { collectDescendants } from './resource-folders.service';
 
 // Resource API responses never disclose the storage bucket or object key. A
 // caller must use GET /files/:id/url, which authorizes the linked resource
@@ -106,9 +108,19 @@ export class ResourcesService {
     }
   }
 
+  private async assertFolder(organizationId: string, folderId: string | null | undefined) {
+    if (!folderId) return;
+    const folder = await this.prisma.resourceFolder.findFirst({
+      where: { id: folderId, organizationId },
+      select: { id: true },
+    });
+    if (!folder) throw new BadRequestException('La carpeta no existe en esta organización.');
+  }
+
   async create(dto: CreateResourceDto, user: AuthUser) {
     this.assertLibraryStaff(user);
     await this.assertSource(user.organizationId, dto.fileId, dto.externalUrl);
+    await this.assertFolder(user.organizationId, dto.folderId);
 
     const status = dto.status ?? LearningResourceStatus.DRAFT;
     const created = await this.prisma.learningResource.create({
@@ -124,6 +136,7 @@ export class ResourcesService {
         language: dto.language?.trim() || null,
         license: dto.license?.trim() || null,
         tags: this.cleanList(dto.tags),
+        folderId: dto.folderId ?? null,
         fileId: dto.fileId ?? null,
         externalUrl: dto.externalUrl?.trim() || null,
         status,
@@ -173,6 +186,7 @@ export class ResourcesService {
     const nextExternalUrl =
       dto.externalUrl === undefined ? existing.externalUrl : dto.externalUrl;
     await this.assertSource(user.organizationId, nextFileId, nextExternalUrl);
+    await this.assertFolder(user.organizationId, dto.folderId);
 
     const status = dto.status ?? existing.status;
     const publishedAt =
@@ -194,6 +208,7 @@ export class ResourcesService {
         ...(dto.license !== undefined && { license: dto.license?.trim() || null }),
         ...(dto.tags !== undefined && { tags: this.cleanList(dto.tags) }),
         ...(dto.fileId !== undefined && { fileId: dto.fileId }),
+        ...(dto.folderId !== undefined && { folderId: dto.folderId }),
         ...(dto.externalUrl !== undefined && { externalUrl: dto.externalUrl?.trim() || null }),
         ...(dto.status !== undefined && { status, publishedAt }),
       },
@@ -284,31 +299,102 @@ export class ResourcesService {
     }
   }
 
-  /** Resource list inside one subject. Students see only PUBLISHED entries. */
+  /**
+   * Resource list inside one subject. Students see only PUBLISHED entries.
+   * Includes direct links (SubjectResource) plus every resource living in a
+   * folder tree linked via SubjectFolder (live link, #26). Folder-derived
+   * rows carry `viaFolderId` and sort after direct links.
+   */
   async findForSubject(subjectId: string, dto: ListResourcesDto, user: AuthUser) {
     const access = await this.access.assertSubjectReadable(subjectId, user);
     const search = dto.search?.trim();
     const studentView = !access.isStaff;
-    return this.prisma.subjectResource.findMany({
-      where: {
-        subjectId,
-        resource: {
-          organizationId: user.organizationId,
-          ...(studentView && { status: LearningResourceStatus.PUBLISHED }),
-          ...(dto.type && { type: dto.type }),
-          ...(search && {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' } },
-              { description: { contains: search, mode: 'insensitive' } },
-              { authors: { has: search } },
-              { tags: { has: search } },
-            ],
-          }),
-        },
-      },
+    const resourceWhere: Prisma.LearningResourceWhereInput = {
+      organizationId: user.organizationId,
+      ...(studentView && { status: LearningResourceStatus.PUBLISHED }),
+      ...(dto.type && { type: dto.type }),
+      ...(search && {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { authors: { has: search } },
+          { tags: { has: search } },
+        ],
+      }),
+    };
+    const direct = await this.prisma.subjectResource.findMany({
+      where: { subjectId, resource: resourceWhere },
       include: { resource: { include: resourceIncludeForSubject(subjectId) } },
       orderBy: { order: 'asc' },
     });
+
+    const folderLinks = await this.prisma.subjectFolder.findMany({
+      where: { subjectId, folder: { organizationId: user.organizationId } },
+      select: { folderId: true, required: true },
+    });
+    if (folderLinks.length === 0) return direct;
+
+    const folders = await this.prisma.resourceFolder.findMany({
+      where: { organizationId: user.organizationId },
+      select: { id: true, parentId: true },
+    });
+    // folderId -> the linked root that exposes it (and whether it is required)
+    const exposure = new Map<string, { viaFolderId: string; required: boolean }>();
+    for (const link of folderLinks) {
+      for (const id of collectDescendants([link.folderId], folders)) {
+        const prev = exposure.get(id);
+        if (!prev || (link.required && !prev.required)) {
+          exposure.set(id, { viaFolderId: link.folderId, required: link.required });
+        }
+      }
+    }
+    const directIds = new Set(direct.map((row) => row.resourceId));
+    const derived = await this.prisma.learningResource.findMany({
+      where: { ...resourceWhere, folderId: { in: [...exposure.keys()] }, id: { notIn: [...directIds] } },
+      include: resourceIncludeForSubject(subjectId),
+      orderBy: { title: 'asc' },
+    });
+    const offset = direct.reduce((max, row) => Math.max(max, row.order), 0) + 1;
+    return [
+      ...direct,
+      ...derived.map((resource, index) => {
+        const via = exposure.get(resource.folderId!)!;
+        return {
+          resourceId: resource.id,
+          subjectId,
+          order: offset + index,
+          required: via.required,
+          viaFolderId: via.viaFolderId,
+          resource,
+        };
+      }),
+    ];
+  }
+
+  /** Subjects reached through live folder links, keyed by folder id (incl. ancestors). */
+  private async folderSubjectLinks(organizationId: string, folderIds: string[]) {
+    const result = new Map<string, { subjectId: string; subject: { courseId: string; status: PublicationStatus } }[]>();
+    if (folderIds.length === 0) return result;
+    const folders = await this.prisma.resourceFolder.findMany({
+      where: { organizationId },
+      select: { id: true, parentId: true },
+    });
+    const parentOf = new Map(folders.map((f) => [f.id, f.parentId]));
+    const chains = new Map<string, string[]>();
+    for (const id of folderIds) {
+      const chain: string[] = [];
+      let cur: string | null | undefined = id;
+      while (cur && !chain.includes(cur)) { chain.push(cur); cur = parentOf.get(cur); }
+      chains.set(id, chain);
+    }
+    const links = await this.prisma.subjectFolder.findMany({
+      where: { folderId: { in: [...new Set([...chains.values()].flat())] } },
+      select: { folderId: true, subjectId: true, subject: { select: { courseId: true, status: true } } },
+    });
+    for (const [id, chain] of chains) {
+      result.set(id, links.filter((link) => chain.includes(link.folderId)));
+    }
+    return result;
   }
 
   /**
@@ -322,10 +408,19 @@ export class ResourcesService {
       select: {
         createdById: true,
         status: true,
+        folderId: true,
         subjects: { select: { subjectId: true, subject: { select: { courseId: true, status: true } } } },
       },
     });
     if (resources.length === 0) return false;
+    // Live folder publication (#26): treat folder-derived subjects as links.
+    const folderIds = [...new Set(resources.map((r) => r.folderId).filter((id): id is string => !!id))];
+    if (folderIds.length > 0) {
+      const viaFolders = await this.folderSubjectLinks(user.organizationId, folderIds);
+      for (const resource of resources) {
+        if (resource.folderId) resource.subjects.push(...(viaFolders.get(resource.folderId) ?? []));
+      }
+    }
     if (user.role === 'ADMIN' || resources.some((resource) => resource.createdById === user.userId)) {
       return true;
     }

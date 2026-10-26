@@ -75,4 +75,10 @@ export class CreateResourceDto {
   @IsEnum(LearningResourceStatus)
   @IsOptional()
   status?: LearningResourceStatus;
+
+  /** Optional library folder (#26). */
+  @IsString({ message: 'El identificador de la carpeta debe ser texto.' })
+  @Matches(ID_PATTERN, { message: 'El identificador de la carpeta debe tener un formato válido.' })
+  @IsOptional()
+  folderId?: string;
 }

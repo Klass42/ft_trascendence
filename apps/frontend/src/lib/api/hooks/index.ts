@@ -61,5 +61,5 @@ export { useUpdateProfile } from './useUpdateProfile';
 export { useChangePassword, type ChangePasswordInput } from './useChangePassword';
 export { useEnrollments, type EnrollmentRow } from './useEnrollments';
 export { useUsersByIds } from './useUsersByIds';
-export { useResources, useCourseResources, type ResourceFilters } from './useResources';
+export { useResources, useCourseResources, useResourceFolders, type ResourceFilters } from './useResources';
 export { useResourceMutations } from './useResourceMutations';
