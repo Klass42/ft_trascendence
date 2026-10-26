@@ -36,6 +36,13 @@ const student: AuthUser = {
   role: 'STUDENT',
 } as AuthUser;
 
+
+const admin: AuthUser = {
+  userId: 'user-admin',
+  organizationId: 'org-a',
+  role: 'ADMIN',
+} as AuthUser;
+
 function buildService() {
   const storage = {
     putObject: jest.fn(),
@@ -265,7 +272,7 @@ describe('FilesService access and orphan safety', () => {
       lessonAttachments: [{ lesson: { section: { subjectId: 'subject-a' } } }],
     } as never);
 
-    await expect(service.delete('file-a', 'org-a', 'user-a'))
+    await expect(service.delete('file-a', student))
       .rejects.toBeInstanceOf(ConflictException);
     expect(prisma.file.deleteMany).not.toHaveBeenCalled();
     expect(storage.deleteObject).not.toHaveBeenCalled();
@@ -275,7 +282,7 @@ describe('FilesService access and orphan safety', () => {
     const { service, storage, prisma } = buildService();
     prisma.file.deleteMany.mockResolvedValue({ count: 1 });
 
-    await expect(service.delete('file-a', 'org-a', 'user-a')).resolves.toEqual({ deleted: true });
+    await expect(service.delete('file-a', student)).resolves.toEqual({ deleted: true });
 
     expect(prisma.file.deleteMany).toHaveBeenCalledWith({
       where: { id: 'file-a', organizationId: 'org-a' },
@@ -287,7 +294,7 @@ describe('FilesService access and orphan safety', () => {
   it('retains blobs referenced by an avatar or an attempt answer', async () => {
     const { service, storage, prisma } = buildService();
     prisma.user.findFirst.mockResolvedValue({ id: 'user-a' } as never);
-    await expect(service.delete('file-a', 'org-a', 'user-a'))
+    await expect(service.delete('file-a', student))
       .rejects.toBeInstanceOf(ConflictException);
     expect(prisma.file.deleteMany).not.toHaveBeenCalled();
     expect(storage.deleteObject).not.toHaveBeenCalled();
@@ -296,7 +303,7 @@ describe('FilesService access and orphan safety', () => {
     prisma.answer.findMany.mockResolvedValue([{
       attempt: { userId: 'user-a', activity: { subjectId: 'subject-a' } },
     }] as never);
-    await expect(service.delete('file-a', 'org-a', 'user-a'))
+    await expect(service.delete('file-a', student))
       .rejects.toBeInstanceOf(ConflictException);
     expect(prisma.file.deleteMany).not.toHaveBeenCalled();
   });
@@ -311,4 +318,28 @@ describe('FilesService access and orphan safety', () => {
       .resolves.toBeUndefined();
     expect(storage.deleteObject).toHaveBeenCalledTimes(2);
   });
+
+  it('lets an org admin read and delete an unlinked file with no uploader', async () => {
+    const { service, prisma, storage } = buildService();
+    prisma.file.findFirst.mockResolvedValue({ ...baseFile, uploaderId: null } as never);
+    prisma.file.deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.assertCanRead('file-a', admin)).resolves.toBeDefined();
+    await expect(service.delete('file-a', admin)).resolves.toEqual({ deleted: true });
+    expect(prisma.file.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'file-a', organizationId: 'org-a' },
+    });
+    expect(storage.deleteObject).toHaveBeenCalledWith('org-a/file-a');
+  });
+
+  it('does not let a non-admin read or delete an unlinked file with no uploader', async () => {
+    const { service, prisma, storage } = buildService();
+    prisma.file.findFirst.mockResolvedValue({ ...baseFile, uploaderId: null } as never);
+
+    await expect(service.assertCanRead('file-a', student)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.delete('file-a', student)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.file.deleteMany).not.toHaveBeenCalled();
+    expect(storage.deleteObject).not.toHaveBeenCalled();
+  });
+
 });

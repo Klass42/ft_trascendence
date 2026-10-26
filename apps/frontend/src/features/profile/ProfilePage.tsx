@@ -33,11 +33,11 @@ export function ProfilePage() {
     if (!file) return;
 
     if (!AVATAR_TYPES.has(file.type)) {
-      setAvatarError('Elige una imagen PNG, JPG o WebP.');
+      setAvatarError('La imagen no es válida. Usa JPG, PNG o WebP de como máximo 2 MB.');
       return;
     }
     if (file.size === 0 || file.size > AVATAR_MAX_BYTES) {
-      setAvatarError('La imagen debe ocupar como máximo 2 MB.');
+      setAvatarError('La imagen no es válida. Usa JPG, PNG o WebP de como máximo 2 MB.');
       return;
     }
 
@@ -47,10 +47,8 @@ export function ProfilePage() {
       await apiClient.uploadWithProgress('/users/me/avatar', file, { method: 'PATCH' });
       await refreshUser();
       toast({ variant: 'success', message: 'Foto de perfil actualizada' });
-    } catch (err) {
-      const message = err instanceof Error && err.message
-        ? err.message
-        : 'No se pudo subir la imagen. Comprueba el formato y el tamaño.';
+    } catch {
+      const message = 'La imagen no es válida. Usa JPG, PNG o WebP de como máximo 2 MB.';
       setAvatarError(message);
       toast({ variant: 'error', message });
     } finally {

@@ -173,6 +173,8 @@ export class FilesService {
     }
 
     if (!hasReferences && file.uploaderId === user.userId) return file;
+    // Orphan whose owner was deleted: org ADMIN can still read during retention.
+    if (!hasReferences && !file.uploaderId && user.role === 'ADMIN') return file;
     throw new ForbiddenException('You cannot access this file');
   }
 
@@ -207,13 +209,16 @@ export class FilesService {
     return { file, stream };
   }
 
-  async delete(fileId: string, organizationId: string, userId: string) {
+  async delete(fileId: string, user: AuthUser) {
+    const organizationId = user.organizationId;
     const fileRecord = await this.findFile(fileId, organizationId);
 
     if (!fileRecord) {
       return { deleted: false };
     }
-    if (fileRecord.uploaderId !== userId) {
+    const isOwner = fileRecord.uploaderId === user.userId;
+    const isOrgAdminOrphan = !fileRecord.uploaderId && user.role === 'ADMIN';
+    if (!isOwner && !isOrgAdminOrphan) {
       throw new ForbiddenException('You cannot delete this file');
     }
 
