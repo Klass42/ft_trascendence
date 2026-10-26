@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Download } from 'lucide-react';
 import { Button, Input, Modal, Spinner, Textarea } from '@/components/ui';
 import { apiClient, useGradeAttempt } from '@/lib/api';
 import type { ActivityDTO, AttemptDTO, QuestionDTO } from '@/lib/api';
@@ -124,25 +125,43 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
           />
         ))}
 
-        {attempt?.answers && attempt.answers.some((a) => typeof a.response?.text === 'string' && a.response.text) && (
+        {attempt?.answers && (
           <div>
             {subjective.map((q) => {
-              const text = attempt.answers?.find((a) => a.questionId === q.id)?.response?.text;
-              if (typeof text !== 'string' || !text) return null;
+              const answer = attempt.answers?.find((a) => a.questionId === q.id);
+              const text = answer?.response?.text;
+              const responseFileIds = Array.isArray(answer?.response?.fileIds)
+                ? answer.response.fileIds.filter((id): id is string => typeof id === 'string')
+                : [];
+              const files = q.kind === 'FILE_UPLOAD'
+                ? (answer?.files ?? []).filter((file) => responseFileIds.includes(file.id))
+                : [];
+              if ((typeof text !== 'string' || !text) && files.length === 0) return null;
               return (
-                <p
+                <div
                   key={q.id}
                   style={{
-                    fontSize: 13.5,
-                    whiteSpace: 'pre-wrap',
+                    marginTop: 8,
                     background: 'var(--color-bg-primary)',
                     border: '1px solid var(--color-border-primary)',
                     borderRadius: 9,
                     padding: '10px 12px',
                   }}
                 >
-                  <strong>Respuesta:</strong> {text}
-                </p>
+                  {typeof text === 'string' && text && (
+                    <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: 0 }}>
+                      <strong>Respuesta:</strong> {text}
+                    </p>
+                  )}
+                  {files.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <strong style={{ fontSize: 13.5 }}>Archivos entregados:</strong>
+                      {files.map((file) => (
+                        <SubmissionFile key={file.id} file={file} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -170,6 +189,49 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+function SubmissionFile({ file }: { file: { id: string; originalName: string } }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function downloadFile() {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { url, originalName } = await apiClient.get<{
+        url: string;
+        originalName: string;
+      }>(`/files/${encodeURIComponent(file.id)}/url`);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = originalName || file.originalName;
+      link.rel = 'noopener';
+      document.body.append(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo descargar el archivo.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        leftIcon={<Download size={15} />}
+        loading={isLoading}
+        onClick={downloadFile}
+      >
+        {file.originalName}
+      </Button>
+      {error && <span role="alert" style={{ color: 'var(--color-error)', fontSize: 12 }}>{error}</span>}
+    </div>
   );
 }
 

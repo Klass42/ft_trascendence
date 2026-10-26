@@ -4,9 +4,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { StorageService, StoredFile } from './storage.service';
 
 export interface S3StorageConfig {
@@ -16,15 +16,9 @@ export interface S3StorageConfig {
   accessKeyId: string;
   secretAccessKey: string;
   forcePathStyle: boolean;
-  signedUrlTtlSeconds: number;
 }
 
 type S3CommandClient = Pick<S3Client, 'send'>;
-
-function positiveInteger(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 export function s3StorageConfigFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
@@ -47,10 +41,6 @@ export function s3StorageConfigFromEnvironment(
     secretAccessKey,
     // Garage and most local S3-compatible services use path-style buckets.
     forcePathStyle: env.S3_FORCE_PATH_STYLE?.toLowerCase() !== 'false',
-    signedUrlTtlSeconds: Math.min(
-      positiveInteger(env.S3_SIGNED_URL_TTL_SECONDS, 300),
-      3600,
-    ),
   };
 }
 
@@ -94,16 +84,17 @@ export class S3StorageDriver extends StorageService {
     }
   }
 
-  async getSignedUrl(objectKey: string): Promise<string> {
+  async getObject(objectKey: string): Promise<Readable> {
     try {
-      return await getSignedUrl(
-        this.client as S3Client,
-        new GetObjectCommand({ Bucket: this.config.bucket, Key: objectKey }),
-        { expiresIn: this.config.signedUrlTtlSeconds },
-      );
+      const result = await this.client.send(new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: objectKey,
+      }));
+      if (!result.Body) throw new Error('Object response did not include a body');
+      return result.Body as unknown as Readable;
     } catch (error) {
-      this.logger.error(`Failed to sign object URL for ${objectKey}`, error instanceof Error ? error.stack : undefined);
-      throw new ServiceUnavailableException('Unable to access the stored file');
+      this.logger.error(`Failed to read object ${objectKey}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException('Unable to read the stored file');
     }
   }
 

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   LearningResourceStatus,
+  NotificationType,
   Prisma,
 } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
@@ -15,10 +16,11 @@ import { CreateResourceDto } from './dto/create-resource.dto';
 import { ListResourcesDto } from './dto/list-resources.dto';
 import { PublishResourceDto } from './dto/publish-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Resource API responses never disclose the storage bucket or object key. A
 // caller must use GET /files/:id/url, which authorizes the linked resource
-// before it returns a temporary object-storage URL.
+// before issuing a short-lived signed backend streaming URL.
 const RESOURCE_FILE_SELECT = {
   id: true,
   originalName: true,
@@ -30,7 +32,7 @@ const RESOURCE_FILE_SELECT = {
 const RESOURCE_INCLUDE = {
   file: { select: RESOURCE_FILE_SELECT },
   subjects: {
-    include: { subject: { select: { id: true, title: true } } },
+    include: { subject: { select: { id: true, title: true, courseId: true } } },
     orderBy: { order: 'asc' },
   },
 } satisfies Prisma.LearningResourceInclude;
@@ -41,7 +43,7 @@ function resourceIncludeForSubject(subjectId: string) {
     file: { select: RESOURCE_FILE_SELECT },
     subjects: {
       where: { subjectId },
-      include: { subject: { select: { id: true, title: true } } },
+      include: { subject: { select: { id: true, title: true, courseId: true } } },
       orderBy: { order: 'asc' },
     },
   } satisfies Prisma.LearningResourceInclude;
@@ -52,6 +54,7 @@ export class ResourcesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   private isLibraryStaff(user: AuthUser) {
@@ -108,7 +111,7 @@ export class ResourcesService {
     await this.assertSource(user.organizationId, dto.fileId, dto.externalUrl);
 
     const status = dto.status ?? LearningResourceStatus.DRAFT;
-    return this.prisma.learningResource.create({
+    const created = await this.prisma.learningResource.create({
       data: {
         organizationId: user.organizationId,
         createdById: user.userId,
@@ -128,6 +131,8 @@ export class ResourcesService {
       },
       include: RESOURCE_INCLUDE,
     });
+    await this.notifyLibraryStaff(user.organizationId, user.userId, `Nuevo recurso: ${created.title}`);
+    return created;
   }
 
   async findAll(dto: ListResourcesDto, user: AuthUser) {
@@ -176,7 +181,7 @@ export class ResourcesService {
         ? new Date()
         : existing.publishedAt;
 
-    return this.prisma.learningResource.update({
+    const updated = await this.prisma.learningResource.update({
       where: { id },
       data: {
         ...(dto.title !== undefined && { title: dto.title.trim() }),
@@ -194,6 +199,20 @@ export class ResourcesService {
       },
       include: RESOURCE_INCLUDE,
     });
+    await this.notifyLibraryStaff(user.organizationId, user.userId, `Recurso actualizado: ${updated.title}`);
+    if (
+      existing.subjects.length > 0 &&
+      (existing.status === LearningResourceStatus.PUBLISHED || updated.status === LearningResourceStatus.PUBLISHED)
+    ) {
+      await this.notifySubjectStudents(
+        existing.subjects.map(({ subjectId }) => subjectId),
+        user.organizationId,
+        user.userId,
+        `Recurso actualizado: ${updated.title}`,
+        '/resources',
+      );
+    }
+    return updated;
   }
 
   async remove(id: string, user: AuthUser) {
@@ -201,6 +220,16 @@ export class ResourcesService {
     const resource = await this.requireOwnedResource(id, user);
     this.assertOwnerOrAdmin(resource, user);
     await this.prisma.learningResource.delete({ where: { id } });
+    await this.notifyLibraryStaff(user.organizationId, user.userId, `Recurso eliminado: ${resource.title}`);
+    if (resource.status === LearningResourceStatus.PUBLISHED && resource.subjects.length > 0) {
+      await this.notifySubjectStudents(
+        resource.subjects.map(({ subjectId }) => subjectId),
+        user.organizationId,
+        user.userId,
+        `Recurso eliminado: ${resource.title}`,
+        '/resources',
+      );
+    }
   }
 
   /** Link a resource to a subject; subject staff or an organization admin may do so. */
@@ -213,7 +242,7 @@ export class ResourcesService {
     await this.requireOwnedResource(resourceId, user);
     await this.access.assertSubjectStaff(subjectId, user);
 
-    return this.prisma.subjectResource.upsert({
+    const link = await this.prisma.subjectResource.upsert({
       where: { resourceId_subjectId: { resourceId, subjectId } },
       create: {
         resourceId,
@@ -227,12 +256,32 @@ export class ResourcesService {
       },
       include: { resource: { include: RESOURCE_INCLUDE } },
     });
+    if (link.resource.status === LearningResourceStatus.PUBLISHED) {
+      const linkedSubject = link.resource.subjects.find((item) => item.subjectId === subjectId)?.subject;
+      await this.notifySubjectStudents(
+        [subjectId],
+        user.organizationId,
+        user.userId,
+        `Nuevo recurso en ${linkedSubject?.title ?? 'una asignatura'}: ${link.resource.title}`,
+        linkedSubject ? `/courses/${linkedSubject.courseId}/subjects/${subjectId}` : '/resources',
+      );
+    }
+    return link;
   }
 
   async removeFromSubject(resourceId: string, subjectId: string, user: AuthUser) {
-    await this.requireOwnedResource(resourceId, user);
+    const resource = await this.requireOwnedResource(resourceId, user);
     await this.access.assertSubjectStaff(subjectId, user);
-    await this.prisma.subjectResource.deleteMany({ where: { resourceId, subjectId } });
+    const removed = await this.prisma.subjectResource.deleteMany({ where: { resourceId, subjectId } });
+    if (removed.count > 0 && resource.status === LearningResourceStatus.PUBLISHED) {
+      await this.notifySubjectStudents(
+        [subjectId],
+        user.organizationId,
+        user.userId,
+        `Recurso retirado de una asignatura: ${resource.title}`,
+        '/courses',
+      );
+    }
   }
 
   /** Resource list inside one subject. Students see only PUBLISHED entries. */
@@ -305,6 +354,44 @@ export class ResourcesService {
           && memberCourseIds.has(link.subject.courseId)
           && resource.status === LearningResourceStatus.PUBLISHED;
       }),
+    );
+  }
+
+  private async notifyLibraryStaff(organizationId: string, actorId: string, title: string) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      async () => {
+        const staff = await this.prisma.user.findMany({
+          where: { organizationId, role: { in: ['ADMIN', 'TEACHER'] } },
+          select: { id: true },
+        });
+        return staff.map(({ id }) => id);
+      },
+      NotificationType.RESOURCE_CHANGED,
+      { title, link: '/resources' },
+      { organizationId, actorId },
+    );
+  }
+
+  private async notifySubjectStudents(subjectIds: string[], organizationId: string, actorId: string, title: string, link: string) {
+    if (!this.notifications || subjectIds.length === 0) return;
+    await this.notifications.emitMany(
+      async () => {
+        const memberships = await this.prisma.courseMembership.findMany({
+          where: {
+            course: {
+              organizationId,
+              subjects: { some: { id: { in: subjectIds }, organizationId, status: 'PUBLISHED' } },
+            },
+            user: { organizationId, role: 'STUDENT' },
+          },
+          select: { userId: true },
+        });
+        return memberships.map(({ userId }) => userId);
+      },
+      NotificationType.RESOURCE_CHANGED,
+      { title, body: 'Hay material nuevo o actualizado en una asignatura.', link },
+      { organizationId, actorId },
     );
   }
 

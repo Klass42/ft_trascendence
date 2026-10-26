@@ -4,7 +4,6 @@ import './telemetry/otel-sdk';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { resolve } from 'node:path';
 import { AppModule } from './app.module';
 
 // Prisma BigInt fields (e.g. File.sizeBytes) are not JSON-serializable by
@@ -15,12 +14,8 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  // The local development storage driver returns unguessable URLs below this
-  // prefix. S3 deployments keep returning short-lived presigned URLs instead.
-  app.useStaticAssets(resolve(process.env.UPLOAD_DIR || './uploads'), {
-    prefix: '/uploads/',
-  });
+  // Caddy is the single trusted reverse proxy; preserve the originating client IP for rate limits.
+  app.set('trust proxy', 1);
 
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:5173',

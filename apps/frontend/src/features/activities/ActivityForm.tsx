@@ -2,15 +2,14 @@ import { useState } from 'react';
 import {
   Button,
   DatePicker,
-  FileUpload,
   FormField,
   Input,
   Select,
   Textarea,
   Toggle,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useActivityMutations, useAuth } from '@/lib/api';
 import type { ActivityDTO, ActivityStatus } from '@/lib/api';
 import { toDatetimeLocal, toIso } from '../assignments/helpers';
@@ -136,6 +135,7 @@ export function ActivityForm({
           <Input
             {...field}
             value={title}
+            maxLength={200}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Ej. Examen mixto · unidad 3"
           />

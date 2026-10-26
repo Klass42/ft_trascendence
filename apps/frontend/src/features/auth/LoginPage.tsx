@@ -8,8 +8,9 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, LogIn } from 'lucide-react';
-import { useAuth } from '@/lib/api';
+import { ApiError, useAuth } from '@/lib/api';
 import { Button, Input, Card } from '@/components/ui';
+import { mapApiValidationErrors } from '@/lib/form-errors';
 import styles from './LoginPage.module.css';
 
 // =============================================================================
@@ -25,6 +26,7 @@ export function LoginPage() {
   const [organizationSlug, setOrganizationSlug] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   // Get the page they tried to visit before being redirected to login
@@ -39,13 +41,24 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
     setIsLoading(true);
 
     try {
       await login(organizationSlug, email, password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+      if (err instanceof ApiError && err.isValidationError) {
+        const mapped = mapApiValidationErrors(err.errors ?? []);
+        setFieldErrors(mapped.fields);
+        setError(mapped.form ?? null);
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('El correo electrónico o la contraseña no son correctos.');
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError('Confirma tu correo electrónico antes de iniciar sesión.');
+      } else {
+        setError('No se pudo iniciar sesión. Inténtalo de nuevo.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -98,20 +111,24 @@ export function LoginPage() {
 
             {/* Email */}
             <Input
-              label="Organization code"
+              label="Código de organización"
               placeholder="your-school"
               value={organizationSlug}
-              onChange={(e) => setOrganizationSlug(e.target.value.toLowerCase())}
+              maxLength={63}
+              onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setFieldErrors((current) => ({ ...current, organization: '' })); }}
+              error={fieldErrors.organization}
               required
               autoComplete="organization"
               autoFocus
             />
             <Input
               type="email"
-              label="Email"
+              label="Correo electrónico"
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              maxLength={254}
+              onChange={(e) => { setEmail(e.target.value); setFieldErrors((current) => ({ ...current, email: '' })); }}
+              error={fieldErrors.email}
               leftIcon={<Mail size={18} />}
               required
               autoComplete="email"
@@ -120,10 +137,12 @@ export function LoginPage() {
             {/* Password */}
             <Input
               type="password"
-              label="Password"
+              label="Contraseña"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              maxLength={128}
+              onChange={(e) => { setPassword(e.target.value); setFieldErrors((current) => ({ ...current, password: '' })); }}
+              error={fieldErrors.password}
               leftIcon={<Lock size={18} />}
               required
               autoComplete="current-password"

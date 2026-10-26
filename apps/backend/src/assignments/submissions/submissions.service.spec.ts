@@ -128,9 +128,9 @@ describe('SubmissionsService', () => {
     const prisma = buildPrismaFake();
     const emitted: Array<{ userId: string; type: NotificationType }> = [];
     const notifications = {
-      emit: async (userId: string, type: NotificationType) => {
-        emitted.push({ userId, type });
-        return { id: 'n-1' };
+      emitMany: async (loader: any, type: NotificationType) => {
+        const userIds = typeof loader === 'function' ? await loader() : loader;
+        for (const userId of userIds) emitted.push({ userId, type });
       },
     } as unknown as NotificationsService;
 
@@ -145,10 +145,10 @@ describe('SubmissionsService', () => {
     expect(result.status).toBe(SubmissionStatus.SUBMITTED);
     expect(result.userId).toBe(STUDENT);
 
-    // Exactly one notification, to the teacher, of type NEW_ASSIGNMENT.
+    // Exactly one notification, to the teacher, of type SUBMISSION_RECEIVED.
     expect(emitted).toHaveLength(1);
     expect(emitted[0].userId).toBe(TEACHER);
-    expect(emitted[0].type).toBe(NotificationType.NEW_ASSIGNMENT);
+    expect(emitted[0].type).toBe(NotificationType.SUBMISSION_RECEIVED);
 
     // Re-submitting must not spam the teacher again.
     await service.submit(ASSIGNMENT_ID, STUDENT, {

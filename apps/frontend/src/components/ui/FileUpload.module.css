@@ -144,13 +144,21 @@
 
 .fileItem {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   padding: var(--space-3);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-primary);
   border-radius: var(--radius-md);
   transition: border-color var(--transition-fast);
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .fileItemError {
@@ -301,9 +309,40 @@
   color: var(--color-error);
 }
 
+.removeBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .removeBtn > svg {
   width: 0.875rem;
   height: 0.875rem;
+}
+
+.filePreview {
+  width: 100%;
+  min-width: 0;
+}
+
+.filePreview audio,
+.filePreview video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.filePreview video {
+  max-height: 360px;
+  background: var(--color-bg-tertiary);
+}
+
+.pdfPreview {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-primary);
 }
 
 /* =============================================================================

@@ -50,8 +50,18 @@ export interface MeSubjectDTO {
   course: { id: string; name: string; academicYear: string };
 }
 
-export function subjectSelectorLabel(subject: Pick<MeSubjectDTO, 'title' | 'course'>): string {
-  return `${subject.title} · ${subject.course.name} · ${subject.course.academicYear}`;
+export function subjectSelectorLabel(subject: {
+  title: string;
+  course: { name: string; academicYear: string };
+}): string {
+  const title = subject.title.trim();
+  const cohort = subject.course.name.trim();
+  const academicYear = subject.course.academicYear.trim();
+  const alreadyIncludesYear = academicYear.length > 0 &&
+    (title.includes(academicYear) || cohort.includes(academicYear));
+  return [title, cohort, !alreadyIncludesYear && academicYear ? academicYear : '']
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export interface SectionDTO {

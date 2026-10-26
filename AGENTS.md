@@ -166,6 +166,11 @@ Dev-without-compose: frontend `5173`, backend `3000`.
 - No secrets in code. The committed contract is `.env.example` (placeholders only);
   real values live in the gitignored `.env` (`make env` generates them).
 - Conventional-style commit prefixes already in use (`infra:`, `init:`); keep them.
+- Auth rules: public registrations stay unverified in production until a valid verification
+  token is used, and tenant JWTs must enforce that status; platform accounts are separate.
+  Organization admins verify email when creating accounts. Refresh-token reuse may revoke
+  sessions only after signature, refresh purpose, and `jti` validation. Google OAuth state must
+  be signed, bound to an `HttpOnly` `SameSite` cookie, and carry the org slug.
 
 ## 8. Definition of Done (per feature)
 
@@ -177,24 +182,22 @@ Dev-without-compose: frontend `5173`, backend `3000`.
 6. Reviewed by ≥1 teammate (CODEOWNERS routes reviews).
 7. Comes up clean under `docker compose up` from scratch.
 
-## 9. Known gaps / cleanup (updated 2026-07)
+## 9. Known gaps / cleanup (updated 2026-10-23)
 
-Done this session: ✅ Postgres + Prisma scaffolded (schema validates, in dev compose) ·
-✅ `.pnpm-store/` untracked + gitignored · ✅ CODEOWNERS updated · ✅ root `.env.example` added ·
-✅ `scripts/ci.sh` created — CI is green (infra linters + build + prisma validate blocking;
-semgrep/trivy informational).
-
-Also done: ✅ Nest foundation — global `PrismaModule`/`PrismaService`, `ConfigModule`, global
-`ValidationPipe`, `/health` DB ping, BigInt JSON fix, and empty feature-module skeletons
-(auth/users/organizations/courses/files/assignments/forums/notifications/realtime) pre-registered
-in `app.module.ts` so owners don't fight over it.
+Built and merged in `staging`: auth (email/password + tenant-aware Google), organizations and
+platform back-office, users/RBAC/friends, courses split into cohort + subject, content builder,
+resource library, activities/attempts engine with task templates and course final grade,
+gradebook, forums, notifications + Socket.IO realtime/presence, analytics, Garage/S3 storage and
+the Prometheus + Grafana stack (see `docs/infra/README.md`). The feature modules are no longer
+skeletons; the root `README.md` is no longer an empty template either.
 
 Still open:
-- ❌ Not scaffolded yet: Valkey.
-- 🔧 `STORAGE_DRIVER=s3` uploads to Garage, but presigned download URLs point at the internal
-  `http://garage:3900` and are unusable from a browser. Keep `local` until the driver gets a
-  public endpoint (plan in `docs/planning/vtrofyme.md`).
-- 🔧 CI does not yet run ESLint (no eslint config in the repo). The **build** (tsc/nest/vite) is
-  the code gate for now. Adding a shared eslint flat config is a separate tooling task.
-- 📝 The root `README.md` is still a template: the subject's mandatory sections (team roles,
-  modules, features, contributions…) must be written before evaluation.
+- ❌ Valkey is not part of the stack (nothing needs it yet).
+- ✅ Local and S3 file downloads use short-lived signed backend streaming URLs; Garage stays
+  private to the container network.
+- 🔧 CI does not run ESLint (no shared flat config). The **build** (tsc/nest/vite) and the tests
+  are the code gate for now.
+- 📝 The root `README.md` still has `TODO`s the subject makes mandatory (module justification,
+  features, individual contributions, AI use). Track them with the open issues labelled
+  `modulo-42` and `documentation`.
+- 🔎 The 2026-10-23 audit (static + live Playwright pass) is tracked as GitHub issues #43–#64.

@@ -1,3 +1,4 @@
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, PlatformRoles, PlatformRolesGuard, type AuthUser } from '@/common/auth';
 import { PlatformService } from './platform.service';
@@ -8,9 +9,9 @@ import { CreatePlatformOrganizationAdminDto } from './dto/create-platform-organi
 export class PlatformController { constructor(private readonly service: PlatformService) {}
  @Post() create(@Body() dto: CreatePlatformOrganizationDto, @CurrentUser() user: AuthUser) { return this.service.createOrganization(dto, user.userId); }
  @Get() list() { return this.service.listOrganizations(); }
- @Get(':id') get(@Param('id') id: string) { return this.service.getOrganization(id); }
- @Patch(':id') update(@Param('id') id: string, @Body() dto: UpdatePlatformOrganizationDto, @CurrentUser() user: AuthUser) { return this.service.updateOrganization(id, dto, user.userId); }
- @Post(':id/suspend') suspend(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.service.suspend(id, user.userId); }
- @Post(':id/admins') inviteAdmin(@Param('id') id: string, @Body() dto: CreatePlatformOrganizationAdminDto, @CurrentUser() user: AuthUser) { return this.service.inviteAdmin(id, dto, user.userId); }
- @Delete(':id') @HttpCode(HttpStatus.NO_CONTENT) remove(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.service.deleteOrganization(id, user.userId); }
+ @Get(':id') get(@Param('id', ParseIdPipe) id: string) { return this.service.getOrganization(id); }
+ @Patch(':id') update(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdatePlatformOrganizationDto, @CurrentUser() user: AuthUser) { return this.service.updateOrganization(id, dto, user.userId); }
+ @Post(':id/suspend') suspend(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) { return this.service.suspend(id, user.userId); }
+ @Post(':id/admins') inviteAdmin(@Param('id', ParseIdPipe) id: string, @Body() dto: CreatePlatformOrganizationAdminDto, @CurrentUser() user: AuthUser) { return this.service.inviteAdmin(id, dto, user.userId); }
+ @Delete(':id') @HttpCode(HttpStatus.NO_CONTENT) remove(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) { return this.service.deleteOrganization(id, user.userId); }
 }

@@ -3,9 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CohortStatus, Prisma } from '@prisma/client';
+import { CohortStatus, NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
@@ -16,6 +17,7 @@ import { AddStaffDto } from './dto/add-staff.dto';
 import { UpdateStaffRoleDto } from './dto/update-staff-role.dto';
 import { AuthUser } from '@/common/auth';
 import { CourseAccessService } from './course-access.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const subjectLabelSelect = {
   id: true,
@@ -26,14 +28,17 @@ const subjectLabelSelect = {
 
 @Injectable()
 export class CoursesService {
+  private readonly logger = new Logger(CoursesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly courseAccess: CourseAccessService,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   async create(dto: CreateCourseDto, user: AuthUser) {
     this.assertDateWindow(dto.startsOn, dto.endsOn);
-    return this.prisma.course.create({
+    const created = await this.prisma.course.create({
       data: {
         organizationId: user.organizationId,
         name: dto.name,
@@ -43,6 +48,8 @@ export class CoursesService {
         ...(dto.status && { status: dto.status }),
       },
     });
+    await this.notifyCourseAdmins(user.organizationId, user.userId, `Nueva cohorte: ${created.name}`, `/courses`);
+    return created;
   }
 
   /**
@@ -82,7 +89,7 @@ export class CoursesService {
       await this.assertMembersHaveNoOtherActiveCourse(id, user.organizationId);
     }
 
-    return this.prisma.course.update({
+    const updated = await this.prisma.course.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
@@ -92,11 +99,50 @@ export class CoursesService {
         ...(dto.status !== undefined && { status: dto.status }),
       },
     });
+    const courseTitle = updated.status === 'ARCHIVED' && course.status !== 'ARCHIVED'
+      ? `Cohorte archivada: ${updated.name}`
+      : `Cohorte actualizada: ${updated.name}`;
+    await this.notifyCourseUsers(id, user.organizationId, user.userId, courseTitle, `/courses`);
+    return updated;
   }
 
   async delete(id: string, user: AuthUser) {
-    await this.requireCourse(id, user.organizationId);
+    const course = await this.prisma.course.findFirst({
+      where: { id, organizationId: user.organizationId },
+      select: { id: true, _count: { select: { memberships: true } } },
+    });
+    if (!course) throw new NotFoundException(`Course ${id} not found`);
+
+    const [attempt, submission] = await Promise.all([
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: { subject: { courseId: id, organizationId: user.organizationId } },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subject: { courseId: id, organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (course._count.memberships > 0 || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a cohort with enrollments or attempts; archive it instead',
+      );
+    }
+    const recipients = this.notifications
+      ? await this.courseRecipients(id, user.organizationId)
+      : [];
+    const courseName = this.notifications
+      ? (await this.requireCourse(id, user.organizationId)).name
+      : '';
     await this.prisma.course.delete({ where: { id } });
+    await this.emitUsers(recipients, user.organizationId, user.userId, `Cohorte eliminada: ${courseName}`, `/courses`);
   }
 
   async listSubjects(courseId: string, user: AuthUser) {
@@ -113,7 +159,7 @@ export class CoursesService {
 
   async createSubject(courseId: string, user: AuthUser, dto: CreateSubjectDto) {
     const course = await this.requireCourse(courseId, user.organizationId);
-    return this.prisma.subject.create({
+    const created = await this.prisma.subject.create({
       data: {
         organizationId: course.organizationId,
         courseId: course.id,
@@ -124,6 +170,8 @@ export class CoursesService {
         ...(dto.status && { status: dto.status }),
       },
     });
+    await this.notifySubjectUsers(created.id, user.organizationId, user.userId, `Nueva asignatura: ${created.title}`, `/courses/${course.id}/subjects/${created.id}`, created.status === 'PUBLISHED');
+    return created;
   }
 
   async findSubject(subjectId: string, user: AuthUser) {
@@ -141,15 +189,62 @@ export class CoursesService {
     if (subject.organizationId !== subject.course.organizationId) {
       throw new BadRequestException('Subject organization does not match its course');
     }
-    return this.prisma.subject.update({
+    const updated = await this.prisma.subject.update({
       where: { id: subject.id },
       data: dto,
     });
+    const subjectTitle = updated.status === 'ARCHIVED' && subject.status !== 'ARCHIVED'
+      ? `Asignatura archivada: ${updated.title}`
+      : updated.status === 'PUBLISHED' && subject.status !== 'PUBLISHED'
+        ? `Asignatura publicada: ${updated.title}`
+        : `Asignatura actualizada: ${updated.title}`;
+    const subjectLink = updated.status === 'PUBLISHED'
+      ? `/courses/${subject.courseId}/subjects/${subject.id}`
+      : '/courses';
+    await this.notifySubjectUsers(subject.id, user.organizationId, user.userId, subjectTitle, subjectLink, subject.status === 'PUBLISHED' || updated.status === 'PUBLISHED');
+    return updated;
   }
 
   async deleteSubject(subjectId: string, user: AuthUser) {
     const subject = await this.requireSubject(subjectId, user.organizationId);
+    const [membership, attempt, submission] = await Promise.all([
+      this.prisma.courseMembership.findFirst({
+        where: {
+          courseId: subject.courseId,
+          course: { organizationId: user.organizationId },
+        },
+        select: { id: true },
+      }),
+      this.prisma.attempt.findFirst({
+        where: {
+          activity: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+      this.prisma.submission.findFirst({
+        where: {
+          assignment: {
+            subjectId: subject.id,
+            subject: { organizationId: user.organizationId },
+          },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (membership || attempt || submission) {
+      throw new ConflictException(
+        'Cannot delete a subject with enrollments or attempts; archive it instead',
+      );
+    }
+    const recipients = this.notifications
+      ? await this.subjectRecipients(subjectId, user.organizationId, subject.status === 'PUBLISHED')
+      : [];
     await this.prisma.subject.delete({ where: { id: subject.id } });
+    await this.emitUsers(recipients, user.organizationId, user.userId, `Asignatura eliminada: ${subject.title}`, `/courses`);
   }
 
   async listMySubjects(user: AuthUser) {
@@ -164,35 +259,87 @@ export class CoursesService {
   }
 
   async addMember(courseId: string, user: AuthUser, dto: AddMemberDto) {
-    const course = await this.requireCourse(courseId, user.organizationId);
-    const target = await this.prisma.user.findFirst({
-      where: { id: dto.userId, organizationId: user.organizationId },
-      select: { id: true },
-    });
-    if (!target) {
-      throw new NotFoundException('User not found in this organization');
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      let courseName = '';
+      let membership: Prisma.CourseMembershipGetPayload<{}>;
+      try {
+        membership = await this.prisma.$transaction(async (tx) => {
+          const course = await tx.course.findFirst({
+            where: { id: courseId, organizationId: user.organizationId },
+          });
+          if (!course) throw new NotFoundException(`Course ${courseId} not found`);
+
+          const target = await tx.user.findFirst({
+            where: { id: dto.userId, organizationId: user.organizationId },
+            select: { id: true },
+          });
+          if (!target) {
+            throw new NotFoundException('User not found in this organization');
+          }
+
+          const existing = await tx.courseMembership.findFirst({
+            where: {
+              courseId,
+              userId: dto.userId,
+              course: { organizationId: user.organizationId },
+            },
+          });
+          if (existing) {
+            throw new ConflictException('Already a member of this course');
+          }
+
+          await this.assertSingleActiveMembership(
+            dto.userId,
+            user.organizationId,
+            course,
+            tx,
+          );
+          courseName = course.name;
+          return tx.courseMembership.create({
+            data: { courseId, userId: dto.userId },
+          });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch (error) {
+        if (!this.isSerializationConflict(error)) throw error;
+        if (attempt === maxAttempts - 1) {
+          throw new ConflictException(
+            'No se pudo completar el alta por un conflicto concurrente. Inténtalo de nuevo.',
+          );
+        }
+        continue;
+      }
+
+      await this.emitUsers(
+        [dto.userId],
+        user.organizationId,
+        user.userId,
+        `Te has matriculado en ${courseName}`,
+        `/courses`,
+        NotificationType.MEMBERSHIP_CHANGED,
+      );
+      return membership;
     }
-    const existing = await this.prisma.courseMembership.findUnique({
-      where: { courseId_userId: { courseId, userId: dto.userId } },
-    });
-    if (existing) {
-      throw new ConflictException('Already a member of this course');
-    }
-    await this.assertSingleActiveMembership(dto.userId, user.organizationId, course);
-    return this.prisma.courseMembership.create({
-      data: { courseId, userId: dto.userId },
-    });
+
+    throw new ConflictException('No se pudo completar el alta. Inténtalo de nuevo.');
   }
 
   async removeMember(courseId: string, memberUserId: string, user: AuthUser) {
-    await this.requireCourse(courseId, user.organizationId);
-    const membership = await this.prisma.courseMembership.findUnique({
-      where: { courseId_userId: { courseId, userId: memberUserId } },
+    const course = await this.requireCourse(courseId, user.organizationId);
+    const membership = await this.prisma.courseMembership.findFirst({
+      where: {
+        courseId,
+        userId: memberUserId,
+        course: { organizationId: user.organizationId },
+        user: { organizationId: user.organizationId },
+      },
     });
     if (!membership) {
       throw new NotFoundException('Membership not found');
     }
     await this.prisma.courseMembership.delete({ where: { id: membership.id } });
+    await this.emitUsers([memberUserId], user.organizationId, user.userId, `Has dejado de estar matriculado en ${course.name}`, `/courses`, NotificationType.MEMBERSHIP_CHANGED);
   }
 
   async listMembers(courseId: string, user: AuthUser) {
@@ -241,9 +388,11 @@ export class CoursesService {
     if (existing) {
       throw new ConflictException('User is already staff of this subject');
     }
-    return this.prisma.subjectStaff.create({
+    const assignment = await this.prisma.subjectStaff.create({
       data: { subjectId: subject.id, userId: dto.userId, role: dto.role },
     });
+    await this.emitUsers([dto.userId], user.organizationId, user.userId, `Te han asignado como ${dto.role === 'TEACHER' ? 'profesor' : 'ayudante'} de ${subject.title}`, `/courses/${subject.courseId}/subjects/${subject.id}`, NotificationType.MEMBERSHIP_CHANGED);
+    return assignment;
   }
 
   async updateStaffRole(
@@ -252,24 +401,27 @@ export class CoursesService {
     user: AuthUser,
     dto: UpdateStaffRoleDto,
   ) {
-    await this.requireSubject(subjectId, user.organizationId);
+    const subject = await this.requireSubject(subjectId, user.organizationId);
     const staff = await this.prisma.subjectStaff.findUnique({
       where: { subjectId_userId: { subjectId, userId: staffUserId } },
     });
     if (!staff) throw new NotFoundException('Staff assignment not found');
-    return this.prisma.subjectStaff.update({
+    const updated = await this.prisma.subjectStaff.update({
       where: { id: staff.id },
       data: { role: dto.role },
     });
+    await this.emitUsers([staffUserId], user.organizationId, user.userId, `Tu asignación en ${subject.title} ha cambiado`, `/courses/${subject.courseId}/subjects/${subject.id}`, NotificationType.MEMBERSHIP_CHANGED);
+    return updated;
   }
 
   async removeStaff(subjectId: string, staffUserId: string, user: AuthUser) {
-    await this.requireSubject(subjectId, user.organizationId);
+    const subject = await this.requireSubject(subjectId, user.organizationId);
     const staff = await this.prisma.subjectStaff.findUnique({
       where: { subjectId_userId: { subjectId, userId: staffUserId } },
     });
     if (!staff) throw new NotFoundException('Staff assignment not found');
     await this.prisma.subjectStaff.delete({ where: { id: staff.id } });
+    await this.emitUsers([staffUserId], user.organizationId, user.userId, `Ya no formas parte del equipo de ${subject.title}`, `/courses`, NotificationType.MEMBERSHIP_CHANGED);
   }
 
   async listStaff(subjectId: string, user: AuthUser) {
@@ -339,9 +491,10 @@ export class CoursesService {
     userId: string,
     organizationId: string,
     course: { id: string; status: CohortStatus },
+    tx: Prisma.TransactionClient,
   ) {
     if (course.status !== 'ACTIVE') return;
-    const other = await this.prisma.courseMembership.findFirst({
+    const other = await tx.courseMembership.findFirst({
       where: {
         userId,
         courseId: { not: course.id },
@@ -351,6 +504,15 @@ export class CoursesService {
     if (other) {
       throw new ConflictException('The user already belongs to an active course');
     }
+  }
+
+  private isSerializationConflict(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2034'
+    );
   }
 
   private async assertMembersHaveNoOtherActiveCourse(courseId: string, organizationId: string) {
@@ -387,5 +549,94 @@ export class CoursesService {
       counts.set(row.userId, Math.round((row._count._all / total) * 100));
     }
     return counts;
+  }
+
+  private async notifyCourseAdmins(organizationId: string, actorId: string, title: string, link: string) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      () => this.orgAdminIds(organizationId),
+      NotificationType.COURSE_CHANGED,
+      { title, link },
+      { organizationId, actorId },
+    );
+  }
+
+  private async notifyCourseUsers(courseId: string, organizationId: string, actorId: string, title: string, link: string) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      () => this.courseRecipients(courseId, organizationId),
+      NotificationType.COURSE_CHANGED,
+      { title, link },
+      { organizationId, actorId },
+    );
+  }
+
+  private async notifySubjectUsers(subjectId: string, organizationId: string, actorId: string, title: string, link: string, includeStudents: boolean) {
+    if (!this.notifications) return;
+    await this.notifications.emitMany(
+      () => this.subjectRecipients(subjectId, organizationId, includeStudents),
+      NotificationType.COURSE_CHANGED,
+      { title, link },
+      { organizationId, actorId },
+    );
+  }
+
+  private async emitUsers(userIds: readonly string[], organizationId: string, actorId: string, title: string, link: string, type: NotificationType = NotificationType.COURSE_CHANGED) {
+    await this.notifications?.emitMany(userIds, type, { title, link }, { organizationId, actorId });
+  }
+
+  private async orgAdminIds(organizationId: string): Promise<string[]> {
+    const admins = await this.prisma.user.findMany({
+      where: { organizationId, role: 'ADMIN' },
+      select: { id: true },
+    });
+    return admins.map(({ id }) => id);
+  }
+
+  private async courseRecipients(courseId: string, organizationId: string): Promise<string[]> {
+    try {
+      const [members, staff, admins] = await Promise.all([
+        this.prisma.courseMembership.findMany({
+          where: { courseId, course: { organizationId }, user: { organizationId, role: 'STUDENT' } },
+          select: { userId: true },
+        }),
+        this.prisma.subjectStaff.findMany({
+          where: { subject: { courseId, organizationId }, user: { organizationId } },
+          select: { userId: true },
+        }),
+        this.orgAdminIds(organizationId),
+      ]);
+      return [...members.map(({ userId }) => userId), ...staff.map(({ userId }) => userId), ...admins];
+    } catch (error) {
+      this.logger.error('No se pudieron buscar miembros de la cohorte para notificar', error instanceof Error ? error.stack : undefined);
+      return [];
+    }
+  }
+
+  private async subjectRecipients(subjectId: string, organizationId: string, includeStudents: boolean): Promise<string[]> {
+    try {
+      const subject = await this.prisma.subject.findFirst({
+        where: { id: subjectId, organizationId },
+        select: { courseId: true },
+      });
+      if (!subject) return [];
+      const [members, staff, admins] = await Promise.all([
+        includeStudents
+          ? this.prisma.courseMembership.findMany({
+              where: { courseId: subject.courseId, course: { organizationId }, user: { organizationId, role: 'STUDENT' } },
+              select: { userId: true },
+            })
+          : Promise.resolve([]),
+        this.prisma.subjectStaff.findMany({
+          where: { subjectId, subject: { organizationId }, user: { organizationId } },
+          select: { userId: true },
+        }),
+        this.orgAdminIds(organizationId),
+      ]);
+      return [...members.map(({ userId }) => userId), ...staff.map(({ userId }) => userId), ...admins];
+    } catch (error) {
+      this.logger.error('No se pudieron buscar miembros de la asignatura para notificar', error instanceof Error ? error.stack : undefined);
+      return [];
+    }
   }
 }

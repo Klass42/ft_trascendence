@@ -22,11 +22,10 @@ import {
   Textarea,
   ConfirmDialog,
   EmptyState,
-  FileUpload,
   Spinner,
   useToast,
-  type FileValue,
 } from '@/components/ui';
+import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import styles from './ContentEditor.module.css';
 
 /** Mirrors the GENERAL allowlist in apps/backend/src/files/file-validation.ts. */
@@ -35,7 +34,7 @@ const ATTACHMENT_ACCEPT = [
   '.txt', '.csv',
   '.jpg', '.jpeg', '.png', '.webp', '.gif',
   '.mp3', '.wav', '.ogg', '.m4a',
-  '.mp4', '.webm', '.mov',
+  '.mp4', '.m4v', '.webm', '.mov',
 ].join(',');
 
 /** Same limit as MAX_UPLOAD_BYTES on the server. */
@@ -333,6 +332,7 @@ function SectionEditor({
               className={styles.inlineField}
               aria-label="Nuevo título de la sección"
               value={newTitle}
+              maxLength={200}
               onChange={(e) => setNewTitle(e.target.value)}
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenaming(false); }}
@@ -369,6 +369,7 @@ function SectionEditor({
             <Input
               label="Título"
               value={editLessonTitle}
+              maxLength={200}
               onChange={(e) => setEditLessonTitle(e.target.value)}
             />
             <Textarea
@@ -420,6 +421,7 @@ function SectionEditor({
               className={styles.inlineField}
               aria-label="Título de la lección"
               value={lessonTitle}
+              maxLength={200}
               onChange={(e) => setLessonTitle(e.target.value)}
               placeholder="Título de la lección"
               autoFocus
@@ -524,6 +526,7 @@ export function ContentEditor({ courseId }: { courseId: string }) {
               className={styles.sectionTitleField}
               aria-label="Título de la sección"
               value={sectionTitle}
+              maxLength={200}
               onChange={(e) => setSectionTitle(e.target.value)}
               placeholder="Título de la sección"
               autoFocus
