@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Archive, CheckSquare, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
+  Archive, CheckSquare, ChevronRight, Folder, FolderInput, FolderTree as FolderTreeIcon, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
 } from 'lucide-react';
 import { Button, ConfirmDialog, Dropdown, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
@@ -19,7 +19,9 @@ import {
   type LearningResourceType,
 } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
+import { FolderTree } from './FolderTree';
 import { ResourceCard } from './ResourceCard';
+import styles from './ResourcesPage.module.css';
 import { RESOURCE_STATUSES, RESOURCE_TYPES, splitList } from './resource-helpers';
 
 const EMPTY_FORM = {
@@ -46,7 +48,8 @@ const countLabel = ({ resourceIds, folderIds }: Targets) => [
 ].filter(Boolean).join(' y ');
 
 /**
- * Staff-only organization catalogue (#26): real folders with breadcrumbs, a ⋮
+ * Staff-only organization catalogue (#26, Drive-style layout #22: fixed
+ * folder-tree sidebar on the left, breadcrumbs + grid on the right): real folders with breadcrumbs, a ⋮
  * menu per item, a «Seleccionar» mode with batch actions and «Mover a…».
  * Files are uploaded first, then referenced by id.
  */
@@ -66,6 +69,7 @@ export function ResourcesPage() {
   const [folderModal, setFolderModal] = useState<{ mode: 'create' } | { mode: 'rename'; folder: ResourceFolderDTO } | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [busy, setBusy] = useState(false);
+  const [treeOpen, setTreeOpen] = useState(false);
   const { data: resources, isLoading, error, refresh } = useResources({ search, type: type || undefined, status: status || undefined });
   const { data: folders, refresh: refreshFolders } = useResourceFolders();
   // Staff also need to prepare resources for a draft course before it is
@@ -98,7 +102,7 @@ export function ResourcesPage() {
   const reloadAll = async () => { await Promise.all([refresh(), refreshFolders()]); };
   const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
-  const openFolder = (id: string | null) => { setFolderId(id); clearSelection(); };
+  const openFolder = (id: string | null) => { setFolderId(id); clearSelection(); setTreeOpen(false); };
 
   const askArchive = (targets: Targets) => {
     const ids = targets.resourceIds.filter((id) => resources?.find((r) => r.id === id)?.status !== 'ARCHIVED');
@@ -238,7 +242,7 @@ export function ResourcesPage() {
     : [];
 
   return (
-    <div style={{ padding: '28px 40px', maxWidth: 1100 }}>
+    <div style={{ padding: '28px 40px', maxWidth: 1360 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26 }}>Biblioteca</h1>
@@ -253,6 +257,16 @@ export function ResourcesPage() {
         </div>
       </div>
 
+      <div className={styles.layout}>
+      <div>
+        <div className={styles.sidebarToggle}><Button size="sm" variant="secondary" onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen} aria-controls="library-folder-tree">
+          <FolderTreeIcon size={14} /> {treeOpen ? 'Ocultar carpetas' : 'Carpetas'}
+        </Button></div>
+        <aside id="library-folder-tree" className={`${styles.sidebar} ${treeOpen ? '' : styles.sidebarCollapsed}`}>
+          <FolderTree folders={folderList} activeId={filtering ? null : folderId} onOpen={(id) => { openFolder(id); if (filtering) { setSearch(''); setType(''); setStatus(''); } }} />
+        </aside>
+      </div>
+      <div className={styles.main}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <label style={searchStyle}><Search size={15} /><input aria-label="Buscar biblioteca" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Título, autor o etiqueta" style={inputStyle} /></label>
         <select aria-label="Tipo de recurso" value={type} onChange={(e) => setType(e.target.value as LearningResourceType | '')} style={selectStyle}>
@@ -296,7 +310,7 @@ export function ResourcesPage() {
       {!isLoading && !error && visibleResources.length === 0 && visibleFolders.length === 0 && (
         <p style={messageStyle}>{filtering ? 'No hay recursos con estos filtros.' : 'Esta carpeta está vacía.'}</p>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
         {visibleFolders.map((folder) => {
           const manage = canManage(folder);
           return (
@@ -338,6 +352,8 @@ export function ResourcesPage() {
             } : undefined}
           />
         ))}
+      </div>
+      </div>
       </div>
 
       <ResourceForm
