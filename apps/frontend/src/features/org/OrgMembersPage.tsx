@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { apiClient, useAuth } from '@/lib/api';
-import { ApiError } from '@/lib/api/types';
+import { useAuth } from '@/lib/api';
+import { DeleteUserDialog, DELETE_USER_COPY } from '@/features/admin/DeleteUserDialog';
 import { Avatar, Button, Spinner } from '@/components/ui';
 import { useOrg, useOrgMembers } from '@/lib/api/hooks';
 import type { GlobalRole } from '@/lib/api/types';
@@ -20,56 +20,8 @@ export function OrgMembersPage() {
   const { data: org } = useOrg();
   const { data: members, isLoading, error } = useOrgMembers(org?.id);
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<MemberDTO | null>(null);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  const startDelete = useCallback((memberId: string) => {
-    setDeletingId(memberId);
-    setBannerError(null);
-    timerRef.current = setTimeout(() => {
-      setDeletingId(null);
-      timerRef.current = null;
-    }, 5000);
-  }, []);
-
-  const confirmDelete = useCallback(
-    async (memberId: string) => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      setDeletingId(null);
-      try {
-        await apiClient.delete(
-          `/organizations/${org!.id}/members/${memberId}`,
-        );
-        setDeletedIds((prev) => [...prev, memberId]);
-      } catch (err) {
-        const msg =
-          err instanceof ApiError
-            ? err.message
-            : 'No se pudo conectar con el servidor.';
-        setBannerError(msg);
-      }
-    },
-    [org],
-  );
-
-  const cancelDelete = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    setDeletingId(null);
-  }, []);
 
   if (!org) {
     return null;
@@ -90,12 +42,7 @@ export function OrgMembersPage() {
       <div className={styles.header}>
         <h1 className={styles.title}>Miembros</h1>
       </div>
-
-      {bannerError && (
-        <div className={styles.banner} role="alert">
-          {bannerError}
-        </div>
-      )}
+      <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{DELETE_USER_COPY.hint}</p>
 
       {error && (
         <div className={styles.banner} role="alert">
@@ -154,30 +101,14 @@ export function OrgMembersPage() {
                     >
                       —
                     </span>
-                  ) : deletingId === m.id ? (
-                    <div className={styles.dangerActions}>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => confirmDelete(m.id)}
-                      >
-                        Confirmar eliminación
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelDelete}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
                   ) : (
                     <Button
-                      variant="ghost"
+                      variant="danger"
                       size="sm"
-                      onClick={() => startDelete(m.id)}
+                      onClick={() => setPendingDelete(m)}
+                      aria-label={`${DELETE_USER_COPY.action} de ${m.name}`}
                     >
-                      Eliminar
+                      {DELETE_USER_COPY.action}
                     </Button>
                   )}
                 </td>
@@ -186,6 +117,15 @@ export function OrgMembersPage() {
           </tbody>
         </table>
       )}
+
+      <DeleteUserDialog
+        target={pendingDelete}
+        onCancel={() => setPendingDelete(null)}
+        onDeleted={(id) => {
+          setDeletedIds((prev) => [...prev, id]);
+          setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

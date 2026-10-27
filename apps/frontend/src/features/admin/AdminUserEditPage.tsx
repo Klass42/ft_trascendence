@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { apiClient, useAuth } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
 import { Button, Spinner } from '@/components/ui';
 import { useUser } from '@/lib/api/hooks';
+import { DeleteUserDialog, DELETE_USER_COPY } from './DeleteUserDialog';
 import { UserForm, diffForPatch, type FormValues } from './UserForm';
 import type { UserDTO } from './types';
 import styles from './AdminUserEditPage.module.css';
@@ -15,16 +16,7 @@ export function AdminUserEditPage() {
   const { user: currentUser } = useAuth();
   const { data, isLoading, error } = useUser(id);
 
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-    };
-  }, []);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -61,50 +53,6 @@ export function AdminUserEditPage() {
     }
   }
 
-  function handleDeleteClick() {
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      setDeleteError(null);
-      deleteTimerRef.current = setTimeout(() => {
-        setConfirmingDelete(false);
-        deleteTimerRef.current = null;
-      }, 5000);
-      return;
-    }
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = null;
-    }
-    void performDelete();
-  }
-
-  async function performDelete() {
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      await apiClient.delete(`/users/${id}`);
-      navigate('/admin/users');
-    } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? err.message
-          : 'No se pudo conectar con el servidor.';
-      setDeleteError(msg);
-      setConfirmingDelete(false);
-    } finally {
-      setIsDeleting(false);
-    }
-  }
-
-  function handleCancelDelete() {
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = null;
-    }
-    setConfirmingDelete(false);
-    setDeleteError(null);
-  }
-
   return (
     <div className={styles.page}>
       <Link to="/admin/users" className={styles.backLink}>
@@ -129,32 +77,21 @@ export function AdminUserEditPage() {
         <div className={styles.dangerZone}>
           <p className={styles.dangerTitle}>Zona de peligro</p>
           <p className={styles.dangerHint}>
-            Esta acción no se puede deshacer. El usuario y todos sus datos
-            asociados se eliminarán.
+            {DELETE_USER_COPY.hint}
           </p>
-          {deleteError && (
-            <div className={styles.banner} role="alert">
-              {deleteError}
-            </div>
-          )}
           <div className={styles.dangerActions}>
-            <Button
-              variant="danger"
-              loading={isDeleting}
-              onClick={handleDeleteClick}
-            >
-              {confirmingDelete
-                ? 'Confirmar eliminación'
-                : 'Eliminar usuario'}
+            <Button variant="danger" onClick={() => setConfirmOpen(true)}>
+              {DELETE_USER_COPY.action}
             </Button>
-            {confirmingDelete && (
-              <Button variant="ghost" onClick={handleCancelDelete}>
-                Cancelar
-              </Button>
-            )}
           </div>
         </div>
       )}
+
+      <DeleteUserDialog
+        target={confirmOpen ? { id: data.id, name: data.name, email: data.email } : null}
+        onCancel={() => setConfirmOpen(false)}
+        onDeleted={() => navigate('/admin/users')}
+      />
     </div>
   );
 }
