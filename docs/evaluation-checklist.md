@@ -55,10 +55,10 @@ Código de organización: `klass` (Klass Academy). Contraseña de todas: `demo12
 | Cuenta | Rol | Notas |
 |---|---|---|
 | `admin@demo` | Administrador de la organización | Ada Admin |
-| `teacher@demo` | Profesor | Theo Teacher; docente de la asignatura "Introducción al Desarrollo Web" |
-| `student@demo` | Alumno | Sam Student; matriculado en las cohortes 2025-2026 y 2024-2025; sin amistades ni notificaciones |
-| `dev@example.com` | Alumno | Lucía Molina; amiga de Diego, con una notificación y una lección completada |
-| `diego@example.com` | Profesor | Diego Torres; docente de la misma asignatura; autor del foro y de la plantilla "Examen mixto" |
+| `teacher@demo` | Profesor | Theo Teacher; docente de la asignatura "Introducción al Desarrollo Web"; tiene una notificación "Nueva entrega para corregir" |
+| `student@demo` | Alumno | Sam Student; matriculado en las cohortes 2025-2026 y 2024-2025; una lección completada, solicitud de amistad pendiente de Diego, 3 notificaciones y actividad académica (ver más abajo) |
+| `dev@example.com` | Alumno | Lucía Molina; amiga de Diego, con tres notificaciones, una lección completada y actividad académica calificada |
+| `diego@example.com` | Profesor | Diego Torres; docente de la misma asignatura; autor del foro y de la plantilla "Examen mixto"; tiene una solicitud pendiente hacia Sam y una entrega por corregir |
 | `admin@example.com` | Administrador | Admin Klass |
 | `PLATFORM_SUPERADMIN_EMAIL` de `.env` (por defecto `admin@platform.local`) | Administrador de plataforma | Contraseña `PLATFORM_SUPERADMIN_PASSWORD` de `.env`; entra por `/platform/login`, sin código de organización |
 
@@ -67,13 +67,38 @@ Grafana: `https://localhost:4150`, usuario y contraseña de `.env` (`GF_SECURITY
 
 Contenido que crea el seed estándar: dos cohortes "1º A" (2025-2026 activa, 2024-2025
 archivada), dos asignaturas ("Introducción al Desarrollo Web" y su edición 2024-2025), dos
-libros con tres lecciones, un cuestionario ("Autoevaluación de la unidad", opción múltiple y
-verdadero/falso), una tarea de ensayo con fichero, la plantilla "Examen mixto", un hilo de foro
-("Presentaciones", con dos mensajes), una amistad aceptada (Lucía y Diego) y una notificación
-("Nota publicada" para Lucía).
+libros con tres lecciones, tres tareas publicadas en la asignatura activa ("Autoevaluación de la
+unidad", cuestionario de opción múltiple y verdadero/falso; "Tarea · Ensayo y fichero"; y
+"Quiz rápido · HTTP y HTML", que vence en 3 días y nadie ha empezado), la plantilla "Examen
+mixto", un hilo de foro ("Presentaciones", con dos mensajes), una amistad aceptada (Lucía y
+Diego) y una solicitud de amistad pendiente (Diego a Sam).
 
-**No crea:** intentos de actividades ni calificaciones, ficheros subidos, recursos de biblioteca,
-invitaciones, entregas, otras organizaciones ni solicitudes de amistad pendientes.
+Actividad académica de la asignatura activa (fechas relativas al momento de ejecutar el seed,
+repartidas en los últimos 9 días):
+
+| Tarea | Lucía (`dev@example.com`) | Sam (`student@demo`) |
+|---|---|---|
+| Autoevaluación de la unidad (máx. 10) | Intento 1: 5/10 (hace 9 días); intento 2: 10/10 (hace 7 días); cuenta el mejor | Intento 1: 5/10 (hace 5 días), calificado automáticamente; le queda 1 intento |
+| Tarea · Ensayo y fichero (máx. 10) | Calificada por Diego: 8,5/10, con comentario general y comentario en la respuesta del ensayo (hace 3 días, calificada hace 2) | Entregada hace 1 día, **por calificar** |
+| Quiz rápido · HTTP y HTML (máx. 10) | Sin intentos | Sin intentos; es su "Próxima entrega" |
+
+Notificaciones: Sam recibe "Actividad calificada" (quiz, leída), "Nueva tarea publicada" (quiz
+rápido) y "Tienes una nueva solicitud de amistad"; Lucía, "Nota publicada" (la original),
+"Nueva tarea publicada" y "Actividad calificada" (ensayo); Theo y Diego, "Nueva entrega para
+corregir" (enlaza a `/grades` con el intento de Sam). Lecciones completadas: Lucía y Sam, la
+primera cada uno.
+
+Números esperados con `teacher@demo` o `diego@example.com` en `/analytics` (asignatura activa):
+2 alumnos, 3 tareas, 3 lecciones; entregas 4/6 (67 %), 3 calificadas y 1 pendiente; nota media
+78,3 % (50 %, 100 % y 85 %); distribución de notas: una en 50-60, una en 80-90 y una en 90-100;
+entregas por día: 5 intentos entregados, uno cada día en los días -9, -7, -5, -3 y -1;
+finalización de lecciones 2/6 (33 %); foro 1 hilo y 2 mensajes. Nota final del curso: Lucía
+92,5 %, Sam 50 % (la tarea por calificar y el quiz rápido aún no cuentan). En `/grades` Sam
+muestra "Por calificar" en el ensayo y en "Mis notas" el 5/10 del cuestionario.
+
+**No crea:** ficheros subidos (las respuestas de tipo fichero van vacías, sin blobs), recursos de
+biblioteca, invitaciones, otras organizaciones ni datos académicos de la cohorte archivada
+2024-2025.
 
 ## 3. Módulo a pantalla con datos del seed
 
@@ -83,14 +108,14 @@ Módulos tomados de la tabla de [README.md](../README.md#modules). "Seed" = dato
 | Módulo (puntos) | Dónde se demuestra | Datos del seed | Estado |
 |---|---|---|---|
 | Framework front y back (2) | Código: React 19 + Vite (`apps/frontend`), NestJS 10 (`apps/backend`); toda la app sirve de demo | Cualquiera | Listo |
-| WebSocket en tiempo real (2) | Dos navegadores: `teacher@demo` y `student@demo`. El profesor responde en el hilo "Presentaciones" (`/forums`) o califica; el alumno ve la campana (`/notifications`) actualizarse sin recargar. Presencia en `/friends` con `dev@example.com` y `diego@example.com` | Hilo "Presentaciones"; amistad Lucía-Diego | Listo (la presencia solo se ve entre Lucía y Diego; Sam no tiene amigos) |
+| WebSocket en tiempo real (2) | Dos navegadores: `teacher@demo` y `student@demo`. El profesor responde en el hilo "Presentaciones" (`/forums`) o califica; el alumno ve la campana (`/notifications`) actualizarse sin recargar. Presencia en `/friends` con `dev@example.com` y `diego@example.com` | Hilo "Presentaciones"; amistad Lucía-Diego | Listo (la presencia solo se ve entre Lucía y Diego; Sam solo tiene una solicitud pendiente de Diego) |
 | ORM (1) | Código: `apps/backend/prisma/schema.prisma`, migraciones y `seed.ts` | Todo el seed | Listo |
-| Gestión de usuarios estándar (2) | `/profile` (nombre, foto, contraseña, preferencias) con `student@demo`; `/admin/users` con `admin@demo`; `/friends` con `dev@example.com` | 6 usuarios de la org `klass`; amistad Lucía-Diego | Listo (la amistad solo con Lucía/Diego; para mostrar el flujo de solicitud, buscar a otra persona desde `student@demo`) |
+| Gestión de usuarios estándar (2) | `/profile` (nombre, foto, contraseña, preferencias) con `student@demo`; `/admin/users` con `admin@demo`; `/friends` con `dev@example.com` | 6 usuarios de la org `klass`; amistad Lucía-Diego; solicitud pendiente Diego-Sam | Listo (con `student@demo` en `/friends` se acepta la solicitud de Diego; para enviar una nueva, buscar a otra persona) |
 | Permisos avanzados / RBAC (2) | Entrar con los tres roles y comparar menús: el administrador ve Usuarios y Organización, el profesor Analíticas y Biblioteca, el alumno ninguno. Un alumno que abre `/analytics` vuelve al inicio. Aislamiento entre organizaciones: ver la fila Organización | Cuentas admin/teacher/student | Listo |
 | Sistema de organizaciones (2) | `/platform/login` → Organizaciones (lista con Klass Academy, crear una nueva, ver detalle); `/org` y `/org/members` con `admin@demo`; invitar en `/admin/users/invite` | Org `klass`, 3 roles | **PREPARAR**: el seed estándar solo tiene una organización. Para enseñar aislamiento entre organizaciones, crear una segunda desde `/platform` antes de la defensa, o usar `make db-seed-small` / `make db-seed-e2e`, que **reemplazan** Klass Academy. No hay invitaciones pendientes: crearlas en directo |
-| Sistema de notificaciones (1) | Campana y `/notifications`. Con `dev@example.com` aparece "Nota publicada". Las demás se generan al crear/editar contenido, responder en foros o calificar | 1 notificación para Lucía | Parcial: `student@demo` y los profesores empiezan sin notificaciones; generarlas en directo (p. ej. el profesor publica una tarea o responde en el foro) |
-| Dashboard de analíticas avanzadas (2) | `/analytics` con `teacher@demo` o `diego@example.com` (KPIs, entregas en el tiempo, distribución de notas, exportación CSV/PDF, refresco en vivo) | Cuestionario, tarea de ensayo y matrículas, **sin intentos** | **PREPARAR**: sin intentos las gráficas salen vacías. Antes de la defensa: `student@demo` hace la "Autoevaluación de la unidad" (`/activities`) y entrega la tarea de ensayo; el profesor la califica. Se pierde al volver a ejecutar el seed |
-| Subida de ficheros (1) | Alumno: entregar la tarea "Tarea · Ensayo y fichero" adjuntando un PNG/PDF (`/activities`); profesor: adjuntar un fichero en una lección o subir un recurso en `/resources`; foto de perfil en `/profile` | Pregunta de tipo fichero (máx. 3) en la tarea | **PREPARAR**: el seed no sube ningún fichero; se enseña en directo con un fichero pequeño de prueba |
+| Sistema de notificaciones (1) | Campana y `/notifications`. Con `student@demo` aparecen la nota del cuestionario, la tarea nueva y la solicitud de amistad; con `teacher@demo`, "Nueva entrega para corregir". Más se generan al crear/editar contenido, responder en foros o calificar | Notificaciones para Sam, Lucía, Theo y Diego | Listo (para verlas llegar en vivo: el profesor califica la entrega de Sam o publica una tarea) |
+| Dashboard de analíticas avanzadas (2) | `/analytics` con `teacher@demo` o `diego@example.com` (KPIs, entregas en el tiempo, distribución de notas, exportación CSV/PDF, refresco en vivo) | 5 intentos (4 calificados, 1 por calificar) repartidos en los últimos 9 días; números esperados en la sección 2 | Listo. En `/grades` el profesor puede calificar la entrega de Sam y ver cómo cambian los KPI en vivo. Calificarla altera los números de arriba; `make db-seed` los restaura |
+| Subida de ficheros (1) | Alumno: entregar la tarea "Tarea · Ensayo y fichero" adjuntando un PNG/PDF (`/activities`); profesor: adjuntar un fichero en una lección o subir un recurso en `/resources`; foto de perfil en `/profile` | Pregunta de tipo fichero (máx. 3) en la tarea; los intentos del seed no llevan ficheros | **PREPARAR**: el seed no sube ningún fichero; se enseña en directo con un fichero pequeño de prueba: los dos alumnos ya han agotado el único intento del ensayo, así que o bien el profesor sube un fichero a una lección o a `/resources`, o bien crea una tarea nueva con una pregunta de fichero y `student@demo` la entrega |
 | OAuth 2.0 (Google) (1) | Botón "Continuar con Google" en `/login` | Ninguno | **PREPARAR**: requiere `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env` y el URI de redirección registrado en Google (ver README, "Configuration"); sin ellos el botón no funciona. Probar antes con una cuenta real |
 | Monitorización Prometheus + Grafana (2) | Grafana en `:4150` (3 dashboards: Platform overview, NestJS backend, Infrastructure); `make smoke` comprueba targets y reglas. Demo de alerta: `docker compose stop backend` → `ServiceProbeFailed` pasa a Pending y luego Firing (~90 s); `docker compose start backend` la resuelve | No usa datos del seed | Listo. Para que los paneles de tráfico no estén vacíos, navegar un poco antes de enseñarlos |
 
@@ -100,8 +125,9 @@ la defensa conviene decidir qué módulos se presentan como reclamados.
 ## 4. Guion mínimo recomendado
 
 1. `make re` y `make smoke` (todo en verde).
-2. Preparar los datos marcados **PREPARAR** que se vayan a enseñar (intentos y calificaciones,
-   un fichero, segunda organización, Google OAuth si se reclama) y cerrar sesión.
+2. Preparar los datos marcados **PREPARAR** que se vayan a enseñar (un fichero, segunda
+   organización, Google OAuth si se reclama) y cerrar sesión. Los intentos y calificaciones ya
+   los crea el seed.
 3. Alumno y profesor en dos navegadores: foro, notificación en vivo, entrega y calificación.
 4. Administrador: usuarios, organización; plataforma: organizaciones.
 5. Analíticas con los datos preparados; Grafana y la demo de alerta.
@@ -109,9 +135,9 @@ la defensa conviene decidir qué módulos se presentan como reclamados.
 
 ## 5. Huecos conocidos de la demo
 
-- El seed no genera actividad académica (intentos, calificaciones, ficheros): analíticas,
-  libro de calificaciones y subida de ficheros dependen de datos creados a mano antes de la defensa.
-  Si el equipo lo prefiere, ampliar `seed.ts` con intentos calificados evitaría el paso manual
-  (es una decisión de producto/backend, no incluida aquí).
+- El seed genera intentos y calificaciones, pero ningún fichero subido: la subida de ficheros se
+  enseña en directo. Las fechas del seed son relativas al momento de ejecutarlo: si la demo se
+  prepara con muchos días de antelación, volver a ejecutar `make db-seed` justo antes para que
+  las gráficas por fecha y la "Próxima entrega" (3 días) sigan siendo coherentes.
 - Los usuarios `dev@example.com`, `diego@example.com` y `admin@example.com` (legado de desarrollo)
-  conviven con las cuentas `*@demo`; no hay ninguna amistad ni notificación para estas últimas.
+  conviven con las cuentas `*@demo`; las cuentas `*@demo` solo tienen la actividad descrita en la sección 2.
