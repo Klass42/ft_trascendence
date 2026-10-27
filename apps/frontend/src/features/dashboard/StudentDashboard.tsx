@@ -4,9 +4,9 @@ import {
   useAuth,
   useMySubjects,
   useMyProgress,
-  useUpcomingAssignments,
+  useMyPendingActivities,
 } from '@/lib/api';
-import type { MyProgressItem, ActivityDTO } from '@/lib/api';
+import type { MyProgressItem } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './StudentDashboard.module.css';
 
@@ -23,16 +23,9 @@ function hashToColor(title: string): string {
   return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
 }
 
-function nextUpcoming(activities: ActivityDTO[]): ActivityDTO | null {
-  const now = Date.now();
-  const upcoming = activities
-    .filter((a) => a.dueAt && new Date(a.dueAt).getTime() > now)
-    .sort((a, b) => new Date(a.dueAt!).getTime() - new Date(b.dueAt!).getTime());
-  return upcoming[0] ?? null;
-}
-
 function formatDue(iso: string): string {
   const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs < 0) return 'vencida';
   const hours = Math.round(diffMs / 3600000);
   if (hours < 1) return 'menos de 1 h';
   if (hours < 24) return `${hours} h`;
@@ -43,29 +36,37 @@ function formatDue(iso: string): string {
 export function StudentDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: courses } = useMySubjects();
-  const { data: myProgress, isLoading: progressLoading } = useMyProgress();
+  const { data: allCourses, isLoading: coursesLoading } = useMySubjects();
+  const { data: myProgress, isLoading: myProgressLoading } = useMyProgress();
+  const progressLoading = myProgressLoading || coursesLoading;
+  const { data: pending, isLoading: assignmentsLoading } = useMyPendingActivities();
 
-  const courseIds = useMemo(() => courses?.map((c) => c.id) ?? [], [courses]);
-  const { data: allAssignments, isLoading: assignmentsLoading } =
-    useUpcomingAssignments(courseIds);
+  // Archived cohorts are history: they stay out of the cards and the average.
+  const courses = useMemo(
+    () => allCourses?.filter((c) => c.course.status !== 'ARCHIVED') ?? null,
+    [allCourses],
+  );
+
+  const activeProgress = useMemo(() => {
+    if (!myProgress || !courses) return [];
+    const activeIds = new Set(courses.map((c) => c.id));
+    return myProgress.filter((p: MyProgressItem) => activeIds.has(p.subjectId));
+  }, [myProgress, courses]);
 
   const progressMap = useMemo(() => {
     const map: Record<string, number> = {};
-    if (myProgress) myProgress.forEach((p: MyProgressItem) => { map[p.subjectId] = p.percentage; });
+    activeProgress.forEach((p: MyProgressItem) => { map[p.subjectId] = p.percentage; });
     return map;
-  }, [myProgress]);
+  }, [activeProgress]);
 
   const avgProgress = useMemo(() => {
-    if (!myProgress || myProgress.length === 0) return 0;
-    const sum = myProgress.reduce((acc: number, p: MyProgressItem) => acc + p.percentage, 0);
-    return Math.round(sum / myProgress.length);
-  }, [myProgress]);
+    if (activeProgress.length === 0) return 0;
+    const sum = activeProgress.reduce((acc: number, p: MyProgressItem) => acc + p.percentage, 0);
+    return Math.round(sum / activeProgress.length);
+  }, [activeProgress]);
 
-  const next = useMemo(
-    () => (allAssignments ? nextUpcoming(allAssignments) : null),
-    [allAssignments],
-  );
+  // The backend already drops finished/closed work and sorts by deadline.
+  const next = pending?.[0] ?? null;
 
   const circumference = 2 * Math.PI * 52;
   const dashOffset = circumference * (1 - avgProgress / 100);
@@ -86,7 +87,8 @@ export function StudentDashboard() {
       <div className={styles.grid}>
         {/* Progress ring */}
         <div className={`${styles.card} ${styles.ringCard}`}>
-          <div className={styles.ringTitle}>Progreso del semestre</div>
+          <div className={styles.ringTitle}>Progreso de lecciones</div>
+          <div className={styles.muted}>Lecciones completadas en tus asignaturas activas</div>
           <div className={styles.ringBody}>
             <div className={styles.ring}>
               <svg width="128" height="128" viewBox="0 0 120 120" aria-hidden="true">
@@ -106,9 +108,9 @@ export function StudentDashboard() {
                 {progressLoading ? '–' : `${avgProgress}%`}
               </span>
             </div>
-            {!progressLoading && myProgress && myProgress.length > 0 && (
+            {!progressLoading && activeProgress.length > 0 && (
               <div className={styles.legend}>
-                {myProgress.map((p: MyProgressItem) => {
+                {activeProgress.map((p: MyProgressItem) => {
                   const course = courses?.find((c) => c.id === p.subjectId);
                   if (!course) return null;
                   return (
@@ -131,7 +133,7 @@ export function StudentDashboard() {
 
         {/* Average progress */}
         <div className={`${styles.card} ${styles.statCard}`}>
-          <span className={styles.label}>PROGRESO PROMEDIO</span>
+          <span className={styles.label}>PROMEDIO DE LECCIONES</span>
           <div className={styles.avgValue} data-testid="avg-progress">
             {progressLoading ? '–' : `${avgProgress}%`}
           </div>

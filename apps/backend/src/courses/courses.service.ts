@@ -24,7 +24,7 @@ const subjectLabelSelect = {
   id: true,
   title: true,
   status: true,
-  course: { select: { id: true, name: true, academicYear: true } },
+  course: { select: { id: true, name: true, academicYear: true, status: true } },
 } satisfies Prisma.SubjectSelect;
 
 @Injectable()

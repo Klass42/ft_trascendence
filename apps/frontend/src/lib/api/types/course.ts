@@ -47,7 +47,7 @@ export interface MeSubjectDTO {
   id: string;
   title: string;
   status: PublicationStatus;
-  course: { id: string; name: string; academicYear: string };
+  course: { id: string; name: string; academicYear: string; status: CohortStatus };
 }
 
 export function subjectSelectorLabel(subject: {
@@ -127,6 +127,20 @@ export interface ProgressDTO {
 export interface CompleteLessonDTO {
   completed: boolean;
   progress: number;
+}
+
+/** Row from GET /me/pending-activities: still to hand in, soonest deadline first. */
+export interface PendingActivityDTO {
+  id: string;
+  subjectId: string;
+  title: string;
+  description: string | null;
+  openAt: string | null;
+  dueAt: string | null;
+  closeAt: string | null;
+  attemptsAllowed: number;
+  attemptsUsed: number;
+  inProgress: boolean;
 }
 
 export interface MyProgressItem {

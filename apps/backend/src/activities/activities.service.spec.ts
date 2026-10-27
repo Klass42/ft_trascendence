@@ -433,3 +433,92 @@ describe('ActivitiesService source activity authorization', () => {
     expect(prisma.activity.create).not.toHaveBeenCalled();
   });
 });
+
+describe('ActivitiesService.listMyPendingActivities', () => {
+  const ORG = 'org-klass-0001';
+  const USER = {
+    userId: 'user-lucia-001', email: 'lucia@example.test', name: 'Lucía',
+    avatarUrl: null, organizationId: ORG, role: 'STUDENT',
+    emailNotificationsEnabled: true, preferredLanguage: 'es',
+  } as const;
+  const NOW = new Date('2026-10-27T12:00:00Z');
+  const day = (n: number) => new Date(NOW.getTime() + n * 86400000);
+  const row = (
+    id: string,
+    over: Partial<{
+      dueAt: Date | null; closeAt: Date | null; attemptsAllowed: number;
+      attempts: { status: string }[];
+    }> = {},
+  ) => ({
+    id, subjectId: 'subj-1', title: id, description: null, openAt: null,
+    dueAt: null, closeAt: null, attemptsAllowed: 1, attempts: [], ...over,
+  });
+  const build = (rows: ReturnType<typeof row>[]) => {
+    const findMany = jest.fn().mockResolvedValue(rows);
+    const svc = new ActivitiesService(
+      { activity: { findMany } } as unknown as PrismaService,
+      {} as never,
+    );
+    return { svc, findMany };
+  };
+
+  it('scopes the query to published work of the user in their organization, skipping archived cohorts and closed windows', async () => {
+    const { svc, findMany } = build([]);
+    await svc.listMyPendingActivities(USER, NOW);
+
+    const args = findMany.mock.calls[0][0];
+    expect(args.where.status).toBe('PUBLISHED');
+    expect(args.where.OR).toEqual([{ closeAt: null }, { closeAt: { gt: NOW } }]);
+    expect(args.where.subject).toEqual({
+      organizationId: ORG,
+      status: 'PUBLISHED',
+      course: {
+        organizationId: ORG,
+        status: { not: 'ARCHIVED' },
+        memberships: { some: { userId: USER.userId } },
+      },
+    });
+    expect(args.select.attempts).toEqual({
+      where: { userId: USER.userId },
+      select: { status: true },
+    });
+  });
+
+  it('drops activities already handed in (graded or submitted)', async () => {
+    const { svc } = build([
+      row('graded', { dueAt: day(1), attempts: [{ status: 'GRADED' }] }),
+      row('submitted', { dueAt: day(1), attempts: [{ status: 'SUBMITTED' }] }),
+      row('fresh', { dueAt: day(2) }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => a.id)).toEqual(['fresh']);
+  });
+
+  it('drops handed-in work even with retries left, keeps untouched and in-progress ones', async () => {
+    const { svc } = build([
+      row('retry-left', { dueAt: day(1), attemptsAllowed: 2, attempts: [{ status: 'GRADED' }] }),
+      row('unlimited-done', { dueAt: day(1), attemptsAllowed: 0, attempts: [{ status: 'SUBMITTED' }] }),
+      row('untouched', { dueAt: day(2), attemptsAllowed: 0 }),
+      row('resuming', { dueAt: day(3), attemptsAllowed: 2, attempts: [{ status: 'GRADED' }, { status: 'IN_PROGRESS' }] }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => [a.id, a.attemptsUsed, a.inProgress])).toEqual([
+      ['untouched', 0, false],
+      ['resuming', 2, true],
+    ]);
+  });
+
+  it('sorts by dueAt then closeAt, undated last, and serializes dates', async () => {
+    const { svc } = build([
+      row('undated'),
+      row('closeOnly', { closeAt: day(5) }),
+      row('late', { dueAt: day(9) }),
+      row('soon', { dueAt: day(1), closeAt: day(30) }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => a.id)).toEqual(['soon', 'closeOnly', 'late', 'undated']);
+    expect(out[0].dueAt).toBe(day(1).toISOString());
+    expect(out[3].dueAt).toBeNull();
+    expect(out[0]).not.toHaveProperty('attempts');
+  });
+});

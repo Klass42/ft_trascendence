@@ -123,6 +123,7 @@ export type {
   ProgressDTO,
   CompleteLessonDTO,
   MyProgressItem,
+  PendingActivityDTO,
   CohortStatus,
   PublicationStatus,
   SubjectStaffRole,

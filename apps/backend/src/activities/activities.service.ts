@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   Activity,
+  AttemptStatus,
   Prisma,
   PublicationStatus,
   NotificationType,
@@ -23,6 +24,7 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuthUser } from '@/common/auth';
 import { PreviewGradeDto } from './dto/preview-grade.dto';
 import { gradeResponses } from './grading/grade-responses';
 
@@ -360,6 +362,62 @@ export class ActivitiesService {
       createdAt: a.createdAt.toISOString(),
       dueAt: a.dueAt ? a.dueAt.toISOString() : null,
     }));
+  }
+
+  /**
+   * Activities the signed-in student still has to hand in, soonest deadline
+   * first (feeds "Próxima entrega"). Only PUBLISHED activities of PUBLISHED
+   * subjects in non-archived cohorts the user belongs to, inside their
+   * organization. Left out: closed windows (closeAt passed) and activities the
+   * student already handed in (a retry is optional, not a pending delivery);
+   * one with an attempt in progress stays. Overdue-but-open activities stay
+   * (late attempts are accepted).
+   */
+  async listMyPendingActivities(user: AuthUser, now: Date = new Date()) {
+    const activities = await this.prisma.activity.findMany({
+      where: {
+        status: PublicationStatus.PUBLISHED,
+        OR: [{ closeAt: null }, { closeAt: { gt: now } }],
+        subject: {
+          organizationId: user.organizationId,
+          status: PublicationStatus.PUBLISHED,
+          course: {
+            organizationId: user.organizationId,
+            status: { not: 'ARCHIVED' },
+            memberships: { some: { userId: user.userId } },
+          },
+        },
+      },
+      select: {
+        id: true,
+        subjectId: true,
+        title: true,
+        description: true,
+        openAt: true,
+        dueAt: true,
+        closeAt: true,
+        attemptsAllowed: true,
+        attempts: { where: { userId: user.userId }, select: { status: true } },
+      },
+    });
+
+    const deadline = (a: { dueAt: Date | null; closeAt: Date | null }) =>
+      (a.dueAt ?? a.closeAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+
+    return activities
+      .filter((a) => {
+        const inProgress = a.attempts.some((t) => t.status === AttemptStatus.IN_PROGRESS);
+        return inProgress || a.attempts.length === 0;
+      })
+      .sort((a, b) => deadline(a) - deadline(b) || a.title.localeCompare(b.title))
+      .map(({ attempts, ...a }) => ({
+        ...a,
+        openAt: a.openAt?.toISOString() ?? null,
+        dueAt: a.dueAt?.toISOString() ?? null,
+        closeAt: a.closeAt?.toISOString() ?? null,
+        attemptsUsed: attempts.length,
+        inProgress: attempts.some((t) => t.status === AttemptStatus.IN_PROGRESS),
+      }));
   }
 
   // ─── Authoring: questions ─────────────────────────────────────────────────
