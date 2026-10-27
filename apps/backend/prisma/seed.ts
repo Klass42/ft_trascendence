@@ -6,6 +6,7 @@
  */
 import {
   ActivityType,
+  AttemptStatus,
   CohortStatus,
   FriendStatus,
   PublicationStatus,
@@ -13,6 +14,7 @@ import {
   GlobalRole,
   NotificationType,
   PlatformRole,
+  Prisma,
   PrismaClient,
   QuestionKind,
 } from '@prisma/client';
@@ -479,6 +481,230 @@ async function seedStandard(passwordHash: string): Promise<void> {
       userId: 'user-lucia-001', type: NotificationType.GRADE_PUBLISHED, title: 'Nota publicada',
       body: 'Tu primera entrega ya tiene nota.', link: '/activities?activityId=activity-web-101-quiz',
     },
+  });
+  await seedStandardAcademicActivity(now);
+}
+
+const WEB_SUBJECT = 'course-web-101';
+const QUIZ_ID = 'activity-web-101-quiz';
+const ESSAY_ID = 'activity-web-101-essay';
+const NEXT_QUIZ_ID = 'activity-web-101-quiz-http';
+
+interface SeedQuestion {
+  id: string;
+  kind: QuestionKind;
+  points: number;
+  content: Prisma.InputJsonValue;
+}
+
+/**
+ * Same all-or-nothing rule as the runtime graders (activities/grading/graders.ts)
+ * for the two objective kinds the demo uses. It is repeated here instead of
+ * imported because the runtime image only ships `dist/` and `prisma/`, and the
+ * seed runs with tsx straight from `prisma/`.
+ */
+function autoGrade(question: SeedQuestion, response: Prisma.InputJsonObject): { correct: boolean; awarded: number } {
+  const content = question.content as Record<string, unknown>;
+  let correct: boolean;
+  if (question.kind === QuestionKind.MULTIPLE_CHOICE) {
+    const expected = new Set(content.correct as number[]);
+    const selected = new Set(response.selected as number[]);
+    correct = expected.size === selected.size && [...expected].every((index) => selected.has(index));
+  } else if (question.kind === QuestionKind.TRUE_FALSE) {
+    correct = response.value === content.answer;
+  } else {
+    throw new Error('autoGrade only supports MULTIPLE_CHOICE and TRUE_FALSE, got ' + question.kind);
+  }
+  return { correct, awarded: correct ? question.points : 0 };
+}
+
+/**
+ * Attempts, grades, notifications and one pending friend request for the
+ * standard demo, so analytics, gradebook, "Mis notas" and both dashboards have
+ * data without anyone working by hand first. Timestamps are relative to `now`
+ * (spread over the last 9 days) so the date-range charts always show a curve.
+ * Only touches the active 2025-2026 subject; the archived cohort stays bare.
+ * Attempt, Answer, Notification and Friendship carry no organizationId column:
+ * every row hangs off the `klass` users and subject created by seedStandard.
+ */
+async function seedStandardAcademicActivity(now: Date): Promise<void> {
+  const at = (daysAgo: number, minutes = 0) => new Date(now.getTime() - daysAgo * DAY + minutes * 60 * 1000);
+  const lucia = 'user-lucia-001';
+  const sam = 'user-student-0001';
+  const diego = 'user-diego-001';
+  const theo = 'user-teacher-0001';
+
+  // A second, short task due in 3 days that nobody has started yet.
+  const nextQuizQuestions: SeedQuestion[] = [
+    {
+      id: NEXT_QUIZ_ID + '-question-01', kind: QuestionKind.MULTIPLE_CHOICE, points: 5,
+      content: { options: ['HTTP', 'SMTP', 'FTP'], correct: [0] },
+    },
+    {
+      id: NEXT_QUIZ_ID + '-question-02', kind: QuestionKind.TRUE_FALSE, points: 5,
+      content: { answer: true },
+    },
+  ];
+  await prisma.activity.create({
+    data: {
+      id: NEXT_QUIZ_ID, subjectId: WEB_SUBJECT, type: ActivityType.QUIZ,
+      title: 'Quiz rápido · HTTP y HTML',
+      description: 'Dos preguntas de repaso con corrección automática.',
+      openAt: at(1), dueAt: new Date(now.getTime() + 3 * DAY), maxScore: 10, attemptsAllowed: 2,
+      countsTowardFinal: true,
+      config: { showSolutions: true, shuffleQuestions: false, shuffleOptions: false },
+      status: PublicationStatus.PUBLISHED,
+    },
+  });
+  await prisma.question.createMany({
+    data: [
+      {
+        ...nextQuizQuestions[0], activityId: NEXT_QUIZ_ID, order: 0,
+        prompt: '¿Qué protocolo usa el navegador para pedir una página web?',
+      },
+      {
+        ...nextQuizQuestions[1], activityId: NEXT_QUIZ_ID, order: 1,
+        prompt: 'HTML describe la estructura de una página, no su aspecto.',
+      },
+    ],
+  });
+
+  // ─── Quiz "Autoevaluación de la unidad": two graded attempts for Lucía, one for Sam ───
+  const quizQuestions: SeedQuestion[] = [
+    { id: QUIZ_ID + '-question-01', kind: QuestionKind.MULTIPLE_CHOICE, points: 5, content: { options: ['Opción correcta', 'Distractor'], correct: [0] } },
+    { id: QUIZ_ID + '-question-02', kind: QuestionKind.TRUE_FALSE, points: 5, content: { answer: true } },
+  ];
+  const quizAttempts = [
+    { id: 'attempt-web-101-quiz-lucia-1', userId: lucia, attemptNo: 1, daysAgo: 9, minutes: 12, responses: [{ selected: [1] }, { value: true }] },
+    { id: 'attempt-web-101-quiz-lucia-2', userId: lucia, attemptNo: 2, daysAgo: 7, minutes: 8, responses: [{ selected: [0] }, { value: true }] },
+    { id: 'attempt-web-101-quiz-sam-1', userId: sam, attemptNo: 1, daysAgo: 5, minutes: 15, responses: [{ selected: [0] }, { value: false }] },
+  ];
+  const quizScores = new Map<string, number>();
+  for (const attempt of quizAttempts) {
+    const graded = attempt.responses.map((response, index) => ({
+      question: quizQuestions[index], response, ...autoGrade(quizQuestions[index], response),
+    }));
+    const score = graded.reduce((sum, answer) => sum + answer.awarded, 0);
+    quizScores.set(attempt.id, score);
+    const submittedAt = at(attempt.daysAgo);
+    await prisma.attempt.create({
+      data: {
+        id: attempt.id, activityId: QUIZ_ID, userId: attempt.userId, attemptNo: attempt.attemptNo,
+        status: AttemptStatus.GRADED, startedAt: at(attempt.daysAgo, -attempt.minutes),
+        submittedAt, gradedAt: submittedAt, score,
+        answers: {
+          create: graded.map((answer) => ({
+            id: attempt.id + '-answer-' + answer.question.id.slice(-2),
+            questionId: answer.question.id, response: answer.response,
+            correct: answer.correct, awarded: answer.awarded,
+            createdAt: submittedAt,
+          })),
+        },
+      },
+    });
+  }
+
+  // ─── Task "Ensayo y fichero": graded for Lucía, waiting for the teacher for Sam ───
+  // FILE_UPLOAD answers keep fileIds: [] — the seed never creates File rows
+  // because there is no blob behind them.
+  const essayQuestions = [ESSAY_ID + '-question-01', ESSAY_ID + '-question-02'];
+  const luciaEssaySubmitted = at(3);
+  const luciaEssayGraded = at(2);
+  const luciaEssayId = 'attempt-web-101-essay-lucia-1';
+  const luciaEssayAwarded = 8.5;
+  await prisma.attempt.create({
+    data: {
+      id: luciaEssayId, activityId: ESSAY_ID, userId: lucia, attemptNo: 1,
+      status: AttemptStatus.GRADED, startedAt: at(3, -40),
+      submittedAt: luciaEssaySubmitted, gradedAt: luciaEssayGraded, gradedById: diego,
+      score: luciaEssayAwarded,
+      feedback: 'Buen trabajo: estructura clara y ejemplos acertados. Para la próxima, cita las fuentes que uses.',
+      answers: {
+        create: [
+          {
+            id: luciaEssayId + '-answer-01', questionId: essayQuestions[0],
+            response: {
+              text: 'La web funciona con un modelo cliente-servidor: el navegador envía una petición HTTP y el servidor responde con HTML, CSS y JavaScript. '
+                + 'HTML aporta la estructura y el significado del contenido, CSS controla su presentación y JavaScript añade comportamiento. '
+                + 'Separar estas tres capas facilita el mantenimiento y mejora la accesibilidad.',
+            },
+            awarded: luciaEssayAwarded,
+            feedback: 'Explicas bien el reparto de responsabilidades. Falta mencionar HTTPS.',
+            createdAt: luciaEssaySubmitted,
+          },
+          {
+            id: luciaEssayId + '-answer-02', questionId: essayQuestions[1],
+            response: { fileIds: [] }, awarded: 0, createdAt: luciaEssaySubmitted,
+          },
+        ],
+      },
+    },
+  });
+  const samEssayId = 'attempt-web-101-essay-sam-1';
+  const samEssaySubmitted = at(1);
+  await prisma.attempt.create({
+    data: {
+      id: samEssayId, activityId: ESSAY_ID, userId: sam, attemptNo: 1,
+      status: AttemptStatus.SUBMITTED, startedAt: at(1, -25), submittedAt: samEssaySubmitted,
+      answers: {
+        create: [
+          {
+            id: samEssayId + '-answer-01', questionId: essayQuestions[0],
+            response: {
+              text: 'Cuando escribo una dirección en el navegador, este pide la página al servidor mediante HTTP. '
+                + 'El servidor devuelve un documento HTML y el navegador lo pinta junto con sus estilos.',
+            },
+            createdAt: samEssaySubmitted,
+          },
+          { id: samEssayId + '-answer-02', questionId: essayQuestions[1], response: { fileIds: [] }, createdAt: samEssaySubmitted },
+        ],
+      },
+    },
+  });
+
+  // Sam's first completed lesson (Lucía already has lesson 1).
+  await prisma.lessonCompletion.create({ data: { lessonId: 'lesson-web-101-1', userId: sam } });
+
+  // Pending friend request Diego → Sam.
+  await prisma.friendship.create({
+    data: { requesterId: diego, addresseeId: sam, status: FriendStatus.PENDING, createdAt: at(0, -90) },
+  });
+
+  // Notifications with the same titles/links the real emitters produce.
+  const subjectTitle = 'Introducción al Desarrollo Web';
+  const quizTitle = 'Autoevaluación de la unidad';
+  const essayTitle = 'Tarea · Ensayo y fichero';
+  const nextQuizTitle = 'Quiz rápido · HTTP y HTML';
+  const published = {
+    type: NotificationType.ACTIVITY_PUBLISHED,
+    title: 'Nueva tarea publicada: ' + nextQuizTitle + ' en ' + subjectTitle,
+    link: '/activities?subjectId=' + WEB_SUBJECT + '&activityId=' + NEXT_QUIZ_ID,
+  };
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: sam, type: NotificationType.GRADE_PUBLISHED, title: 'Actividad calificada',
+        body: 'Tu intento 1 de «' + quizTitle + '» ha sido calificado: ' + quizScores.get('attempt-web-101-quiz-sam-1') + '/10',
+        link: '/activities?activityId=' + QUIZ_ID, read: true, createdAt: at(5),
+      },
+      { userId: sam, ...published, createdAt: at(1) },
+      {
+        userId: sam, type: NotificationType.FRIEND_REQUEST, title: 'Tienes una nueva solicitud de amistad',
+        body: 'Puedes revisar tus solicitudes desde Amigos.', link: '/friends', createdAt: at(0, -90),
+      },
+      { userId: lucia, ...published, createdAt: at(1) },
+      {
+        userId: lucia, type: NotificationType.GRADE_PUBLISHED, title: 'Actividad calificada',
+        body: 'Tu intento 1 de «' + essayTitle + '» ha sido calificado: ' + luciaEssayAwarded + '/10',
+        link: '/activities?activityId=' + ESSAY_ID, createdAt: luciaEssayGraded,
+      },
+      ...[theo, diego].map((userId) => ({
+        userId, type: NotificationType.SUBMISSION_RECEIVED, title: 'Nueva entrega para corregir',
+        body: 'Sam Student ha entregado «' + essayTitle + '»',
+        link: '/grades?subjectId=' + WEB_SUBJECT + '&activityId=' + ESSAY_ID + '&attemptId=' + samEssayId,
+        createdAt: samEssaySubmitted,
+      })),
+    ],
   });
 }
 
