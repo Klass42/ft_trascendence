@@ -26,6 +26,8 @@ import {
   useToast,
 } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
+import { parseVideoUrl, validateVideoUrl, VIDEO_URL_MAX_LENGTH } from '@/lib/video-embed';
+import { VideoPlayer } from './VideoPlayer';
 import styles from './ContentEditor.module.css';
 
 /** Mirrors the GENERAL allowlist in apps/backend/src/files/file-validation.ts. */
@@ -236,6 +238,8 @@ function SectionEditor({
   const [confirmDeleteLesson, setConfirmDeleteLesson] = useState<string | null>(null);
 
   const lessons = section.lessons ?? [];
+  const videoError = validateVideoUrl(editLessonVideo);
+  const videoSource = parseVideoUrl(editLessonVideo);
 
   const handleRename = async () => {
     if (!newTitle.trim()) return;
@@ -295,12 +299,13 @@ function SectionEditor({
   };
 
   const handleUpdateLesson = async () => {
-    if (!editingLessonId || !editLessonTitle.trim()) return;
+    if (!editingLessonId || !editLessonTitle.trim() || videoError) return;
     try {
       await updateLesson(section.id, editingLessonId, {
         title: editLessonTitle.trim(),
         contentMd: editLessonContent || undefined,
-        videoUrl: editLessonVideo || undefined,
+        // Empty string clears the video on the server.
+        videoUrl: editLessonVideo.trim(),
       });
       setEditingLessonId(null);
       toast({ message: 'Lección actualizada', variant: 'success' });
@@ -381,13 +386,27 @@ function SectionEditor({
             />
             <Input
               label="URL del video"
+              type="url"
               value={editLessonVideo}
+              maxLength={VIDEO_URL_MAX_LENGTH}
               onChange={(e) => setEditLessonVideo(e.target.value)}
-              placeholder="https://..."
+              placeholder="https://www.youtube.com/watch?v=..."
+              error={videoError ?? undefined}
+              hint="YouTube, Vimeo o un archivo .mp4, .webm u .ogg. Déjalo vacío para quitar el vídeo."
             />
+            {videoSource && !videoError && (
+              <div className={styles.videoPreview}>
+                {videoSource.kind === 'link' && (
+                  <p className={styles.videoPreviewNote}>
+                    No se puede incrustar este enlace: los alumnos verán un botón para abrirlo.
+                  </p>
+                )}
+                <VideoPlayer url={editLessonVideo} title={editLessonTitle || 'Lección'} />
+              </div>
+            )}
             <LessonAttachments lessonId={lesson.id} />
             <div className={styles.actions}>
-              <Button size="sm" onClick={handleUpdateLesson}>Guardar</Button>
+              <Button size="sm" onClick={handleUpdateLesson} disabled={!!videoError}>Guardar</Button>
               <Button size="sm" variant="ghost" onClick={() => setEditingLessonId(null)}>Cancelar</Button>
             </div>
           </div>

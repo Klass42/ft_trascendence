@@ -35,6 +35,7 @@ export {
   useLessonById,
   useProgress,
   useCompleteLesson,
+  useLessonProgress,
   useEnroll,
   useCompletedLessons,
   useMyProgress,

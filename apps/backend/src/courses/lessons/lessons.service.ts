@@ -80,7 +80,7 @@ export class LessonsService {
         sectionId,
         title: dto.title,
         contentMd: dto.contentMd,
-        videoUrl: dto.videoUrl,
+        videoUrl: dto.videoUrl || null,
         order: dto.order ?? 0,
       },
     });
@@ -141,7 +141,10 @@ export class LessonsService {
 
     const updated = await this.prisma.lesson.update({
       where: { id: lessonId },
-      data: dto,
+      data: {
+        ...dto,
+        ...(dto.videoUrl !== undefined && { videoUrl: dto.videoUrl || null }),
+      },
     });
     await this.notifyContent(lessonId, organizationId, actorId, `Lección actualizada: ${updated.title}`);
     return updated;
