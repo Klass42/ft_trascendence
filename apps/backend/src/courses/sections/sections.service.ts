@@ -18,7 +18,7 @@ export class SectionsService {
       where: { id: subjectId, organizationId },
     });
     if (!subject) {
-      throw new NotFoundException(`Subject ${subjectId} not found`);
+      throw new NotFoundException('Asignatura no encontrada.');
     }
     return subject;
   }
@@ -60,7 +60,7 @@ export class SectionsService {
     });
 
     if (!section || section.subjectId !== subjectId) {
-      throw new NotFoundException(`Section ${sectionId} not found`);
+      throw new NotFoundException('Sección no encontrada.');
     }
 
     return section;
@@ -97,7 +97,7 @@ export class SectionsService {
     actorId?: string,
   ) {
     if (!orderedIds || orderedIds.length === 0) {
-      throw new BadRequestException('orderedIds must not be empty');
+      throw new BadRequestException('La lista de elementos a ordenar no puede estar vacía.');
     }
 
     await this.findSubjectOrThrow(subjectId, organizationId);
@@ -112,7 +112,7 @@ export class SectionsService {
 
     if (missing.length > 0) {
       throw new NotFoundException(
-        `Sections not found: ${missing.join(', ')}`,
+        'Alguna de las secciones indicadas no existe.',
       );
     }
 

@@ -538,7 +538,7 @@ export function ContentEditor({ courseId }: { courseId: string }) {
   return (
     <div className={styles.editor}>
       <div className={styles.header}>
-        <h2 className={styles.heading}>Estructura del curso</h2>
+        <h2 className={styles.heading}>Estructura de la asignatura</h2>
         {addingSection ? (
           <div className={styles.inlineForm}>
             <Input
@@ -561,7 +561,7 @@ export function ContentEditor({ courseId }: { courseId: string }) {
 
       {(!sections || sections.length === 0) && !addingSection && (
         <EmptyState
-          title="El curso no tiene secciones todavía"
+          title="La asignatura no tiene secciones todavía"
           description="Crea la primera sección para empezar."
         />
       )}

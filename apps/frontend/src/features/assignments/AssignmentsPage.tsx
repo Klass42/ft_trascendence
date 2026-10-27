@@ -18,8 +18,8 @@ import {
   useDeleteAssignment,
 } from '@/lib/api';
 import type { AssignmentDTO } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import {
-  formatDate,
   isOverdue,
   windowState,
   WINDOW_BADGE,
@@ -113,7 +113,7 @@ export function AssignmentsPage() {
         {courses && courses.length > 0 && (
           <div style={{ marginLeft: 'auto', minWidth: 220 }}>
             <Select
-              aria-label="Curso"
+              aria-label="Asignatura"
               value={courseId ?? ''}
               onChange={(e) => {
                 setCourseId(e.target.value);
@@ -126,12 +126,12 @@ export function AssignmentsPage() {
         )}
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
         <EmptyState
-          title="No hay cursos disponibles"
-          description="Cuando tengas cursos, sus tareas aparecerán aquí."
+          title="No hay asignaturas disponibles"
+          description="Cuando tengas asignaturas, sus tareas aparecerán aquí."
         />
       )}
 
@@ -170,7 +170,7 @@ export function AssignmentsPage() {
 
             {assignmentsError && (
               <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
-                No se pudieron cargar las tareas (¿estás inscrito en este curso?).
+                No se pudieron cargar las tareas (¿estás inscrito en esta asignatura?).
               </p>
             )}
 
@@ -180,7 +180,7 @@ export function AssignmentsPage() {
                 description={
                   isStaff
                     ? 'Crea la primera tarea con el botón de arriba.'
-                    : 'Este curso aún no tiene tareas.'
+                    : 'Esta asignatura aún no tiene tareas.'
                 }
               />
             )}
@@ -236,7 +236,7 @@ export function AssignmentsPage() {
                         marginTop: 3,
                       }}
                     >
-                      {a.dueAt ? `Vence ${formatDate(a.dueAt)}` : 'Sin fecha límite'}
+                      {a.dueAt ? `Vence ${formatDateTime(a.dueAt)}` : 'Sin fecha límite'}
                     </div>
                   </button>
                 );
@@ -365,11 +365,11 @@ function AssignmentDetail({
         }}
       >
         <span>
-          {assignment.openAt ? `Abre ${formatDate(assignment.openAt)} · ` : ''}
+          {assignment.openAt ? `Abre ${formatDateTime(assignment.openAt)} · ` : ''}
           {assignment.dueAt
-            ? `Entrega ${formatDate(assignment.dueAt)}`
+            ? `Entrega ${formatDateTime(assignment.dueAt)}`
             : 'Sin fecha límite'}
-          {assignment.closeAt ? ` · Cierra ${formatDate(assignment.closeAt)}` : ''}
+          {assignment.closeAt ? ` · Cierra ${formatDateTime(assignment.closeAt)}` : ''}
         </span>
         <span>· {assignment.maxScore} pts</span>
       </div>

@@ -22,12 +22,12 @@ import {
   useUpdateThread,
 } from '@/lib/api';
 import type { ForumPostDTO } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { CharCounter } from './CharCounter';
 import {
   FORUM_BODY_MAX,
   FORUM_TITLE_MAX,
   bodyError,
-  formatDateTime,
   initialsOf,
   isStaffRole,
   titleError,

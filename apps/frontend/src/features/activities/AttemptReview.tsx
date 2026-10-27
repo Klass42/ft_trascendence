@@ -1,7 +1,8 @@
 import { Badge, Button, Spinner } from '@/components/ui';
 import { useMyAttempt } from '@/lib/api';
 import type { AnswerDTO, AttemptDTO, QuestionDTO } from '@/lib/api';
-import { formatDate, openFile } from '../assignments/helpers';
+import { openFile } from '../assignments/helpers';
+import { formatDateTime, plural } from '@/lib/format';
 import {
   ATTEMPT_STATUS_BADGE,
   formatAnswer,
@@ -37,7 +38,7 @@ export function AttemptHistory({ attempts, maxScore, selectedId, onSelect, notic
               <span className={styles.attemptMeta}>
                 <strong>Intento {attempt.attemptNo}</strong>
                 <Badge variant={badge.variant}>{badge.label}</Badge>
-                {attempt.submittedAt && <span className={styles.muted}>{formatDate(attempt.submittedAt)}</span>}
+                {attempt.submittedAt && <span className={styles.muted}>{formatDateTime(attempt.submittedAt)}</span>}
               </span>
               <span className={styles.attemptActions}>
                 <strong>
@@ -123,7 +124,7 @@ function ReviewQuestion({ question, number, answer }: { question: QuestionDTO; n
       <p className={styles.answer}>
         <strong>Tu respuesta:</strong>{' '}
         {question.kind === 'FILE_UPLOAD'
-          ? (fileIds.length === 0 ? 'Sin respuesta' : files.length === 0 ? `${fileIds.length} ${fileIds.length === 1 ? 'fichero entregado' : 'ficheros entregados'}` : '')
+          ? (fileIds.length === 0 ? 'Sin respuesta' : files.length === 0 ? plural(fileIds.length, 'archivo entregado', 'archivos entregados') : '')
           : formatAnswer(question, answer?.response)}
       </p>
       {files.length > 0 && (

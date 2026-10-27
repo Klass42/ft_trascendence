@@ -1,5 +1,6 @@
 import { useUsers, useMySubjects } from '@/lib/api';
 import { Avatar, Spinner, EmptyState } from '@/components/ui';
+import { formatDate } from '@/lib/format';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './AdminDashboard.module.css';
 
@@ -10,7 +11,7 @@ export function AdminDashboard() {
   if (usersLoading || coursesLoading) {
     return (
       <>
-        <DashboardHeader title="Panel de administración" roleLabel="Admin" />
+        <DashboardHeader title="Panel de administración" roleLabel="Administrador" />
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
           <Spinner />
         </div>
@@ -26,7 +27,7 @@ export function AdminDashboard() {
 
   return (
     <>
-      <DashboardHeader title="Panel de administración" roleLabel="Admin" />
+      <DashboardHeader title="Panel de administración" roleLabel="Administrador" />
 
       <div className={styles.kpis}>
         <div className={styles.kpiCard}>
@@ -34,7 +35,7 @@ export function AdminDashboard() {
           <div className={styles.kpiValue}>{userCount}</div>
         </div>
         <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Cursos</div>
+          <div className={styles.kpiLabel}>Asignaturas</div>
           <div className={styles.kpiValue}>{courseCount}</div>
         </div>
       </div>
@@ -46,8 +47,8 @@ export function AdminDashboard() {
       ) : (
         <div className={styles.table}>
           {recentUsers.map((u) => {
-            const roleLabel = u.role === 'ADMIN' ? 'Admin' : u.role === 'TEACHER' ? 'Profesor' : 'Alumno';
-            const joined = new Date(u.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            const roleLabel = u.role === 'ADMIN' ? 'Administrador' : u.role === 'TEACHER' ? 'Profesor' : 'Alumno';
+            const joined = formatDate(u.createdAt);
 
             return (
               <div key={u.id} className={styles.row}>

@@ -80,7 +80,7 @@ export class S3StorageDriver extends StorageService {
       return { bucket: this.config.bucket, objectKey };
     } catch (error) {
       this.logger.error(`Failed to upload object ${objectKey}`, error instanceof Error ? error.stack : undefined);
-      throw new ServiceUnavailableException('Unable to store the uploaded file');
+      throw new ServiceUnavailableException('No se pudo guardar el archivo subido.');
     }
   }
 
@@ -94,7 +94,7 @@ export class S3StorageDriver extends StorageService {
       return result.Body as unknown as Readable;
     } catch (error) {
       this.logger.error(`Failed to read object ${objectKey}`, error instanceof Error ? error.stack : undefined);
-      throw new ServiceUnavailableException('Unable to read the stored file');
+      throw new ServiceUnavailableException('No se pudo leer el archivo guardado.');
     }
   }
 
@@ -106,7 +106,7 @@ export class S3StorageDriver extends StorageService {
       }));
     } catch (error) {
       this.logger.error(`Failed to delete object ${objectKey}`, error instanceof Error ? error.stack : undefined);
-      throw new ServiceUnavailableException('Unable to delete the stored file');
+      throw new ServiceUnavailableException('No se pudo eliminar el archivo guardado.');
     }
   }
 }

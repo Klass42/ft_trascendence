@@ -307,7 +307,7 @@ describe('AnalyticsService', () => {
       '2025-06-03',
     );
 
-    expect(result.csv).toContain("Resumen,Curso,'=2+3");
+    expect(result.csv).toContain("Resumen,Asignatura,'=2+3");
     expect(result.csv).toContain('Entregas por día,2025-06-03,3');
     expect(result.csv).toContain('Resumen,Entregas,4/6');
     expect(result.csv).toContain('Resumen,Notas calificadas,3');

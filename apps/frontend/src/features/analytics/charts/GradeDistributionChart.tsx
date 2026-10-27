@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GradeBucketDTO } from '@/lib/api';
+import { plural } from '@/lib/format';
 import styles from '../analytics.module.css';
 
 const VW = 640;
@@ -47,7 +48,7 @@ export function GradeDistributionChart({ buckets }: Props) {
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
         role="group"
-        aria-label={`Distribución de notas sobre ${total} entregas calificadas.`}
+        aria-label={`Distribución de notas sobre ${plural(total, 'entrega calificada', 'entregas calificadas')}.`}
         onMouseLeave={() => setActive(null)}
       >
         {yTicks.map((t) => {
@@ -93,7 +94,7 @@ export function GradeDistributionChart({ buckets }: Props) {
                 height={PLOT_H}
                 tabIndex={0}
                 role="img"
-                aria-label={`${b.label}%: ${b.count} entregas`}
+                aria-label={`${b.label}%: ${plural(b.count, 'entrega', 'entregas')}`}
                 onMouseEnter={() => setActive(i)}
                 onFocus={() => setActive(i)}
                 onBlur={() => setActive(null)}

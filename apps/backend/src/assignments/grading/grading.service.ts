@@ -58,7 +58,7 @@ export class GradingService {
       select: { id: true, userId: true, assignmentId: true },
     });
     if (!submission) {
-      throw new NotFoundException(`Submission ${submissionId} not found`);
+      throw new NotFoundException('Entrega no encontrada.');
     }
 
     // Staff-only gate; also derives the tenant org from the parent course.
@@ -70,7 +70,7 @@ export class GradingService {
 
     if (dto.score > assignment.maxScore) {
       throw new BadRequestException(
-        `Score must be between 0 and ${assignment.maxScore}`,
+        `La nota debe estar entre 0 y ${assignment.maxScore}.`,
       );
     }
 

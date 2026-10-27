@@ -318,7 +318,7 @@ export function CourseCohortPage() {
 
   return (
     <div className={styles.page}>
-      <Button variant="ghost" size="sm" onClick={() => navigate('/courses')}>← Mis cursos</Button>
+      <Button variant="ghost" size="sm" onClick={() => navigate('/courses')}>← Cohortes</Button>
       <header className={styles.header}>
         <div className={styles.heading}>
           <Badge variant={course.status === 'ACTIVE' ? 'success' : course.status === 'ARCHIVED' ? 'neutral' : 'info'} dot>

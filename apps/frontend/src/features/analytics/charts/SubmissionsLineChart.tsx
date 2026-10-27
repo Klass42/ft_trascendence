@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SubmissionsSeriesPointDTO } from '@/lib/api';
+import { plural } from '@/lib/format';
 import styles from '../analytics.module.css';
 
 // Fixed viewBox coordinate space; the SVG scales to the container width and the
@@ -112,7 +113,7 @@ export function SubmissionsLineChart({ series }: Props) {
               height={PLOT_H}
               tabIndex={0}
               role="img"
-              aria-label={`${p.date}: ${p.count} entregas`}
+              aria-label={`${p.date}: ${plural(p.count, 'entrega', 'entregas')}`}
               onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}
               onBlur={() => setActive(null)}

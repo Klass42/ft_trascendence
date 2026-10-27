@@ -168,12 +168,12 @@ export function GradebookPage() {
         </div>
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
         <EmptyState
-          title="No hay cursos disponibles"
-          description="Cuando impartas un curso, su libro de notas aparecerá aquí."
+          title="No hay asignaturas disponibles"
+          description="Cuando impartas una asignatura, sus calificaciones aparecerán aquí."
         />
       )}
 
@@ -181,7 +181,7 @@ export function GradebookPage() {
 
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
-          No se pudo cargar el gradebook (¿eres profesor de este curso?).
+          No se pudieron cargar las calificaciones (¿eres profesor de esta asignatura?).
         </p>
       )}
 
@@ -189,7 +189,7 @@ export function GradebookPage() {
         <>
           {gradebook.items.length === 0 ? (
             <EmptyState
-              title="Este curso no tiene tareas todavía"
+              title="Esta asignatura no tiene tareas todavía"
               description="Publica una tarea para ver columnas de notas."
             />
           ) : gradebook.students.length === 0 ? (

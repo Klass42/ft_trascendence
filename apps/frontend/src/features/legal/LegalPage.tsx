@@ -36,9 +36,9 @@ const COPY: Record<LegalDocument, LegalCopy> = {
         <>
           El responsable del tratamiento es {LEGAL_INFO.controller}. Klass es la plataforma de
           aprendizaje de la organización en la que tienes una cuenta; para los datos académicos de
-          esa organización (cursos, entregas, calificaciones) tu punto de contacto es{' '}
+          esa organización (cohortes, asignaturas, entregas, calificaciones) tu punto de contacto es{' '}
           {LEGAL_INFO.organizationContact}. Esta política se aplica a los datos tratados al
-          registrarte, acceder a cursos, entregar actividades y usar las herramientas de
+          registrarte, acceder a tus asignaturas, entregar tareas y usar las herramientas de
           comunicación de Klass.
         </>,
       ],
@@ -48,11 +48,11 @@ const COPY: Record<LegalDocument, LegalCopy> = {
       ],
       [
         'Finalidad y conservación',
-        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en cursos y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando el administrador de una organización elimina una cuenta, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma el borrado de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
+        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en las asignaturas y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando el administrador de una organización elimina una cuenta, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma el borrado de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
       ],
       [
         'Acceso y destinatarios',
-        'Solo pueden acceder a tus datos las personas autorizadas de tu organización según su rol y relación con cada curso. No vendemos datos personales ni los usamos para publicidad. Los proveedores de infraestructura solo los tratan para alojar y operar el servicio bajo instrucciones de Klass.',
+        'Solo pueden acceder a tus datos las personas autorizadas de tu organización según su rol y relación con cada asignatura. No vendemos datos personales ni los usamos para publicidad. Los proveedores de infraestructura solo los tratan para alojar y operar el servicio bajo instrucciones de Klass.',
       ],
       [
         'Tus derechos y contacto',

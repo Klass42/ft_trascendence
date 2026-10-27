@@ -10,7 +10,7 @@ export class PlatformRolesGuard implements CanActivate {
     const roles = this.reflector.getAllAndOverride<AuthUser['platformRole'][] | undefined>(PLATFORM_ROLES_KEY, [context.getHandler(), context.getClass()]);
     if (!roles?.length) return true;
     const user = context.switchToHttp().getRequest<{ user?: AuthUser }>().user;
-    if (!user || !user.platformRole || !roles.includes(user.platformRole)) throw new ForbiddenException('Platform access required');
+    if (!user || !user.platformRole || !roles.includes(user.platformRole)) throw new ForbiddenException('Se requiere acceso de administración de plataforma.');
     return true;
   }
 }

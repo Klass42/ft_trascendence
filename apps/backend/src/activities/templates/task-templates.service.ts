@@ -64,7 +64,7 @@ export class TaskTemplatesService {
       where: { id },
     });
     if (!template || template.organizationId !== user.organizationId) {
-      throw new NotFoundException(`Task template ${id} not found`);
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
     }
     return template;
   }
@@ -77,7 +77,7 @@ export class TaskTemplatesService {
       where: { id, organizationId: user.organizationId },
     });
     if (!template) {
-      throw new NotFoundException(`Task template ${id} not found`);
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
     }
 
     const blocks = template.blocks as unknown as TemplateBlock[];
@@ -145,7 +145,7 @@ export class TaskTemplatesService {
       },
     });
     if (!activity) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
 
     await this.access.assertSubjectStaffForUser(activity.subjectId, actingUserId);
@@ -183,7 +183,7 @@ export class TaskTemplatesService {
       where: { id: actingUserId },
     });
     if (!user?.organizationId) {
-      throw new NotFoundException('Task templates not found');
+      throw new NotFoundException('Plantillas de tarea no encontradas.');
     }
     return user as typeof user & { organizationId: string };
   }
@@ -203,7 +203,7 @@ export class TaskTemplatesService {
       },
     });
     if (!staff) {
-      throw new NotFoundException('Task templates not found');
+      throw new NotFoundException('Plantillas de tarea no encontradas.');
     }
   }
 
@@ -216,7 +216,7 @@ export class TaskTemplatesService {
       return;
     }
     throw new ForbiddenException(
-      'Only teachers and administrators can create templates',
+      'Solo profesores y administradores pueden crear plantillas.',
     );
   }
 
@@ -226,14 +226,14 @@ export class TaskTemplatesService {
       where: { id },
     });
     if (!template || template.organizationId !== user.organizationId) {
-      throw new NotFoundException(`Task template ${id} not found`);
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
     }
     if (
       template.createdById !== actingUserId &&
       user.role !== GlobalRole.ADMIN
     ) {
       throw new ForbiddenException(
-        'Only the author or an organization admin can modify this template',
+        'Solo el autor o un administrador de la organización pueden modificar esta plantilla.',
       );
     }
     return template;

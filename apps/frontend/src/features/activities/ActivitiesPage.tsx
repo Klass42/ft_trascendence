@@ -24,11 +24,12 @@ import {
   subjectSelectorLabel,
 } from '@/lib/api';
 import type { ActivityDTO } from '@/lib/api';
-import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
+import { windowState, WINDOW_BADGE } from '../assignments/helpers';
+import { formatDateTime } from '@/lib/format';
 import {
   ATTEMPT_STATUS_BADGE,
   attemptsAllowedLabel,
-  blocksLabel,
+  questionsLabel,
   isSubjective,
   plural,
   pointsLabel,
@@ -203,12 +204,12 @@ export function ActivitiesPage() {
         )}
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
         <EmptyState
-          title="No hay cursos disponibles"
-          description="Cuando impartas un curso, sus tareas aparecerán aquí."
+          title="No hay asignaturas disponibles"
+          description="Cuando impartas una asignatura, sus tareas aparecerán aquí."
         />
       )}
 
@@ -229,7 +230,7 @@ export function ActivitiesPage() {
 
             {activitiesError && (
               <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
-                No se pudieron cargar las tareas (¿impartes este curso?).
+                No se pudieron cargar las tareas (¿impartes esta asignatura?).
               </p>
             )}
 
@@ -264,7 +265,7 @@ export function ActivitiesPage() {
                       <Badge variant={status.variant} dot>{status.label}</Badge>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>
-                      {blocksLabel(a.questions?.length ?? 0)} · {pointsLabel(a.maxScore)}
+                      {questionsLabel(a.questions?.length ?? 0)} · {pointsLabel(a.maxScore)}
                       {a.countsTowardFinal === false ? ' · práctica' : ''}
                     </div>
                   </button>
@@ -385,13 +386,13 @@ function StudentActivitiesPage() {
           setSearchParams(next, { replace: true });
         }} options={courses.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))} /></div> : null}
       </div>
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
-      {!coursesLoading && !courses?.length && <EmptyState title="No tienes cursos disponibles" description="Cuando te matricules en un curso, sus tareas aparecerán aquí." />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
+      {!coursesLoading && !courses?.length && <EmptyState title="No tienes asignaturas disponibles" description="Cuando te matricules en una cohorte, sus tareas aparecerán aquí." />}
       {courseId && <div className={styles.columns}>
         <div className={styles.listColumn}>
           {isLoading && <Spinner size="md" label="Cargando tareas…" />}
-          {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las tareas de este curso.</p>}
-          {activities?.length === 0 && !isLoading && <EmptyState title="Sin tareas todavía" description="Este curso aún no tiene tareas publicadas." />}
+          {error && <p style={{ color: 'var(--color-error)', fontSize: 14 }}>No se pudieron cargar las tareas de esta asignatura.</p>}
+          {activities?.length === 0 && !isLoading && <EmptyState title="Sin tareas todavía" description="Esta asignatura aún no tiene tareas publicadas." />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {activities?.map((activity) => {
               const active = activity.id === selectedId;
@@ -404,7 +405,7 @@ function StudentActivitiesPage() {
                   : WINDOW_BADGE[windowState(activity.openAt, activity.closeAt)];
               return <button key={activity.id} type="button" onClick={() => selectActivity(activity.id)} style={{ textAlign: 'left', background: active ? 'var(--color-accent-muted)' : 'var(--color-bg-secondary)', border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-primary)'}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 700, fontSize: 14.5 }}>{activity.title}</span><Badge variant={badge.variant}>{badge.label}</Badge></div>
-                <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{blocksLabel(activity.questions?.length ?? 0)} · {pointsLabel(activity.maxScore)}{activity.countsTowardFinal === false ? ' · práctica' : ''}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{questionsLabel(activity.questions?.length ?? 0)} · {pointsLabel(activity.maxScore)}{activity.countsTowardFinal === false ? ' · práctica' : ''}</div>
               </button>;
             })}
           </div>
@@ -470,7 +471,7 @@ function ActivityDetail({
   async function togglePublish() {
     try {
       if (!published && !canPublish) {
-        toast({ variant: 'error', message: 'Añade al menos un bloque antes de publicar.' });
+        toast({ variant: 'error', message: 'Añade al menos una pregunta antes de publicar.' });
         return;
       }
       if (!published) {
@@ -573,9 +574,9 @@ function ActivityDetail({
 
       <div style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '10px 0 16px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <span>
-          {activity.openAt ? `Abre ${formatDate(activity.openAt)} · ` : ''}
-          {activity.dueAt ? `Entrega ${formatDate(activity.dueAt)}` : 'Sin fecha límite'}
-          {activity.closeAt ? ` · Cierra ${formatDate(activity.closeAt)}` : ''}
+          {activity.openAt ? `Abre ${formatDateTime(activity.openAt)} · ` : ''}
+          {activity.dueAt ? `Entrega ${formatDateTime(activity.dueAt)}` : 'Sin fecha límite'}
+          {activity.closeAt ? ` · Cierra ${formatDateTime(activity.closeAt)}` : ''}
         </span>
         <span>· {pointsLabel(activity.maxScore)}</span>
         <span>· {attemptsAllowedLabel(activity.attemptsAllowed)}</span>

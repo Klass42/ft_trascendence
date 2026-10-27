@@ -91,6 +91,7 @@ export function AuthRateLimit(route: AuthRateLimitRoute) {
 }
 
 export const AuthThrottlerModule = ThrottlerModule.forRoot({
+  errorMessage: 'Demasiados intentos. Espera un momento y vuelve a intentarlo.',
   skipIf: () => process.env.NODE_ENV === 'test',
   throttlers: Object.values(policies).map(({ name, limit }) => ({
     name,

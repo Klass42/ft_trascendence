@@ -24,10 +24,10 @@ export class PlatformService {
    const invitation = await tx.organizationInvitation.create({ data: { organizationId: organization.id, email: dto.adminEmail, role: 'ADMIN', tokenHash: token.hash, expiresAt, invitedById: actorId } });
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_PROVISIONED', organizationId: organization.id, metadata: { firstAdminEmail: dto.adminEmail, invitationId: invitation.id } } });
    return { organization, invitationId: invitation.id };
-  }); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Organization slug already exists'); throw error; }
+  }); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Ya existe una organización con ese código.'); throw error; }
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
- async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
+ async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); if (!org) throw new NotFoundException('Organización no encontrada.'); return org; }
  async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) {
   // Suspending through PATCH must also revoke sessions (issue #106).
   if (dto.status === 'SUSPENDED') { const { status: _s, ...rest } = dto; if (Object.keys(rest).length) await this.updateOrganization(id, rest as UpdatePlatformOrganizationDto, actorId); return this.suspend(id, actorId); }
@@ -40,11 +40,11 @@ export class PlatformService {
   await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } });
   await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha actualizado`, 'Se han cambiado sus datos o configuración.');
   return org;
-  } catch (error: any) { if (error?.code === 'P2025') throw new NotFoundException('Organización no encontrada'); throw error; }
+  } catch (error: any) { if (error?.code === 'P2025') throw new NotFoundException('Organización no encontrada.'); throw error; }
  }
  async suspend(id: string, actorId: string) {
   const exists = await this.prisma.organization.findUnique({ where: { id }, select: { id: true } });
-  if (!exists) throw new NotFoundException('Organización no encontrada');
+  if (!exists) throw new NotFoundException('Organización no encontrada.');
   const org = await this.prisma.$transaction(async tx => {
    const updated = await tx.organization.update({
     where: { id },
@@ -61,7 +61,7 @@ export class PlatformService {
  }
  async deleteOrganization(id: string, actorId: string) {
   const org = await this.prisma.organization.findUnique({ where: { id } });
-  if (!org) throw new NotFoundException('Organization not found');
+  if (!org) throw new NotFoundException('Organización no encontrada.');
   const objectKeys = await this.prisma.$transaction(async tx => {
    const files = await tx.file.findMany({ where: { organizationId: id }, select: { objectKey: true } });
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_DELETED', organizationId: id, metadata: { name: org.name, slug: org.slug } } });
@@ -81,9 +81,9 @@ export class PlatformService {
  // recipient still sets their own password on accept.
  async inviteAdmin(organizationId: string, dto: CreatePlatformOrganizationAdminDto, actorId: string) {
   const organization = await this.prisma.organization.findUnique({ where: { id: organizationId } });
-  if (!organization) throw new NotFoundException('Organization not found');
+  if (!organization) throw new NotFoundException('Organización no encontrada.');
   const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
-  if (existing) throw new ConflictException('A user with this email already belongs to this organization');
+  if (existing) throw new ConflictException('Ya existe una persona con ese correo electrónico en esta organización.');
 
   const token = this.token(); const expiresAt = new Date(Date.now() + 7 * 86400000);
   const invitation = await this.prisma.$transaction(async tx => {

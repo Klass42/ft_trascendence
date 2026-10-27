@@ -1,7 +1,8 @@
 import { Spinner } from '@/components/ui';
 import { useAssignmentSubmissions } from '@/lib/api';
 import type { AssignmentDTO } from '@/lib/api';
-import { STATUS_CHIP, formatDate, openFile } from './helpers';
+import { STATUS_CHIP, openFile } from './helpers';
+import { formatDateTime } from '@/lib/format';
 
 interface SubmissionsListProps {
   assignment: AssignmentDTO;
@@ -51,7 +52,7 @@ export function SubmissionsList({ assignment }: SubmissionsListProps) {
                 <div
                   style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}
                 >
-                  {formatDate(s.updatedAt)}
+                  {formatDateTime(s.updatedAt)}
                 </div>
               </div>
               <span

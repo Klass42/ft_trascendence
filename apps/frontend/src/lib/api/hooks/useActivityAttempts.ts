@@ -41,7 +41,7 @@ export function useActivityAttempts(activityId: string | null): UseActivityAttem
   }, [activityId, user, nonce]);
 
   const start = useCallback(async () => {
-    if (!activityId) throw new Error('No hay actividad seleccionada.');
+    if (!activityId) throw new Error('No hay ninguna tarea seleccionada.');
     const attempt = await apiClient.post<AttemptDTO>(`/activities/${activityId}/attempts`);
     setAttempts((previous) => {
       const rest = (previous ?? []).filter((item) => item.id !== attempt.id);

@@ -185,7 +185,7 @@ describe('Google OAuth HTTP', () => {
       expect(res.headers.location).toBeUndefined();
       expect(res.body).toMatchObject({
         statusCode: 400,
-        message: 'Organization code is required',
+        message: 'El código de organización es obligatorio.',
       });
       expect(res.body).not.toMatchObject({ statusCode: 401, message: 'Unauthorized' });
     });
@@ -202,7 +202,7 @@ describe('Google OAuth HTTP', () => {
         expect(res.headers.location).toBeUndefined();
         expect(res.body).toMatchObject({
           statusCode: 400,
-          message: 'Organization code is required',
+          message: 'El código de organización es obligatorio.',
         });
       },
     );

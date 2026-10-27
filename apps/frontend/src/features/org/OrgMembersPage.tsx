@@ -10,7 +10,7 @@ import type { MemberDTO } from './types';
 import styles from './OrgMembersPage.module.css';
 
 const ROLE_LABEL: Record<GlobalRole, string> = {
-  ADMIN: 'Admin',
+  ADMIN: 'Administrador',
   TEACHER: 'Profesor',
   STUDENT: 'Alumno',
 };
@@ -68,7 +68,7 @@ export function OrgMembersPage() {
             <tr>
               <th className={styles.th}>Nombre</th>
               <th className={`${styles.th} ${styles.emailHeader}`}>
-                Email
+                Correo electrónico
               </th>
               <th className={styles.th}>Rol</th>
               <th className={styles.th}>Acciones</th>

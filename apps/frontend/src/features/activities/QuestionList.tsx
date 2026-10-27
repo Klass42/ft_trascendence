@@ -104,7 +104,7 @@ export function QuestionList({ activity, onChanged }: Props) {
       {questions.length === 0 ? (
         <EmptyState
           title="Sin preguntas todavía"
-          description="Añade la primera pregunta para que la actividad sea realizable."
+          description="Añade la primera pregunta para que la tarea sea realizable."
         />
       ) : (
         <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>

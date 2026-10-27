@@ -84,7 +84,7 @@ export class ResourcesService {
 
   private assertLibraryStaff(user: AuthUser) {
     if (!this.isLibraryStaff(user)) {
-      throw new ForbiddenException('Only teachers and administrators can use the resource library');
+      throw new ForbiddenException('Solo profesores y administradores pueden usar la biblioteca de recursos.');
     }
   }
 
@@ -93,7 +93,7 @@ export class ResourcesService {
     user: AuthUser,
   ) {
     if (user.role !== 'ADMIN' && resource.createdById !== user.userId) {
-      throw new ForbiddenException('Only the resource owner or an administrator can manage it');
+      throw new ForbiddenException('Solo quien creó el recurso o un administrador puede gestionarlo.');
     }
   }
 
@@ -102,7 +102,7 @@ export class ResourcesService {
       where: { id, organizationId: user.organizationId },
       include: RESOURCE_INCLUDE,
     });
-    if (!resource) throw new NotFoundException(`Resource ${id} not found`);
+    if (!resource) throw new NotFoundException('Recurso no encontrado.');
     return resource;
   }
 
@@ -114,7 +114,7 @@ export class ResourcesService {
     const hasFile = !!fileId;
     const hasExternalUrl = !!externalUrl;
     if (hasFile === hasExternalUrl) {
-      throw new BadRequestException('Provide exactly one source: fileId or externalUrl');
+      throw new BadRequestException('Indica un archivo o una URL externa (solo uno de los dos).');
     }
     if (fileId) {
       const file = await this.prisma.file.findFirst({
@@ -122,7 +122,7 @@ export class ResourcesService {
         select: { id: true },
       });
       if (!file) {
-        throw new BadRequestException('The file does not belong to this organization');
+        throw new BadRequestException('El archivo no pertenece a esta organización.');
       }
     }
   }

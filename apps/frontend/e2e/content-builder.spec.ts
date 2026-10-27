@@ -69,7 +69,7 @@ async function attachmentsOf(request: APIRequestContext, lessonId: string) {
 async function openEditor(page: Page, subjectId: string) {
   await page.goto(`/courses/${COHORT}/subjects/${subjectId}`);
   await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
-  await expect(page.getByText('Estructura del curso')).toBeVisible();
+  await expect(page.getByText('Estructura de la asignatura')).toBeVisible();
 }
 
 const sectionCard = (page: Page, title: string) =>

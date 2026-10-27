@@ -61,7 +61,7 @@ export class ForumsService {
       where: { id: threadId },
     });
     if (!thread) {
-      throw new NotFoundException(`Thread ${threadId} not found`);
+      throw new NotFoundException('Hilo no encontrado.');
     }
     const access = await this.requireSubject(thread.subjectId, actingUserId, staffOnly);
     return { thread, access };
@@ -74,7 +74,7 @@ export class ForumsService {
   private async requirePostMembership(postId: string, actingUserId: string) {
     const post = await this.prisma.forumPost.findUnique({ where: { id: postId } });
     if (!post) {
-      throw new NotFoundException(`Post ${postId} not found`);
+      throw new NotFoundException('Mensaje no encontrado.');
     }
     const { thread, access } = await this.requireThreadMembership(post.threadId, actingUserId);
     return { post, thread, access };
@@ -272,7 +272,7 @@ export class ForumsService {
       });
       if (!parent) {
         throw new NotFoundException(
-          `Parent post ${dto.parentId} not found in this thread`,
+          'El mensaje al que respondes no existe en este hilo.',
         );
       }
       parentAuthorId = parent.authorId;

@@ -146,7 +146,7 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
 function validatePoints(kind: QuestionKind, raw: string, value: number): string | null {
   if (raw.trim() === '' || !Number.isFinite(value)) return 'Indica los puntos como un número.';
   if (kind === 'FILE_UPLOAD') return value < 0 ? 'Los puntos no pueden ser negativos.' : null;
-  if (value < 1) return 'Asigna al menos 1 punto a la pregunta (solo las de fichero pueden valer 0).';
+  if (value < 1) return 'Asigna al menos 1 punto a la pregunta (solo las de archivo pueden valer 0).';
   return null;
 }
 
@@ -214,7 +214,7 @@ function validateContent(
     case 'FILE_UPLOAD': {
       const maxFiles = Number(content.maxFiles);
       if (!Number.isInteger(maxFiles) || maxFiles < 1) {
-        return 'Indica un número máximo de ficheros ≥ 1.';
+        return 'Indica un número máximo de archivos ≥ 1.';
       }
       if (
         content.accept !== undefined &&

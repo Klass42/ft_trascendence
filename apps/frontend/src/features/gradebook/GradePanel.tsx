@@ -135,7 +135,7 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
 
   return (
     <Modal open onClose={onClose} title="Calificar" size="md">
-      <form onSubmit={handleSubmit} className={styles.form}>
+      <form onSubmit={handleSubmit} noValidate className={styles.form}>
         <div className={styles.context}>
           {[attempt?.user?.name ?? target.studentName, target.title].filter(Boolean).join(' · ')}
         </div>
@@ -144,7 +144,7 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
         {loadError && <p className={styles.error}>{loadError}</p>}
 
         {activity && subjective.length === 0 && (
-          <p className={styles.muted}>Esta tarea no tiene bloques de corrección manual.</p>
+          <p className={styles.muted}>Esta tarea no tiene preguntas de corrección manual.</p>
         )}
 
         {activity && (

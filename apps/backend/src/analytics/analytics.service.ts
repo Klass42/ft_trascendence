@@ -185,7 +185,7 @@ export class AnalyticsService {
 
     const rows: string[][] = [
       ['Sección', 'Métrica', 'Valor'],
-      ['Resumen', 'Curso', overview.course.title],
+      ['Resumen', 'Asignatura', overview.course.title],
       ['Resumen', 'Alumnos', String(overview.students)],
       ['Resumen', 'Tareas', String(overview.assignments)],
       ['Resumen', 'Lecciones', String(overview.lessons)],
