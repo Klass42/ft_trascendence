@@ -25,6 +25,7 @@ awk \
   -v S3_ACCESS_KEY="GK$(hex 12)" \
   -v S3_SECRET_KEY="$(hex 32)" \
   -v GARAGE_RPC_SECRET="$(hex 32)" \
+  -v PLATFORM_SUPERADMIN_PASSWORD="Sa1$(hex 12)" \
   '
   BEGIN {
     secret["POSTGRES_PASSWORD"] = POSTGRES_PASSWORD
@@ -34,6 +35,9 @@ awk \
     secret["S3_ACCESS_KEY"] = S3_ACCESS_KEY
     secret["S3_SECRET_KEY"] = S3_SECRET_KEY
     secret["GARAGE_RPC_SECRET"] = GARAGE_RPC_SECRET
+    # The seed demands upper case, lower case and a digit: the "Sa1" prefix
+    # guarantees them whatever the random part looks like.
+    secret["PLATFORM_SUPERADMIN_PASSWORD"] = PLATFORM_SUPERADMIN_PASSWORD
   }
   {
     key = $0
