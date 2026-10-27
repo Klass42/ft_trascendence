@@ -206,6 +206,12 @@ export class AttemptsService {
     return this.studentView(attemptId, actingUserId);
   }
 
+  /** One of the acting user's own attempts with its activity (questions, and
+   * answer keys only when `showSolutions` allows it on a graded attempt). */
+  async getMine(attemptId: string, actingUserId: string) {
+    return this.studentView(attemptId, actingUserId);
+  }
+
   /** The acting user's own attempts for an activity, with their per-answer
    * results. Correct answer keys are only revealed when the author opted in
    * (`config.showSolutions`). */
@@ -430,11 +436,49 @@ export class AttemptsService {
     }
     await this.requireStudentActivity(attempt.activityId, actingUserId, false);
 
-    return this.projectStudentAttempt(
+    const projected = this.projectStudentAttempt(
       attempt,
       attempt.activity,
       attempt.activity,
     );
+    // The learner may see the names of their own uploads (never someone else's,
+    // never another organization's) so the review can say what was delivered.
+    const kinds = new Map(
+      attempt.activity.questions.map((question) => [question.id, question.kind]),
+    );
+    const fileIds = [
+      ...new Set(
+        attempt.answers.flatMap((answer) =>
+          kinds.get(answer.questionId) === QuestionKind.FILE_UPLOAD
+            ? responseFileIds(answer.response)
+            : [],
+        ),
+      ),
+    ];
+    if (!fileIds.length) return projected;
+    const files = await this.prisma.file.findMany({
+      where: {
+        id: { in: fileIds },
+        organizationId: attempt.activity.subject.organizationId,
+        uploaderId: actingUserId,
+      },
+      select: { id: true, originalName: true },
+    });
+    const filesById = new Map(files.map((file) => [file.id, file]));
+    return {
+      ...projected,
+      answers: projected.answers.map((answer) =>
+        kinds.get(answer.questionId) === QuestionKind.FILE_UPLOAD
+          ? {
+              ...answer,
+              files: responseFileIds(answer.response).flatMap((id) => {
+                const file = filesById.get(id);
+                return file ? [file] : [];
+              }),
+            }
+          : answer,
+      ),
+    };
   }
 
   private projectStudentAttempt(

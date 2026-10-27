@@ -19,3 +19,15 @@ test('restores the chosen subject and selects the subject from an activity link'
   await expect(page.getByRole('button', { name: /Autoevaluación de la unidad/ }))
     .toBeVisible();
 });
+
+test('shows an explicit empty state for a linked task that no longer exists', async ({ page }) => {
+  await actAs(page, STUDENT);
+  await page.goto('/activities?activityId=activity-that-does-not-exist');
+
+  await expect(page.getByText('Esta tarea ya no existe')).toBeVisible({ timeout: 8000 });
+  await expect(page.getByRole('link', { name: 'Volver a las tareas' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Empezar tarea' })).toHaveCount(0);
+
+  await page.goto('/activities/activity-that-does-not-exist');
+  await expect(page.getByText('Esta tarea ya no existe')).toBeVisible({ timeout: 8000 });
+});

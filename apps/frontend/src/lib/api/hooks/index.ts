@@ -34,7 +34,7 @@ export { useDeleteAssignment } from './useDeleteAssignment';
 export { useTeachingSummary } from './useTeachingSummary';
 export { useActivities, useActivity } from './useActivities';
 export { useActivityMutations } from './useActivityMutations';
-export { useActivityAttempts, useStaffAttempts } from './useActivityAttempts';
+export { useActivityAttempts, useMyAttempt, useStaffAttempts } from './useActivityAttempts';
 export { useTaskTemplates } from './useTaskTemplates';
 export { useSaveAsTemplate } from './useSaveAsTemplate';
 export { useTeachingActivities } from './useTeachingActivities';

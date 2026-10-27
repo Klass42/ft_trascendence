@@ -325,6 +325,8 @@ test.describe('Tareas — unified E2E', () => {
       'HTML da la estructura y CSS la presentación.',
     );
     await page.getByRole('button', { name: 'Enviar tarea' }).click();
+    await expect(page.getByRole('dialog').getByText(/sin responder|Has respondido todas/)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, enviar' }).click();
     await expect(page.getByText(/pendiente de corrección/i).first()).toBeVisible({
       timeout: 8000,
     });
@@ -491,6 +493,8 @@ test.describe('Tareas — unified E2E', () => {
     await page.getByRole('button', { name: /Empezar tarea|Reanudar intento/ }).click();
     await page.getByRole('checkbox', { name: 'Madrid' }).check();
     await page.getByRole('button', { name: 'Enviar tarea' }).click();
+    await expect(page.getByRole('dialog').getByText(/sin responder|Has respondido todas/)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, enviar' }).click();
     await expect(page.getByText(/Tarea corregida: 1\/1/)).toBeVisible({ timeout: 8000 });
 
     await openCourseGrades(page, COURSE_ID);

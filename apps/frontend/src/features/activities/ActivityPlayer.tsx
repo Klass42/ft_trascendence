@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
+  ConfirmDialog,
   Spinner,
   Textarea,
   useToast,
@@ -17,7 +18,15 @@ import type {
   SaveAnswersInput,
 } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
-import { isSubjective, KIND_LABELS } from './helpers';
+import { AttemptHistory } from './AttemptReview';
+import {
+  attemptsAllowedLabel,
+  attemptsRemainingLabel,
+  countUnanswered,
+  formatSolution,
+  isSubjective,
+  KIND_LABELS,
+} from './helpers';
 
 type ResponseMap = Record<string, Record<string, unknown>>;
 
@@ -67,6 +76,9 @@ export function ActivityPlayer({
   const [isStarting, setIsStarting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [resultNotice, setResultNotice] = useState<string | null>(null);
 
   const latestAttempt = useMemo(
     () => attempts?.[attempts.length - 1] ?? null,
@@ -154,16 +166,20 @@ export function ActivityPlayer({
       setAllResponses({});
       refetch();
       onAttemptChanged?.();
-      toast({
-        variant: 'success',
-        message: completed.status === 'GRADED'
-          ? `Tarea corregida: ${completed.score ?? 0}/${completed.activity?.maxScore ?? activity?.maxScore ?? 0}`
-          : 'Tarea enviada. Está pendiente de corrección.',
-      });
+      setReviewId(completed.id);
+      if (completed.status === 'GRADED') {
+        // The grading notification already raises a toast; show the result in
+        // the page instead of a second one.
+        setResultNotice(`Tarea corregida: ${completed.score ?? 0}/${completed.activity?.maxScore ?? activity?.maxScore ?? 0}`);
+      } else {
+        setResultNotice(null);
+        toast({ variant: 'success', message: 'Tarea enviada. Está pendiente de corrección.' });
+      }
     } catch (err) {
       toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo enviar la tarea.' });
     } finally {
       setIsSubmitting(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -172,8 +188,30 @@ export function ActivityPlayer({
     return <p style={{ color: 'var(--color-error)' }}>No se pudo cargar esta tarea. Puede que ya no esté disponible.</p>;
   }
 
-  const winBadge = WINDOW_BADGE[state];
   const resumable = attempts?.find((attempt) => attempt.status === 'IN_PROGRESS');
+  const exhausted = attemptsRemaining === 0 && !resumable;
+  // "Abierta" is misleading once the learner can no longer act: surface what
+  // happened to their work instead.
+  const winBadge = exhausted && latestAttempt
+    ? latestAttempt.status === 'GRADED'
+      ? { variant: 'success' as const, label: 'Corregida' }
+      : { variant: 'info' as const, label: 'Entregada' }
+    : resumable
+      ? { variant: 'warning' as const, label: 'En curso' }
+      : WINDOW_BADGE[state];
+  const questionsToAnswer = displayActivity?.questions ?? [];
+  const unanswered = countUnanswered(questionsToAnswer, responses);
+  const confirmMessage = [
+    unanswered > 0
+      ? `Tienes ${unanswered} ${unanswered === 1 ? 'pregunta sin responder' : 'preguntas sin responder'}.`
+      : 'Has respondido todas las preguntas.',
+    'Una vez enviada no podrás cambiar tus respuestas.',
+    attemptsRemaining === null
+      ? ''
+      : attemptsRemaining === 0
+        ? 'Este es tu último intento.'
+        : `Después de enviarla ${attemptsRemaining === 1 ? 'te quedará 1 intento' : `te quedarán ${attemptsRemaining} intentos`}.`,
+  ].filter(Boolean).join(' ');
 
   if (isPreview) {
     const currentResponses = previewResponses ?? responses;
@@ -189,7 +227,7 @@ export function ActivityPlayer({
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
               <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
               <Badge variant="neutral">{activity.maxScore} pts</Badge>
-              <Badge variant="neutral">{activity.attemptsAllowed === 0 ? 'Intentos ilimitados' : `${activity.attemptsAllowed} intento(s)`}</Badge>
+              <Badge variant="neutral">{attemptsAllowedLabel(activity.attemptsAllowed)}</Badge>
             </div>
           </div>
         </div>
@@ -229,8 +267,12 @@ export function ActivityPlayer({
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{activity.title}</h2>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
             <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
+            {exhausted && <Badge variant="neutral">Intentos agotados</Badge>}
             <Badge variant="neutral">{activity.maxScore} pts</Badge>
-            <Badge variant="neutral">{activity.attemptsAllowed === 0 ? 'Intentos ilimitados' : `${activity.attemptsAllowed} intento(s)`}</Badge>
+            <Badge variant="neutral">{attemptsAllowedLabel(activity.attemptsAllowed)}</Badge>
+            {attemptsRemaining !== null && !exhausted && (
+              <Badge variant="neutral">{attemptsRemaining === 0 ? 'Último intento en curso' : attemptsRemainingLabel(attemptsRemaining)}</Badge>
+            )}
           </div>
         </div>
         {activeAttempt?.status === 'IN_PROGRESS' && (
@@ -254,13 +296,19 @@ export function ActivityPlayer({
           responses={responses}
           onChange={updateResponse}
           onSave={() => void saveCurrent().catch((err) => toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo guardar.' }))}
-          onSubmit={() => void submitAttempt()}
+          onSubmit={() => setConfirmOpen(true)}
           saving={saveState === 'saving'}
           submitting={isSubmitting}
         />
       ) : (
         <>
-          <AttemptHistory attempts={attempts ?? []} maxScore={activity.maxScore} />
+          <AttemptHistory
+            attempts={attempts ?? []}
+            maxScore={activity.maxScore}
+            selectedId={reviewId}
+            onSelect={(id) => { setReviewId(id); setResultNotice(null); }}
+            notice={resultNotice}
+          />
           <div style={{ marginTop: 18 }}>
             {state !== 'open' ? (
               <p style={{ color: 'var(--color-text-muted)' }}>{state === 'not-open' ? 'Esta tarea todavía no está abierta.' : 'El plazo de esta tarea ha terminado.'}</p>
@@ -269,30 +317,22 @@ export function ActivityPlayer({
                 {resumable ? 'Reanudar intento' : latestAttempt ? 'Nuevo intento' : 'Empezar tarea'}
               </Button>
             ) : (
-              <p style={{ color: 'var(--color-text-muted)' }}>Has utilizado todos los intentos disponibles.</p>
+              <p style={{ color: 'var(--color-text-muted)' }}>Has utilizado todos los intentos disponibles ({attemptsAllowedLabel(activity.attemptsAllowed)}).</p>
             )}
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="¿Enviar la tarea?"
+        message={confirmMessage}
+        confirmLabel="Sí, enviar"
+        cancelLabel="Seguir editando"
+        loading={isSubmitting}
+        onConfirm={() => void submitAttempt()}
+        onCancel={() => { if (!isSubmitting) setConfirmOpen(false); }}
+      />
     </section>
-  );
-}
-
-function AttemptHistory({ attempts, maxScore }: { attempts: AttemptDTO[]; maxScore: number }) {
-  const completed = attempts.filter((attempt) => attempt.status !== 'IN_PROGRESS');
-  if (!completed.length) return null;
-  return (
-    <div style={{ marginTop: 18, borderTop: '1px solid var(--color-border-primary)', paddingTop: 14 }}>
-      <h3 style={{ fontSize: 15, margin: '0 0 8px' }}>Intentos anteriores</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {completed.map((attempt) => (
-          <div key={attempt.id} style={{ fontSize: 14, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <span>Intento {attempt.attemptNo} · {attempt.status === 'GRADED' ? 'Corregido' : 'Pendiente de corrección'}</span>
-            <strong>{attempt.status === 'GRADED' ? `${attempt.score ?? 0}/${maxScore}` : 'Enviado'}</strong>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -444,52 +484,6 @@ function QuestionInput({ question, number, response, onChange, preview = false, 
       )}
     </fieldset>
   );
-}
-
-function formatSolution(question: QuestionDTO, content: Record<string, unknown>): string {
-  const text = (value: unknown) => typeof value === 'string'
-    ? value
-    : value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
-      ? value.text
-      : String(value ?? '');
-  switch (question.kind) {
-    case 'MULTIPLE_CHOICE': {
-      const options = Array.isArray(content.options) ? content.options : [];
-      const correct = Array.isArray(content.correct) ? content.correct : [];
-      return correct.map((index) => text(options[Number(index)])).filter(Boolean).join(' · ') || 'Sin respuesta configurada';
-    }
-    case 'TRUE_FALSE':
-      return typeof content.answer === 'boolean' ? (content.answer ? 'Verdadero' : 'Falso') : 'Sin respuesta configurada';
-    case 'FILL_BLANK': {
-      const blanks = Array.isArray(content.blanks) ? content.blanks : [];
-      return blanks.map((blank) => {
-        const accepted = blank && typeof blank === 'object' && 'accepted' in blank && Array.isArray(blank.accepted)
-          ? blank.accepted
-          : [];
-        return accepted.map(text).join(' / ');
-      }).map((answer, index) => `Hueco ${index + 1}: ${answer}`).join(' · ');
-    }
-    case 'MATCHING': {
-      const left = Array.isArray(content.left) ? content.left : [];
-      const right = Array.isArray(content.right) ? content.right : [];
-      const pairs = Array.isArray(content.pairs) ? content.pairs : [];
-      return pairs.flatMap((pair) => Array.isArray(pair) && pair.length === 2
-        ? [`${text(left[Number(pair[0])])} → ${text(right[Number(pair[1])])}`]
-        : []).join(' · ');
-    }
-    case 'ORDERING': {
-      const items = Array.isArray(content.items) ? content.items : [];
-      const order = Array.isArray(content.correctOrder) ? content.correctOrder : [];
-      return order.map((index) => text(items[Number(index)])).filter(Boolean).join(' → ');
-    }
-    case 'SHORT_ANSWER': {
-      const accepted = Array.isArray(content.accepted) ? content.accepted : [];
-      return accepted.length ? accepted.map(text).join(' · ') : 'Se corrige a mano';
-    }
-    case 'ESSAY':
-    case 'FILE_UPLOAD':
-      return 'Se corrige a mano';
-  }
 }
 
 function FileUploadQuestion({

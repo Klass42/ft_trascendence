@@ -3,6 +3,7 @@ import {
   createBrowserRouter,
   Navigate,
   Outlet,
+  useParams,
   type RouteObject,
 } from 'react-router-dom';
 import { Spinner } from '@/components/ui';
@@ -107,6 +108,11 @@ function PageLoader() {
       <Spinner size="lg" label="Cargando..." />
     </div>
   );
+}
+
+function ActivityDeepLink() {
+  const { activityId = '' } = useParams();
+  return <Navigate to={`/activities?activityId=${encodeURIComponent(activityId)}`} replace />;
 }
 
 const routes: RouteObject[] = [
@@ -230,6 +236,11 @@ const routes: RouteObject[] = [
       {
         path: '/assignments',
         element: <Navigate to="/activities" replace />,
+      },
+      {
+        // Old/shared deep link: the workspace resolves the id (or says it is gone).
+        path: '/activities/:activityId',
+        element: <ActivityDeepLink />,
       },
       {
         path: '/activities',

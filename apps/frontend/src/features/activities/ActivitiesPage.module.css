@@ -47,6 +47,12 @@
   min-width: 0;
 }
 
+.backLink {
+  color: var(--color-accent-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 @media (max-width: 700px) {
   .page {
     padding: var(--space-6) var(--space-4);

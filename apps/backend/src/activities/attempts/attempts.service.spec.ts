@@ -557,6 +557,80 @@ describe('AttemptsService', () => {
     expect(studentAttempts[0].answers[0]).not.toHaveProperty('files');
   });
 
+  it('returns a single own attempt with the learner\'s own upload names, tenant and owner scoped', async () => {
+    const { service, attempts, answers, files } = build({
+      questions: [
+        {
+          id: 'upload-1',
+          kind: QuestionKind.FILE_UPLOAD,
+          content: { maxFiles: 3 },
+          points: 0,
+          order: 0,
+        },
+      ],
+    });
+    attempts.push({
+      id: 'att-upload',
+      activityId: 'act-1',
+      userId: STUDENT,
+      attemptNo: 1,
+      status: AttemptStatus.SUBMITTED,
+    });
+    answers.push({
+      id: 'answer-upload',
+      attemptId: 'att-upload',
+      questionId: 'upload-1',
+      response: { fileIds: ['file-owned', 'file-other-org', 'file-other-user'] },
+      correct: null,
+      awarded: null,
+    });
+    files.push(
+      { id: 'file-owned', organizationId: 'org-klass-0001', uploaderId: STUDENT, originalName: 'informe.pdf' },
+      { id: 'file-other-org', organizationId: 'org-otro', uploaderId: STUDENT, originalName: 'ajeno.pdf' },
+      { id: 'file-other-user', organizationId: 'org-klass-0001', uploaderId: 'someone-else', originalName: 'otro.pdf' },
+    );
+
+    const view = (await service.getMine('att-upload', STUDENT)) as any;
+    expect(view.answers[0].files).toHaveLength(1);
+    expect(view.answers[0].files[0]).toMatchObject({ id: 'file-owned', originalName: 'informe.pdf' });
+    expect(view.activity.questions).toHaveLength(1);
+  });
+
+  it('forbids reading another learner\'s attempt and 404s on a missing one', async () => {
+    const { service, attempts } = build({ questions: [mcq('q1', [0])] });
+    attempts.push({
+      id: 'att-foreign',
+      activityId: 'act-1',
+      userId: 'other-student',
+      attemptNo: 1,
+      status: AttemptStatus.GRADED,
+    });
+    await expect(service.getMine('att-foreign', STUDENT)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.getMine('nope', STUDENT)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('reveals answer keys and verdicts on getMine only for a graded attempt when showSolutions is on', async () => {
+    const hidden = build({ questions: [mcq('q1', [0])], config: { showSolutions: false } });
+    const started = await hidden.service.start('act-1', STUDENT);
+    await hidden.service.saveAnswers(started.id, STUDENT, {
+      answers: [{ questionId: 'q1', response: { selected: [1] } }],
+    });
+    await hidden.service.submit(started.id, STUDENT);
+    const hiddenView = (await hidden.service.getMine(started.id, STUDENT)) as any;
+    expect(hiddenView.answers[0]).not.toHaveProperty('correct');
+    expect(hiddenView.activity.questions[0].content).not.toHaveProperty('correct');
+
+    const shown = build({ questions: [mcq('q1', [0])], config: { showSolutions: true } });
+    const s2 = await shown.service.start('act-1', STUDENT);
+    await shown.service.saveAnswers(s2.id, STUDENT, {
+      answers: [{ questionId: 'q1', response: { selected: [1] } }],
+    });
+    await shown.service.submit(s2.id, STUDENT);
+    const shownView = (await shown.service.getMine(s2.id, STUDENT)) as any;
+    expect(shownView.answers[0]).toMatchObject({ correct: false, awarded: 0 });
+    expect(shownView.activity.questions[0].content.correct).toEqual([0]);
+  });
+
   it('does not allow attempt operations after course membership is removed', async () => {
     const { service, setMember } = build({ questions: [mcq('q1', [0])] });
     const started = await service.start('act-1', STUDENT);

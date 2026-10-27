@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Badge,
   Button,
@@ -11,9 +11,11 @@ import {
   useToast,
 } from '@/components/ui';
 import {
+  ApiError,
   apiClient,
   useAuth,
   useActivities,
+  useMyGrades,
   useActivityMutations,
   useMySubjects,
   useSaveAsTemplate,
@@ -22,7 +24,7 @@ import {
 } from '@/lib/api';
 import type { ActivityDTO } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
-import { ATTEMPT_STATUS_BADGE, isSubjective, STATUS_BADGE } from './helpers';
+import { ATTEMPT_STATUS_BADGE, attemptsAllowedLabel, isSubjective, STATUS_BADGE } from './helpers';
 import { ActivityForm } from './ActivityForm';
 import { ActivityPlayer } from './ActivityPlayer';
 import { ActivityPreviewModal } from './ActivityPreviewModal';
@@ -59,8 +61,11 @@ function useActivityCourseSelection(
   activityId: string | null,
 ) {
   const [courseId, setCourseId] = useState<string | null>(null);
+  // The linked activity answered 404: it was deleted (or never existed).
+  const [activityMissing, setActivityMissing] = useState(false);
 
   useEffect(() => {
+    setActivityMissing(false);
     if (!courses?.length) return;
     let active = true;
     const availableIds = courses.map((course) => course.id);
@@ -79,8 +84,10 @@ function useActivityCourseSelection(
         if (!active) return;
         setCourseId(availableIds.includes(activity.subjectId) ? activity.subjectId : fallback);
       })
-      .catch(() => {
-        if (active) setCourseId(fallback);
+      .catch((err) => {
+        if (!active) return;
+        if (err instanceof ApiError && err.status === 404) setActivityMissing(true);
+        setCourseId(fallback);
       });
 
     return () => { active = false; };
@@ -91,7 +98,7 @@ function useActivityCourseSelection(
     rememberSubject(userId, subjectId);
   }
 
-  return { courseId, selectCourse };
+  return { courseId, selectCourse, activityMissing };
 }
 
 /**
@@ -111,7 +118,7 @@ export function ActivitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedSubjectId = searchParams.get('subjectId');
   const linkedActivityId = searchParams.get('activityId');
-  const { courseId, selectCourse } = useActivityCourseSelection(
+  const { courseId, selectCourse, activityMissing } = useActivityCourseSelection(
     courses,
     user?.userId,
     linkedSubjectId,
@@ -127,6 +134,11 @@ export function ActivitiesPage() {
 
   useEffect(() => {
     if (!activities) return;
+    if (activityMissing) {
+      // Don't silently fall back to another task: the empty state explains it.
+      setSelectedId(null);
+      return;
+    }
     const fromUrl = searchParams.get('activityId');
     if (fromUrl && activities.some((a) => a.id === fromUrl)) {
       setSelectedId(fromUrl);
@@ -135,7 +147,7 @@ export function ActivitiesPage() {
     } else if (activities.length === 0) {
       setSelectedId(null);
     }
-  }, [activities, searchParams, selectedId]);
+  }, [activities, activityMissing, searchParams, selectedId]);
 
   const selected = useMemo<ActivityDTO | null>(
     () => activities?.find((a) => a.id === selectedId) ?? null,
@@ -251,7 +263,9 @@ export function ActivitiesPage() {
 
           {/* Detail column */}
           <div className={styles.detailColumn}>
-            {!selected ? (
+            {activityMissing ? (
+              <MissingActivity />
+            ) : !selected ? (
               <p style={{ color: 'var(--color-text-muted)' }}>
                 Selecciona una tarea para editarla.
               </p>
@@ -316,7 +330,7 @@ function StudentActivitiesPage() {
   const { data: courses, isLoading: coursesLoading } = useMySubjects();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const { courseId, selectCourse: selectCourseFromUser } = useActivityCourseSelection(
+  const { courseId, selectCourse: selectCourseFromUser, activityMissing } = useActivityCourseSelection(
     courses,
     user?.userId,
     searchParams.get('subjectId'),
@@ -324,14 +338,19 @@ function StudentActivitiesPage() {
   );
 
   const { data: activities, isLoading, error, refetch } = useActivities(courseId);
+  const { data: myGrades, refetch: refetchMyGrades } = useMyGrades(courseId);
 
   useEffect(() => {
     if (!activities) return;
+    if (activityMissing) {
+      setSelectedId(null);
+      return;
+    }
     const fromUrl = searchParams.get('activityId');
     if (fromUrl && activities.some((activity) => activity.id === fromUrl)) setSelectedId(fromUrl);
     else if (!selectedId && activities.length) setSelectedId(activities[0].id);
     else if (!activities.length) setSelectedId(null);
-  }, [activities, searchParams, selectedId]);
+  }, [activities, activityMissing, searchParams, selectedId]);
 
   const selected = activities?.find((activity) => activity.id === selectedId) ?? null;
   function selectActivity(id: string) {
@@ -364,7 +383,13 @@ function StudentActivitiesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {activities?.map((activity) => {
               const active = activity.id === selectedId;
-              const badge = WINDOW_BADGE[windowState(activity.openAt, activity.closeAt)];
+              // Once the learner has delivered, their own progress says more than "Abierta".
+              const delivered = myGrades?.items.find((item) => item.activityId === activity.id)?.status;
+              const badge = delivered === 'GRADED'
+                ? { variant: 'success' as const, label: 'Corregida' }
+                : delivered === 'SUBMITTED'
+                  ? { variant: 'info' as const, label: 'Entregada' }
+                  : WINDOW_BADGE[windowState(activity.openAt, activity.closeAt)];
               return <button key={activity.id} type="button" onClick={() => selectActivity(activity.id)} style={{ textAlign: 'left', background: active ? 'var(--color-accent-muted)' : 'var(--color-bg-secondary)', border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-primary)'}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontWeight: 700, fontSize: 14.5 }}>{activity.title}</span><Badge variant={badge.variant}>{badge.label}</Badge></div>
                 <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{activity.questions?.length ?? 0} bloques · {activity.maxScore} pts{activity.countsTowardFinal === false ? ' · práctica' : ''}</div>
@@ -373,10 +398,21 @@ function StudentActivitiesPage() {
           </div>
         </div>
         <div className={styles.detailColumn}>
-          {selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={refetch} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una tarea para ver sus detalles.</p>}
+          {activityMissing ? <MissingActivity /> : selected ? <ActivityPlayer key={selected.id} activityId={selected.id} onAttemptChanged={() => { refetch(); refetchMyGrades(); }} /> : <p style={{ color: 'var(--color-text-muted)' }}>Selecciona una tarea para ver sus detalles.</p>}
         </div>
       </div>}
     </div>
+  );
+}
+
+/** Shown when a deep link points at a task that was deleted or never existed. */
+function MissingActivity() {
+  return (
+    <EmptyState
+      title="Esta tarea ya no existe"
+      description="Puede que se haya eliminado o que ya no esté disponible para ti."
+      action={<Link to="/activities" className={styles.backLink}>Volver a las tareas</Link>}
+    />
   );
 }
 
@@ -485,7 +521,7 @@ function ActivityDetail({
           {activity.closeAt ? ` · Cierra ${formatDate(activity.closeAt)}` : ''}
         </span>
         <span>· {activity.maxScore} pts</span>
-        <span>· {activity.attemptsAllowed === 0 ? 'Intentos ilimitados' : `${activity.attemptsAllowed} intento(s)`}</span>
+        <span>· {attemptsAllowedLabel(activity.attemptsAllowed)}</span>
         {activity.countsTowardFinal === false && (
           <Badge variant="neutral">Práctica</Badge>
         )}

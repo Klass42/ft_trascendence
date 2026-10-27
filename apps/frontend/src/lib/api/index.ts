@@ -50,6 +50,7 @@ export {
   useActivity,
   useActivityMutations,
   useActivityAttempts,
+  useMyAttempt,
   useStaffAttempts,
   useTaskTemplates,
   useSaveAsTemplate,
