@@ -18,8 +18,11 @@ export function useGradeAttempt(): UseGradeAttemptResult {
 
   const grade = useCallback(async (attemptId: string, input: GradeAttemptInput) => {
     for (const item of input.answers) {
-      if (!Number.isFinite(item.awarded) || item.awarded < 0) {
+      if (item.awarded !== undefined && (!Number.isFinite(item.awarded) || item.awarded < 0)) {
         throw new Error('Cada nota debe ser un número ≥ 0.');
+      }
+      if (item.feedback !== undefined && item.feedback.length > 2000) {
+        throw new Error('Cada comentario puede tener como máximo 2000 caracteres.');
       }
     }
 

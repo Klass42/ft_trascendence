@@ -153,8 +153,9 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     const withIncludes = (row: any, include: any) => {
       if (!row) return null;
       const out: any = { ...row };
-      if (include?.course) {
+      if (include?.course || include?.subject) {
         out.course = { id: COURSE, organizationId: ORG, title: 'Web 101' };
+        out.subject = out.course;
       }
       if (include?.questions) {
         out.questions = questions
@@ -368,6 +369,47 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     expect(notify.removeByLink).toHaveBeenCalledWith(expect.any(String), {
       endsWith: [`activityId=${created.id}`],
     });
+  });
+
+  it('refuses to publish a task whose total is 0 points', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Sin puntos' });
+    await service.addQuestion(created.id, TEACHER, { ...MCQ_DTO, points: 0 });
+
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).rejects.toThrow(/0 puntos en total/);
+  });
+
+  it('refuses to publish when any non-upload question has 0 points', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Mixta' });
+    await service.addQuestion(created.id, TEACHER, MCQ_DTO);
+    await service.addQuestion(created.id, TEACHER, { ...MCQ_DTO, points: 0 });
+
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).rejects.toThrow(/La pregunta 2 tiene 0 puntos/);
+  });
+
+  it('still publishes a 0-point FILE_UPLOAD companion and re-saves published tasks', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Con fichero' });
+    await service.addQuestion(created.id, TEACHER, MCQ_DTO);
+    await service.addQuestion(created.id, TEACHER, {
+      kind: QuestionKind.FILE_UPLOAD,
+      prompt: 'Evidencia',
+      points: 0,
+      content: { maxFiles: 1 },
+    });
+
+    const published = await service.update(created.id, TEACHER, {
+      status: PublicationStatus.PUBLISHED,
+    });
+    expect(published.status).toBe(PublicationStatus.PUBLISHED);
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).resolves.toBeDefined();
   });
 
   it('publishing with no questions throws BadRequestException', async () => {

@@ -33,6 +33,7 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
   const [kind, setKind] = useState<QuestionKind>(initial?.kind ?? 'MULTIPLE_CHOICE');
   const [prompt, setPrompt] = useState(initial?.prompt ?? '');
   const [points, setPoints] = useState(String(initial?.points ?? 1));
+  const [pointsError, setPointsError] = useState<string | undefined>();
   const [content, setContent] = useState<Record<string, unknown>>(
     initial?.content ?? emptyContent('MULTIPLE_CHOICE'),
   );
@@ -40,6 +41,7 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
   function changeKind(next: QuestionKind) {
     setKind(next);
     setContent(emptyContent(next)); // start fresh so content matches the kind
+    setPointsError(undefined);
   }
 
   async function handleSave() {
@@ -49,10 +51,9 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
       return;
     }
     const pts = Number(points);
-    if (!Number.isFinite(pts) || pts < 0) {
-      toast({ variant: 'error', message: 'Los puntos deben ser un número ≥ 0.' });
-      return;
-    }
+    const pointsProblem = validatePoints(kind, points, pts);
+    setPointsError(pointsProblem ?? undefined);
+    if (pointsProblem) return;
     const contentError = validateContent(kind, content);
     if (contentError) {
       toast({ variant: 'error', message: contentError });
@@ -110,15 +111,18 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
       <QuestionContentEditor kind={kind} content={content} onChange={setContent} />
 
       <div style={{ maxWidth: 140 }}>
-        <FormField label="Puntos">
+        <FormField label="Puntos" error={pointsError}>
           {(field) => (
             <Input
               {...field}
               type="number"
-              min={0}
+              min={kind === 'FILE_UPLOAD' ? 0 : 1}
               step="0.5"
               value={points}
-              onChange={(e) => setPoints(e.target.value)}
+              onChange={(e) => {
+                setPoints(e.target.value);
+                setPointsError(undefined);
+              }}
             />
           )}
         </FormField>
@@ -134,6 +138,16 @@ export function QuestionForm({ activityId, initial, onSaved, onCancel }: Props) 
       </div>
     </div>
   );
+}
+
+/** A question must be worth at least 1 point: a 0-point question adds nothing
+ * and the backend refuses to publish it. Only FILE_UPLOAD may be worth 0
+ * (optional evidence next to a graded question). */
+function validatePoints(kind: QuestionKind, raw: string, value: number): string | null {
+  if (raw.trim() === '' || !Number.isFinite(value)) return 'Indica los puntos como un número.';
+  if (kind === 'FILE_UPLOAD') return value < 0 ? 'Los puntos no pueden ser negativos.' : null;
+  if (value < 1) return 'Asigna al menos 1 punto a la pregunta (solo las de fichero pueden valer 0).';
+  return null;
 }
 
 /** Front-side content validation mirroring the backend's per-kind rules, so a

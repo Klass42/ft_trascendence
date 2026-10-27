@@ -732,6 +732,7 @@ model Answer {
   response   Json // student's raw response, shape by kind
   correct    Boolean? // null = not auto-graded (subjective / pending manual)
   awarded    Float? // points awarded
+  feedback   String? // teacher's per-question comment for the student
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

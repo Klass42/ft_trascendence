@@ -317,7 +317,7 @@ test.describe('Tareas — unified E2E', () => {
     await openCourseActivities(page, COURSE_ID);
     await page.getByRole('button', { name: new RegExp(title) }).click();
     await page.getByRole('button', { name: /Empezar tarea|Reanudar intento/ }).click();
-    await expect(page.getByText('Pregunta 1 · 1 pts')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Pregunta 1 · 1 pt')).toBeVisible({ timeout: 8000 });
     await page.getByRole('checkbox', { name: '4' }).check();
     await page.getByLabel('Relacionar HTML').selectOption({ label: 'Estructura' });
     await page.getByLabel('Relacionar CSS').selectOption({ label: 'Presentación' });
@@ -352,8 +352,11 @@ test.describe('Tareas — unified E2E', () => {
     const gradeDialog = page.getByRole('dialog', { name: 'Calificar' });
     await expect(gradeDialog).toBeVisible();
     await gradeDialog
-      .getByLabel(/Explica brevemente cómo se relaciona HTML y CSS/)
+      .getByLabel(/Puntos de la pregunta \d/)
       .fill('2');
+    // The student's answer is shown next to its own question.
+    await expect(gradeDialog.getByText(/Explica brevemente cómo se relaciona HTML y CSS/)).toBeVisible();
+    await gradeDialog.getByLabel(/Comentario para el alumno/).last().fill('Buen razonamiento.');
     await gradeDialog.getByLabel(/Feedback/).fill('Clarísimo.');
     await gradeDialog.getByRole('button', { name: 'Guardar nota' }).click();
     await expect(page.getByText('Calificado').first()).toBeVisible({ timeout: 8000 });
@@ -401,6 +404,9 @@ test.describe('Tareas — unified E2E', () => {
     await openCourseActivities(page, COURSE_ID);
     await page.getByRole('button', { name: new RegExp(title) }).click();
     await page.getByRole('button', { name: 'Guardar plantilla' }).click();
+    const templateDialog = page.getByRole('dialog', { name: 'Guardar como plantilla' });
+    await expect(templateDialog.getByLabel('Nombre de la plantilla')).toHaveValue(title);
+    await templateDialog.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(page.getByText('Guardada como plantilla.')).toBeVisible({ timeout: 8000 });
 
     await openCourseActivities(page, otherCourse.id);

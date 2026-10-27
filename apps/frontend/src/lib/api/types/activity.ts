@@ -103,6 +103,9 @@ export interface AnswerDTO {
   correct?: boolean | null;
   /** Omitted from the learner's own view unless the activity shows solutions. */
   awarded?: number | null;
+  /** Teacher's comment on this question; shown to the learner once graded,
+   * independent of `showSolutions`. */
+  feedback?: string | null;
   /** Upload names: the staff attempt list and the learner's single-attempt view. */
   files?: Array<{ id: string; originalName: string }>;
 }
@@ -144,6 +147,6 @@ export interface PreviewGradeResponse {
 }
 
 export interface GradeAttemptInput {
-  answers: { questionId: string; awarded: number }[];
+  answers: { questionId: string; awarded?: number; feedback?: string }[];
   feedback?: string;
 }

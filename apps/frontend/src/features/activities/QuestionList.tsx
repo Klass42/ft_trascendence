@@ -10,7 +10,7 @@ import {
 import { useActivityMutations } from '@/lib/api';
 import type { ActivityDTO, QuestionDTO } from '@/lib/api';
 import { QuestionForm } from './QuestionForm';
-import { KIND_LABELS } from './helpers';
+import { KIND_LABELS, longPointsLabel } from './helpers';
 
 /**
  * Staff list of an activity's questions with add / edit / delete / reorder.
@@ -123,7 +123,7 @@ export function QuestionList({ activity, onChanged }: Props) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <Badge variant="neutral">{KIND_LABELS[q.kind]}</Badge>
                     <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-                      {q.points} {q.points === 1 ? 'punto' : 'puntos'}
+                      {longPointsLabel(q.points)}
                     </span>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>

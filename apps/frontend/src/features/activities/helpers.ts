@@ -87,16 +87,26 @@ export function emptyContent(kind: QuestionKind): Record<string, unknown> {
   }
 }
 
+/** "1 bloque" / "2 bloques": the count followed by the right noun form. */
+export function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export const blocksLabel = (count: number) => plural(count, 'bloque', 'bloques');
+export const pointsLabel = (count: number) => plural(count, 'pt', 'pts');
+export const longPointsLabel = (count: number) => plural(count, 'punto', 'puntos');
+export const attemptsLabel = (count: number) => plural(count, 'intento', 'intentos');
+
 /** "1 intento" / "2 intentos"; 0 means the author set no cap. */
 export function attemptsAllowedLabel(allowed: number): string {
   if (allowed === 0) return 'Intentos ilimitados';
-  return `${allowed} ${allowed === 1 ? 'intento' : 'intentos'}`;
+  return attemptsLabel(allowed);
 }
 
 /** What is left for the learner, e.g. "Te quedan 2 intentos". */
 export function attemptsRemainingLabel(remaining: number): string {
   if (remaining <= 0) return 'No te quedan intentos';
-  return remaining === 1 ? 'Te queda 1 intento' : `Te quedan ${remaining} intentos`;
+  return remaining === 1 ? 'Te queda 1 intento' : `Te quedan ${attemptsLabel(remaining)}`;
 }
 
 function textOf(value: unknown): string {
