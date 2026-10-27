@@ -4,7 +4,7 @@ import { IsDateString, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLeng
 export class CreateCourseDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(200, { message: 'El nombre del curso no puede superar los 200 caracteres.' })
+  @MaxLength(200, { message: 'El nombre de la cohorte no puede superar los 200 caracteres.' })
   name: string;
 
   @IsString()

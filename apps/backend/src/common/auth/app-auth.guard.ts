@@ -63,7 +63,7 @@ export class AppAuthGuard implements CanActivate {
       path.startsWith('/auth') ||
       path.startsWith('/notifications');
     if (!openToPlatformAccount && !req.user?.organizationId) {
-      throw new ForbiddenException('Organization membership required');
+      throw new ForbiddenException('Necesitas pertenecer a una organización.');
     }
   }
 }

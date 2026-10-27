@@ -19,7 +19,7 @@ interface PaginatedMembers {
 }
 
 const ROLE_LABEL: Record<GlobalRole, string> = {
-  ADMIN: 'Admin',
+  ADMIN: 'Administrador',
   TEACHER: 'Profesor',
   STUDENT: 'Alumno',
 };
@@ -90,7 +90,7 @@ export function AdminUsersPage() {
 
   const columns = useMemo(() => [
     { key: 'name', header: 'Nombre', render: (member: PaginatedMember) => <span className={styles.memberName} title={member.name}>{member.name}</span> },
-    { key: 'email', header: 'Email', render: (member: PaginatedMember) => <span className={styles.memberEmail} title={member.email}>{member.email}</span> },
+    { key: 'email', header: 'Correo electrónico', render: (member: PaginatedMember) => <span className={styles.memberEmail} title={member.email}>{member.email}</span> },
     { key: 'role', header: 'Rol', render: (member: PaginatedMember) => <Badge variant="accent">{ROLE_LABEL[member.role]}</Badge> },
     { key: 'status', header: 'Estado', render: (member: PaginatedMember) => {
       return <Badge variant={statusVariant(member.status)} dot>{statusLabel(member.status)}</Badge>;
@@ -126,7 +126,7 @@ export function AdminUsersPage() {
       <div className={styles.filters}>
         <Input
           label="Buscar usuarios"
-          placeholder="Nombre o email"
+          placeholder="Nombre o correo electrónico"
           value={search}
           maxLength={100}
           leftIcon={<Search size={18} />}
@@ -138,14 +138,14 @@ export function AdminUsersPage() {
           onChange={(event) => { setRole(event.target.value as GlobalRole | ''); setPage(1); }}
           options={[
             { value: '', label: 'Todos los roles' },
-            { value: 'ADMIN', label: 'Admin' },
+            { value: 'ADMIN', label: 'Administrador' },
             { value: 'TEACHER', label: 'Profesor' },
             { value: 'STUDENT', label: 'Alumno' },
           ]}
         />
         <Select
           label="Estado"
-          hint="Activo: presencia en los últimos cinco minutos. Pendiente: email sin verificar."
+          hint="Activo: presencia en los últimos cinco minutos. Pendiente: correo electrónico sin verificar."
           value={status}
           onChange={(event) => { setStatus(event.target.value as MemberStatus | ''); setPage(1); }}
           options={[
@@ -175,7 +175,7 @@ export function AdminUsersPage() {
                 <EmptyState
                   icon={<Users size={21} />}
                   title={result?.total ? 'No hay resultados' : 'Aún no hay usuarios'}
-                  description={result?.total ? 'Prueba con otro nombre, email, rol o estado.' : 'Invita a las personas que participarán en esta organización.'}
+                  description={result?.total ? 'Prueba con otro nombre, correo electrónico, rol o estado.' : 'Invita a las personas que participarán en esta organización.'}
                   action={!result?.total ? <Button onClick={() => navigate('/admin/users/invite')}>Invitar usuario</Button> : undefined}
                 />
               )}

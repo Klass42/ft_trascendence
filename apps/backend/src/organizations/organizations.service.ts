@@ -38,7 +38,7 @@ export class OrganizationsService {
 
   async invite(organizationId: string, invitedById: string, dto: CreateInvitationDto) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
-    if (existing) throw new BadRequestException('Email already belongs to this organization');
+    if (existing) throw new BadRequestException('Ya existe una persona con ese correo electrónico en esta organización.');
     const raw = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 86400000);
@@ -53,7 +53,7 @@ export class OrganizationsService {
 
   async revokeInvitation(organizationId: string, invitationId: string, actorId: string) {
     const changed = await this.prisma.organizationInvitation.updateMany({ where: { id: invitationId, organizationId, status: 'PENDING' }, data: { status: 'REVOKED' } });
-    if (!changed.count) throw new NotFoundException('Pending invitation not found');
+    if (!changed.count) throw new NotFoundException('Invitación pendiente no encontrada.');
     await this.prisma.auditLog.create({ data: { actorId, action: 'INVITATION_REVOKED', organizationId, metadata: { invitationId } } });
     return { revoked: true };
   }
@@ -63,14 +63,14 @@ export class OrganizationsService {
       where: { id: organizationId },
     });
     if (!org) {
-      throw new NotFoundException('Organization not found');
+      throw new NotFoundException('Organización no encontrada.');
     }
     return org;
   }
 
   async update(id: string, dto: UpdateOrganizationDto, callerOrgId: string, callerUserId?: string) {
     if (id !== callerOrgId) {
-      throw new ForbiddenException('Cannot edit an organization you do not belong to');
+      throw new ForbiddenException('No puedes editar una organización a la que no perteneces.');
     }
     const updated = await this.prisma.organization.update({ where: { id }, data: dto });
     await this.notifications.emitMany(
@@ -94,7 +94,7 @@ export class OrganizationsService {
     query?: ListMembersQueryDto,
   ): Promise<Member[] | { data: Array<Member & { status: MemberStatus }>; total: number; page: number; pageSize: number; totalPages: number }> {
     if (id !== callerOrgId) {
-      throw new ForbiddenException('Cannot list members of another organization');
+      throw new ForbiddenException('No puedes ver los miembros de otra organización.');
     }
 
     const select = {
@@ -170,7 +170,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       select: { id: true, name: true },
     });
-    if (!org) throw new NotFoundException('Organization not found');
+    if (!org) throw new NotFoundException('Organización no encontrada.');
 
     const pending = await this.prisma.notification.findFirst({
       where: {
@@ -188,14 +188,14 @@ export class OrganizationsService {
     id: string, userId: string, callerOrgId: string, callerUserId: string,
   ): Promise<void> {
     if (id !== callerOrgId) {
-      throw new ForbiddenException('Cannot remove members from another organization');
+      throw new ForbiddenException('No puedes quitar miembros de otra organización.');
     }
     if (userId === callerUserId) {
-      throw new BadRequestException('Cannot remove yourself');
+      throw new BadRequestException('No puedes quitarte a ti mismo de la organización.');
     }
     const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true } });
-    if (!target) throw new NotFoundException('User not found');
-    if (target.organizationId !== id) throw new ForbiddenException('User belongs to another organization');
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+    if (target.organizationId !== id) throw new ForbiddenException('El usuario pertenece a otra organización.');
     await this.prisma.user.delete({ where: { id: userId } });
     await this.notifications.emitMany(
       async () => {
@@ -223,14 +223,14 @@ export class OrganizationsService {
       where: { id: organizationId },
       select: { id: true, name: true, slug: true },
     });
-    if (!org) throw new NotFoundException('Organization not found');
+    if (!org) throw new NotFoundException('Organización no encontrada.');
 
     const superadmins = await this.prisma.user.findMany({
       where: { platformRole: 'SUPERADMIN' },
       select: { id: true },
     });
     if (superadmins.length === 0) {
-      throw new ServiceUnavailableException('No platform superadmin can receive this request');
+      throw new ServiceUnavailableException('Ninguna persona administradora de la plataforma puede recibir esta solicitud.');
     }
 
     const title = `Solicitud de borrado: ${org.name}`;
@@ -277,7 +277,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       select: { id: true, name: true },
     });
-    if (!org) throw new NotFoundException('Organization not found');
+    if (!org) throw new NotFoundException('Organización no encontrada.');
 
     const title = `Solicitud de borrado: ${org.name}`;
     const link = `/platform/organizations/${org.id}`;

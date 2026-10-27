@@ -56,9 +56,9 @@ export class FriendshipsService {
         addressee: { is: { organizationId } },
       },
     });
-    if (!friendship) throw new NotFoundException('Friendship not found');
-    if (friendship.addresseeId !== callerUserId) throw new ForbiddenException('Only the addressee can accept or block');
-    if (friendship.status !== 'PENDING') throw new BadRequestException(`Cannot transition from ${friendship.status} to ${newStatus}`);
+    if (!friendship) throw new NotFoundException('Solicitud de amistad no encontrada.');
+    if (friendship.addresseeId !== callerUserId) throw new ForbiddenException('Solo quien recibe la solicitud puede aceptarla o bloquearla.');
+    if (friendship.status !== 'PENDING') throw new BadRequestException('Esta solicitud de amistad ya no se puede modificar.');
     const scope = {
       id: friendshipId,
       requester: { is: { organizationId } },
@@ -68,7 +68,7 @@ export class FriendshipsService {
       where: { ...scope, status: 'PENDING' },
       data: { status: newStatus },
     });
-    if (result.count === 0) throw new NotFoundException('Friendship not found');
+    if (result.count === 0) throw new NotFoundException('Solicitud de amistad no encontrada.');
     const updated = await this.prisma.friendship.findFirst({ where: scope });
     if (newStatus === 'ACCEPTED') {
       await this.notifications.emit(friendship.requesterId, 'FRIEND_REQUEST', {
@@ -88,9 +88,9 @@ export class FriendshipsService {
         addressee: { is: { organizationId } },
       },
     });
-    if (!friendship) throw new NotFoundException('Friendship not found');
+    if (!friendship) throw new NotFoundException('Solicitud de amistad no encontrada.');
     if (friendship.requesterId !== callerUserId && friendship.addresseeId !== callerUserId) {
-      throw new ForbiddenException('Only friendship participants can remove it');
+      throw new ForbiddenException('Solo las personas implicadas pueden eliminar esta amistad.');
     }
     const result = await this.prisma.friendship.deleteMany({
       where: {
@@ -99,7 +99,7 @@ export class FriendshipsService {
         addressee: { is: { organizationId } },
       },
     });
-    if (result.count === 0) throw new NotFoundException('Friendship not found');
+    if (result.count === 0) throw new NotFoundException('Solicitud de amistad no encontrada.');
     return { deleted: true };
   }
 }

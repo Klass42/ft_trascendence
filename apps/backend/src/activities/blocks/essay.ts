@@ -17,7 +17,7 @@ export const essayAdapter: BlockKindAdapter = {
     const minChars = optionalNonNegInt(c.minChars, 'minChars');
     const maxChars = optionalNonNegInt(c.maxChars, 'maxChars');
     if (minChars !== undefined && maxChars !== undefined && minChars > maxChars) {
-      throw new BadRequestException('ESSAY minChars cannot exceed maxChars');
+      throw new BadRequestException('El mínimo de caracteres no puede superar el máximo.');
     }
   },
   validateResponse(response: unknown): void {

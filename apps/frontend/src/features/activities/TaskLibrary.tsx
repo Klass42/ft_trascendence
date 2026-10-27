@@ -18,7 +18,7 @@ import {
   useTeachingActivities,
 } from '@/lib/api';
 import type { ActivityDTO, TaskTemplateDTO, TeachingActivityDTO } from '@/lib/api';
-import { formatDate } from '../assignments/helpers';
+import { formatDate } from '@/lib/format';
 import { STATUS_BADGE } from './helpers';
 
 interface Props {
@@ -190,7 +190,7 @@ function TemplatesTab({
                   onClick={() => void instantiate(row)}
                   loading={creating}
                 >
-                  Usar en este curso
+                  Usar en esta asignatura
                 </Button>
                 <Button
                   size="sm"
@@ -208,7 +208,7 @@ function TemplatesTab({
         empty={
           <EmptyState
             title="Sin plantillas todavía"
-            description="Guarda una tarea como plantilla para reutilizar sus bloques."
+            description="Guarda una tarea como plantilla para reutilizar sus preguntas."
           />
         }
       />
@@ -257,7 +257,7 @@ function PreviousTab({
         title: row.title,
         sourceActivityId: row.id,
       });
-      toast({ variant: 'success', message: 'Tarea duplicada en este curso.' });
+      toast({ variant: 'success', message: 'Tarea duplicada en esta asignatura.' });
       onInstantiated(created);
     } catch (err) {
       toast({
@@ -362,7 +362,7 @@ function PreviousTab({
       empty={
         <EmptyState
           title="Sin tareas anteriores"
-          description="Cuando publiques tareas en tus cursos, aparecerán aquí para duplicarlas."
+          description="Cuando publiques tareas en tus asignaturas, aparecerán aquí para duplicarlas."
         />
       }
     />

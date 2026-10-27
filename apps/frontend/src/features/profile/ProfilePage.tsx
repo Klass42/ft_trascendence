@@ -150,7 +150,7 @@ export function ProfilePage() {
   }
 
   const roleLabel =
-    user.role === 'STUDENT' ? 'Alumno' : user.role === 'TEACHER' ? 'Profesor' : 'Admin';
+    user.role === 'STUDENT' ? 'Alumno' : user.role === 'TEACHER' ? 'Profesor' : 'Administrador';
 
   return (
     <div className={styles.page}>
@@ -260,14 +260,14 @@ export function ProfilePage() {
       <Card title="Preferencias" titleAs="h2" className={styles.section}>
         <div className={styles.row}>
           <div>
-            <div className={styles.rowTitle}>Notificaciones por email</div>
+            <div className={styles.rowTitle}>Notificaciones por correo electrónico</div>
             <div className={styles.rowHint}>Resumen semanal de actividad</div>
           </div>
           <Toggle
             checked={user.emailNotificationsEnabled}
             onChange={handleToggleNotifications}
             disabled={isSavingProfile}
-            aria-label="Notificaciones por email"
+            aria-label="Notificaciones por correo electrónico"
           />
         </div>
         <div className={styles.row}>

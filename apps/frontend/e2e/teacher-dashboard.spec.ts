@@ -80,7 +80,7 @@ test.describe('A4-teacher — TeacherDashboard (real data)', () => {
     await page.goto('/dashboard');
 
     await expect(page.getByText('Profesor')).toBeVisible();
-    await expect(page.getByText('Cursos activos')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Asignaturas activas')).toBeVisible({ timeout: 8000 });
     await expect(page.getByText('Alumnos totales')).toBeVisible();
     await expect(page.getByText('142')).toHaveCount(0);
 

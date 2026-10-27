@@ -37,7 +37,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     // passport-google-oauth20 copies Google's email_verified onto emails[].verified.
     // Linking by address treats that email as proof of ownership.
     if (!email?.value || email.verified !== true) {
-      throw new UnauthorizedException('Google account email is not verified');
+      throw new UnauthorizedException('El correo electrónico de la cuenta de Google no está verificado.');
     }
     return {
       providerUserId: profile.id,

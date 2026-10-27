@@ -44,7 +44,7 @@ export function RosterPage({ courseId }: { courseId: string }) {
 
   if (enrollLoading || usersLoading) return <Spinner label="Cargando alumnos" />;
   if (enrollError) return <EmptyState title="No se pudo cargar el listado" description={enrollError.message} />;
-  if (rows.length === 0) return <EmptyState title="Sin alumnos" description="Nadie está matriculado en este curso." />;
+  if (rows.length === 0) return <EmptyState title="Sin alumnos" description="Nadie está matriculado en esta asignatura." />;
 
   return (
     <div className={styles.roster}>

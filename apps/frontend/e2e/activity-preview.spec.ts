@@ -14,7 +14,7 @@ test('el profesor comprueba una tarea en vista previa sin crear entregas', async
 
   try {
     await page.goto('/activities');
-    const course = page.getByRole('combobox', { name: 'Curso' });
+    const course = page.getByRole('combobox', { name: 'Asignatura' });
     await expect(course).toBeVisible({ timeout: 8000 });
     await course.selectOption(COURSE_ID);
 

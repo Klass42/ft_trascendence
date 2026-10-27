@@ -125,7 +125,7 @@ describe('ActivitiesService tenancy', () => {
     const prisma = prismaFake();
     const svc = new ActivitiesService(prisma, accessFromPrisma(prisma));
     await expect(svc.findOne(ACTIVITY, 'stranger-999')).rejects.toThrow(
-      /not found/i,
+      /no encontrada/i,
     );
   });
 });
@@ -336,7 +336,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
       ConflictException,
     );
     await expect(service.addQuestion(created.id, TEACHER, MCQ_DTO)).rejects.toThrow(
-      /la estructura está bloqueada/,
+      /estructura de la tarea está bloqueada/,
     );
   });
 
@@ -354,7 +354,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
       ConflictException,
     );
     await expect(service.remove(created.id, TEACHER)).rejects.toThrow(
-      /archivar en su lugar/,
+      /archívala en su lugar/,
     );
   });
 

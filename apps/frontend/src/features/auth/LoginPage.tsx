@@ -41,7 +41,14 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setFieldErrors({});
+    const nextErrors: Record<string, string> = {};
+    if (!organizationSlug.trim()) nextErrors.organization = 'El código de organización es obligatorio.';
+    if (!email.trim()) nextErrors.email = 'El correo electrónico es obligatorio.';
+    // Like the backend (require_tld: false): seeded accounts such as student@demo have no TLD.
+    else if (!/^[^\s@]+@[^\s@]+$/.test(email.trim())) nextErrors.email = 'Introduce un correo electrónico válido.';
+    if (!password) nextErrors.password = 'La contraseña es obligatoria.';
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
     setIsLoading(true);
 
     try {
@@ -103,7 +110,7 @@ export function LoginPage() {
 
         {/* Login Card */}
         <Card className={styles.card}>
-          <form onSubmit={handleSubmit} className={styles.form}>
+          <form onSubmit={handleSubmit} noValidate className={styles.form}>
             {/* Error message */}
             {error && (
               <div className={styles.error} role="alert">
@@ -126,7 +133,7 @@ export function LoginPage() {
             <Input
               type="email"
               label="Correo electrónico"
-              placeholder="you@example.com"
+              placeholder="nombre@ejemplo.es"
               value={email}
               maxLength={254}
               onChange={(e) => { setEmail(e.target.value); setFieldErrors((current) => ({ ...current, email: '' })); }}

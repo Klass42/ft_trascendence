@@ -61,11 +61,11 @@ export class ActivitiesService {
       include: { subject: true },
     });
     if (!activity) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     const access = await this.requireSubject(activity.subjectId, actingUserId, staffOnly);
     if (!access.isStaff && activity.status !== PublicationStatus.PUBLISHED) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     return { activity, subject: activity.subject, access };
   }
@@ -78,7 +78,7 @@ export class ActivitiesService {
 
     if (dto.templateId && dto.sourceActivityId) {
       throw new BadRequestException(
-        'templateId and sourceActivityId are mutually exclusive',
+        'Indica una plantilla o una tarea de origen, pero no ambas.',
       );
     }
 
@@ -191,7 +191,7 @@ export class ActivitiesService {
       select: { organizationId: true },
     });
     if (!actor?.organizationId) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
 
     const activity = await this.prisma.activity.findFirst({
@@ -205,7 +205,7 @@ export class ActivitiesService {
       },
     });
     if (!activity) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
 
     // Same authorship gate as authoring, including assistants and org admins.
@@ -216,7 +216,7 @@ export class ActivitiesService {
       const question = questions.get(answer.questionId);
       if (!question) {
         throw new BadRequestException(
-          `La pregunta ${answer.questionId} no pertenece a esta actividad`,
+          `La pregunta ${answer.questionId} no pertenece a esta tarea`,
         );
       }
       const adapter = getAdapter(question.kind);
@@ -318,7 +318,7 @@ export class ActivitiesService {
       where: { activityId },
     });
     if (attempts > 0) {
-      throw new ConflictException('archivar en su lugar');
+      throw new ConflictException('No se puede eliminar una tarea con intentos; archívala en su lugar.');
     }
     await this.prisma.activity.delete({ where: { id: activityId } });
     // Publish/change/grade notices deep-link to `…activityId=<id>`, now a 404.
@@ -469,7 +469,7 @@ export class ActivitiesService {
       this.validateQuestionContent(nextKind, dto.content);
     } else if (dto.kind !== undefined && dto.kind !== question.kind) {
       throw new BadRequestException(
-        'Changing a question kind requires new matching content',
+        'Para cambiar el tipo de pregunta hay que enviar también su nuevo contenido.',
       );
     }
 
@@ -554,7 +554,7 @@ export class ActivitiesService {
       !questionIds.every((id) => existingIds.has(id))
     ) {
       throw new BadRequestException(
-        'questionIds must list exactly the activity’s questions',
+        'Debes indicar exactamente las preguntas de la tarea.',
       );
     }
 
@@ -596,7 +596,7 @@ export class ActivitiesService {
       where: { id: questionId },
     });
     if (!question) {
-      throw new NotFoundException(`Question ${questionId} not found`);
+      throw new NotFoundException('Pregunta no encontrada.');
     }
     await this.requireActivity(question.activityId, actingUserId, true);
     return question;
@@ -658,7 +658,7 @@ export class ActivitiesService {
   private async assertNoAttempts(activityId: string): Promise<void> {
     const count = await this.prisma.attempt.count({ where: { activityId } });
     if (count > 0) {
-      throw new ConflictException('la estructura está bloqueada');
+      throw new ConflictException('La estructura de la tarea está bloqueada porque ya tiene intentos.');
     }
   }
 
@@ -684,7 +684,7 @@ export class ActivitiesService {
     checkEachQuestion: boolean,
   ): void {
     if (questions.length === 0) {
-      throw new BadRequestException('no se puede publicar vacía');
+      throw new BadRequestException('La tarea no se puede publicar vacía: añade al menos una pregunta.');
     }
     const total = questions.reduce((sum, q) => sum + q.points, 0);
     if (total === 0) {
@@ -721,7 +721,7 @@ export class ActivitiesService {
         where: { id: dto.templateId },
       });
       if (!template || template.organizationId !== organizationId) {
-        throw new NotFoundException(`Task template ${dto.templateId} not found`);
+        throw new NotFoundException('Plantilla de tarea no encontrada.');
       }
       return this.normalizeBlocks(template.blocks);
     }
@@ -736,7 +736,7 @@ export class ActivitiesService {
       });
       if (!sourceRef) {
         throw new NotFoundException(
-          `Activity ${dto.sourceActivityId} not found`,
+          'Tarea no encontrada.',
         );
       }
 
@@ -747,7 +747,7 @@ export class ActivitiesService {
         // missing one in the same organization.
         if (error instanceof ForbiddenException) {
           throw new NotFoundException(
-            `Activity ${dto.sourceActivityId} not found`,
+            'Tarea no encontrada.',
           );
         }
         throw error;
@@ -765,7 +765,7 @@ export class ActivitiesService {
       });
       if (!source) {
         throw new NotFoundException(
-          `Activity ${dto.sourceActivityId} not found`,
+          'Tarea no encontrada.',
         );
       }
       return source.questions.map((q) => ({
@@ -821,7 +821,7 @@ export class ActivitiesService {
         select: { id: true },
       });
       if (files.length !== fileIds.length) {
-        throw new BadRequestException('One or more files are not in this organization');
+        throw new BadRequestException('Uno o más archivos no pertenecen a esta organización.');
       }
     }
     await this.prisma.activityFile.deleteMany({ where: { activityId } });

@@ -33,22 +33,22 @@ export class CourseAccessService {
       where: { id: courseId, organizationId: user.organizationId },
     });
     if (!course) {
-      throw new NotFoundException(`Course ${courseId} not found`);
+      throw new NotFoundException('Cohorte no encontrada.');
     }
     if (user.role === 'ADMIN' || await this.canReadCourse(course.id, user)) {
       return course;
     }
-    throw new ForbiddenException('You cannot access this course');
+    throw new ForbiddenException('No tienes acceso a esta cohorte.');
   }
 
   async assertSubjectReadable(subjectId: string, user: AuthUser): Promise<SubjectAccess> {
     const loaded = await this.loadSubject(subjectId, user);
     if (loaded.isStaff) return loaded;
     if (loaded.subject.status !== 'PUBLISHED') {
-      throw new NotFoundException(`Subject ${subjectId} not found`);
+      throw new NotFoundException('Asignatura no encontrada.');
     }
     if (!loaded.isMember) {
-      throw new ForbiddenException('You must be enrolled in this course');
+      throw new ForbiddenException('Debes estar matriculado en esta cohorte.');
     }
     return loaded;
   }
@@ -56,7 +56,7 @@ export class CourseAccessService {
   async assertSubjectStaff(subjectId: string, user: AuthUser): Promise<SubjectAccess> {
     const loaded = await this.loadSubject(subjectId, user);
     if (!loaded.isStaff) {
-      throw new ForbiddenException('Subject staff access is required');
+      throw new ForbiddenException('Solo el profesorado de la asignatura puede hacer esto.');
     }
     return loaded;
   }
@@ -96,7 +96,7 @@ export class CourseAccessService {
       include: { course: true },
     });
     if (!subject || subject.course.organizationId !== user.organizationId) {
-      throw new NotFoundException(`Subject ${subjectId} not found`);
+      throw new NotFoundException('Asignatura no encontrada.');
     }
 
     const [staff, membership] = await Promise.all([
@@ -121,7 +121,7 @@ export class CourseAccessService {
   private async authFromUserId(userId: string, subjectId: string): Promise<AuthUser> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.organizationId) {
-      throw new NotFoundException(`Subject ${subjectId} not found`);
+      throw new NotFoundException('Asignatura no encontrada.');
     }
     return {
       userId: user.id,

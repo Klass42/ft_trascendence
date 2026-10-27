@@ -11,6 +11,7 @@ import { EmptyState, Spinner } from '@/components/ui';
 import { useAuth, useTeachingSummary } from '@/lib/api';
 import type { PendingAttemptDTO } from '@/lib/api';
 import { useNotifications } from '@/features/notifications';
+import { formatRelativeTime } from '@/lib/format';
 import { DashboardHeader } from './DashboardHeader';
 
 function initials(name: string): string {
@@ -22,17 +23,6 @@ function initials(name: string): string {
       .toUpperCase()
       .slice(0, 2) || '?'
   );
-}
-
-function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return 'ahora';
-  if (mins < 60) return `hace ${mins} min`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'ayer' : `hace ${days} días`;
 }
 
 function StatCard({
@@ -169,7 +159,7 @@ export function TeacherDashboard() {
               marginBottom: 'var(--space-5)',
             }}
           >
-            <StatCard label="Cursos activos" value={data.activeCourses} />
+            <StatCard label="Asignaturas activas" value={data.activeCourses} />
             <StatCard
               label="Por calificar"
               value={data.pendingCount}
@@ -270,7 +260,7 @@ export function TeacherDashboard() {
                       flex: 'none',
                     }}
                   >
-                    {s.submittedAt ? relativeTime(s.submittedAt) : '—'}
+                    {s.submittedAt ? formatRelativeTime(s.submittedAt) : '—'}
                   </span>
                 </div>
               ))}

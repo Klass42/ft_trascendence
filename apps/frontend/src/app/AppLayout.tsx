@@ -30,6 +30,8 @@ interface NavItem {
   to: string;
   icon: ReactNode;
   label: string;
+  /** Label shown to students when it differs from `label` (matches the page title). */
+  studentLabel?: string;
   staffOnly?: boolean;
   student?: boolean;
   teacher?: boolean;
@@ -39,11 +41,11 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { to: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Inicio' },
-  { to: '/courses', icon: <BookOpen size={20} />, label: 'Cursos' },
+  { to: '/courses', icon: <BookOpen size={20} />, label: 'Cohortes' },
   { to: '/friends', icon: <Users size={20} />, label: 'Amigos' },
   { to: '/activities', icon: <ClipboardCheck size={20} />, label: 'Tareas', student: true, teacher: true },
   { to: '/forums', icon: <MessageSquare size={20} />, label: 'Foros', student: true, teacher: true },
-  { to: '/grades', icon: <BarChart3 size={20} />, label: 'Datos', hideFromAdmin: true },
+  { to: '/grades', icon: <BarChart3 size={20} />, label: 'Calificaciones', studentLabel: 'Mis notas', hideFromAdmin: true },
   { to: '/analytics', icon: <LineChart size={20} />, label: 'Analíticas', staffOnly: true, hideFromAdmin: true },
   { to: '/resources', icon: <Library size={20} />, label: 'Biblioteca', staffOnly: true },
   { to: '/org', icon: <Building2 size={20} />, label: 'Organización' },
@@ -184,6 +186,7 @@ export function AppLayout({ children }: AppLayoutProps = {}) {
             }
             return true;
           }).map((item) => {
+            const label = user?.role === 'STUDENT' && item.studentLabel ? item.studentLabel : item.label;
             return (
               <NavLink
                 key={item.to}
@@ -192,10 +195,10 @@ export function AppLayout({ children }: AppLayoutProps = {}) {
                   `${styles.navItem} ${isActive ? styles.active : ''}`
                 }
                 onClick={() => setIsMobileMenuOpen(false)}
-                aria-label={item.label}
+                aria-label={label}
               >
                 <span className={styles.navIcon}>{item.icon}</span>
-                {!isCollapsed && <span className={styles.navLabel}>{item.label}</span>}
+                {!isCollapsed && <span className={styles.navLabel}>{label}</span>}
               </NavLink>
             );
           })}

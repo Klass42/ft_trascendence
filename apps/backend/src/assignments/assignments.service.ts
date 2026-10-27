@@ -51,7 +51,7 @@ export class AssignmentsService {
       include: { subject: true },
     });
     if (!assignment) {
-      throw new NotFoundException(`Assignment ${assignmentId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
 
     const access = await this.requireSubject(
@@ -85,7 +85,7 @@ export class AssignmentsService {
     });
     if (files.length !== fileIds.length) {
       throw new BadRequestException(
-        'One or more files are invalid or not owned by you',
+        'Uno o más archivos no son válidos o no son tuyos.',
       );
     }
   }

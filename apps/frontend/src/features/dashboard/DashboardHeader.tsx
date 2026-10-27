@@ -1,16 +1,14 @@
+import { formatWeekdayDate } from '@/lib/format';
+
 /** Shared dashboard header (date + title + role badge). Stable/presentational. */
 export function DashboardHeader({ title, roleLabel }: { title: string; roleLabel: string }) {
   const today = new Date();
-  const dateStr = today.toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  const dateStr = formatWeekdayDate(today);
 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 22 }}>
       <div>
-        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'capitalize' }}>
+        <div style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>
           {dateStr}
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 800, margin: '3px 0 0', letterSpacing: '-0.02em' }}>{title}</h1>

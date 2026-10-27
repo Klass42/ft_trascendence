@@ -97,7 +97,7 @@ export function LessonPage() {
         className={styles.back}
         onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}`)}
       >
-        ← {course?.title || 'Curso'}
+        ← {course?.title || 'Asignatura'}
       </button>
 
       <h1 className={styles.title}>{lesson.title}</h1>

@@ -3,7 +3,8 @@ import { Button } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useAuth, useSubmitAssignment } from '@/lib/api';
 import type { AssignmentDTO, SubmissionDTO } from '@/lib/api';
-import { STATUS_CHIP, formatDate, openFile } from './helpers';
+import { STATUS_CHIP, openFile } from './helpers';
+import { formatDateTime } from '@/lib/format';
 
 interface SubmissionFormProps {
   assignment: AssignmentDTO;
@@ -273,7 +274,7 @@ export function SubmissionForm({
 
           {assignment.dueAt && (
             <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: 0 }}>
-              Fecha límite: {formatDate(assignment.dueAt)}
+              Fecha límite: {formatDateTime(assignment.dueAt)}
             </p>
           )}
         </>

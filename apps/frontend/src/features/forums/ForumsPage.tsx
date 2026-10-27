@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button, Spinner } from '@/components/ui';
 import { subjectSelectorLabel, useMySubjects, useForumThreads } from '@/lib/api';
 import { NewThreadForm } from './NewThreadForm';
-import { formatDateTime, initialsOf } from './helpers';
+import { initialsOf } from './helpers';
+import { formatDateTime } from '@/lib/format';
 import styles from './ForumsPage.module.css';
 
 /**
@@ -84,11 +85,11 @@ export function ForumsPage() {
         )}
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
         <p style={{ color: 'var(--color-text-muted)' }}>
-          No hay cursos disponibles.
+          No hay asignaturas disponibles.
         </p>
       )}
 
@@ -143,7 +144,7 @@ export function ForumsPage() {
 
           {threadsError && (
             <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
-              No se pudieron cargar los hilos (¿estás inscrito en este curso?).
+              No se pudieron cargar los hilos (¿estás inscrito en esta asignatura?).
             </p>
           )}
 
@@ -151,7 +152,7 @@ export function ForumsPage() {
             <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
               {debounced
                 ? 'Ningún hilo coincide con tu búsqueda.'
-                : 'Este curso no tiene hilos todavía. ¡Abre el primero!'}
+                : 'Esta asignatura no tiene hilos todavía. ¡Abre el primero!'}
             </p>
           )}
 

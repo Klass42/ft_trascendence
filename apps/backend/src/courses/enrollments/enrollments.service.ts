@@ -26,7 +26,7 @@ export class EnrollmentsService {
     });
 
     if (!lesson || lesson.section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     return { subjectId: lesson.section.subjectId };
@@ -39,7 +39,7 @@ export class EnrollmentsService {
       include: { section: { include: { subject: true } } },
     });
     if (!lesson || lesson.section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     await this.prisma.lessonCompletion.upsert({
@@ -59,7 +59,7 @@ export class EnrollmentsService {
       include: { section: { include: { subject: true } } },
     });
     if (!lesson || lesson.section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     // Idempotent: unmarking a lesson that was never completed is a no-op.
@@ -175,7 +175,7 @@ export class EnrollmentsService {
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, organizationId },
     });
-    if (!subject) throw new NotFoundException(`Subject ${subjectId} not found`);
+    if (!subject) throw new NotFoundException('Asignatura no encontrada.');
     return subject;
   }
 

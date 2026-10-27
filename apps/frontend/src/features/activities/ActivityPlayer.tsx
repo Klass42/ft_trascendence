@@ -17,7 +17,8 @@ import type {
   QuestionDTO,
   SaveAnswersInput,
 } from '@/lib/api';
-import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
+import { windowState, WINDOW_BADGE } from '../assignments/helpers';
+import { formatDateTime, plural } from '@/lib/format';
 import { AttemptHistory } from './AttemptReview';
 import {
   attemptsAllowedLabel,
@@ -185,7 +186,7 @@ export function ActivityPlayer({
     }
   }
 
-  if (!isPreview && (activityLoading || attemptsLoading)) return <Spinner size="md" label="Cargando actividad…" />;
+  if (!isPreview && (activityLoading || attemptsLoading)) return <Spinner size="md" label="Cargando tarea…" />;
   if (!activity || (!isPreview && (activityError || attemptsError))) {
     return <p style={{ color: 'var(--color-error)' }}>No se pudo cargar esta tarea. Puede que ya no esté disponible.</p>;
   }
@@ -235,9 +236,9 @@ export function ActivityPlayer({
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '12px 0' }}>
-          {activity.openAt ? `Abre ${formatDate(activity.openAt)} · ` : ''}
-          {activity.dueAt ? `Entrega ${formatDate(activity.dueAt)}` : 'Sin fecha límite'}
-          {activity.closeAt ? ` · Cierra ${formatDate(activity.closeAt)}` : ''}
+          {activity.openAt ? `Abre ${formatDateTime(activity.openAt)} · ` : ''}
+          {activity.dueAt ? `Entrega ${formatDateTime(activity.dueAt)}` : 'Sin fecha límite'}
+          {activity.closeAt ? ` · Cierra ${formatDateTime(activity.closeAt)}` : ''}
           {activity.timeLimitSec ? ` · Tiempo recomendado: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
         </p>
         {activity.description && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{activity.description}</p>}
@@ -285,9 +286,9 @@ export function ActivityPlayer({
       </div>
 
       <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '12px 0' }}>
-        {activity.openAt ? `Abre ${formatDate(activity.openAt)} · ` : ''}
-        {activity.dueAt ? `Entrega ${formatDate(activity.dueAt)}` : 'Sin fecha límite'}
-        {activity.closeAt ? ` · Cierra ${formatDate(activity.closeAt)}` : ''}
+        {activity.openAt ? `Abre ${formatDateTime(activity.openAt)} · ` : ''}
+        {activity.dueAt ? `Entrega ${formatDateTime(activity.dueAt)}` : 'Sin fecha límite'}
+        {activity.closeAt ? ` · Cierra ${formatDateTime(activity.closeAt)}` : ''}
         {activity.timeLimitSec ? ` · Tiempo recomendado: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
       </p>
       {activity.description && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{activity.description}</p>}
@@ -353,7 +354,7 @@ function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, 
   const results = new Map((previewGrade?.results ?? []).map((result) => [result.questionId, result]));
   const solutions = new Map((previewGrade?.solutions ?? []).map((solution) => [solution.questionId, solution.content]));
   return (
-    <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }} style={{ marginTop: 20, borderTop: '1px solid var(--color-border-primary)', paddingTop: 18 }}>
+    <form noValidate onSubmit={(event) => { event.preventDefault(); onSubmit(); }} style={{ marginTop: 20, borderTop: '1px solid var(--color-border-primary)', paddingTop: 18 }}>
       {questions.length === 0 ? <p>No hay preguntas publicadas para esta tarea.</p> : questions.map((question, index) => (
         <QuestionInput
           key={question.id}
@@ -509,7 +510,7 @@ function FileUploadQuestion({
     <div>
       {existingCount > 0 && (
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '8px 0' }}>
-          {existingCount} fichero(s) ya guardado(s). Sube de nuevo para reemplazarlos.
+          {plural(existingCount, 'archivo ya guardado', 'archivos ya guardados')}. Sube de nuevo para reemplazar{existingCount === 1 ? 'lo' : 'los'}.
         </p>
       )}
       <FileUpload
@@ -523,7 +524,7 @@ function FileUploadQuestion({
           const done = files.filter((f) => f.status === 'done').map((f) => f.id);
           if (done.length > 0) onFileIds(done);
         }}
-        hint={disabled ? 'En una tarea real podrás subir los ficheros aquí.' : `Máximo ${maxFiles} fichero(s).`}
+        hint={disabled ? 'En una tarea real podrás subir los archivos aquí.' : `Máximo ${plural(maxFiles, 'archivo', 'archivos')}.`}
       />
     </div>
   );

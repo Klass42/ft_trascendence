@@ -83,7 +83,7 @@ export class AttemptsService {
       const question = questions.get(a.questionId);
       if (!question) {
         throw new BadRequestException(
-          `La pregunta ${a.questionId} no pertenece a esta actividad`,
+          `La pregunta ${a.questionId} no pertenece a esta tarea`,
         );
       }
       const adapter = getAdapter(question.kind);
@@ -302,7 +302,7 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     await this.activities.requireActivity(
       attempt.activityId,
       actingUserId,
@@ -320,7 +320,7 @@ export class AttemptsService {
       const question = questions.get(item.questionId);
       if (!question) {
         throw new BadRequestException(
-          `La pregunta ${item.questionId} no pertenece a esta actividad`,
+          `La pregunta ${item.questionId} no pertenece a esta tarea`,
         );
       }
       if (item.awarded === undefined && item.feedback === undefined) {
@@ -420,7 +420,7 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
@@ -443,7 +443,7 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
@@ -583,10 +583,10 @@ export class AttemptsService {
       actingUserId,
     );
     if (!required.access.isMember) {
-      throw new ForbiddenException('Debes estar matriculado en este curso');
+      throw new ForbiddenException('Debes estar matriculado en esta cohorte.');
     }
     if (required.activity.status !== PublicationStatus.PUBLISHED) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     if (checkWindow) this.assertOpenWindow(required.activity);
     return required;
@@ -595,10 +595,10 @@ export class AttemptsService {
   private assertOpenWindow(activity: Activity) {
     const now = new Date();
     if (activity.openAt && now < activity.openAt) {
-      throw new BadRequestException('La actividad aún no está abierta');
+      throw new BadRequestException('La tarea aún no está abierta.');
     }
     if (activity.closeAt && now > activity.closeAt) {
-      throw new BadRequestException('La actividad está cerrada');
+      throw new BadRequestException('La tarea está cerrada.');
     }
   }
 
@@ -622,7 +622,7 @@ export class AttemptsService {
             });
             if (activity.attemptsAllowed > 0 && used >= activity.attemptsAllowed) {
               throw new BadRequestException(
-                'No quedan intentos disponibles para esta actividad',
+                'No quedan intentos disponibles para esta tarea.',
               );
             }
 
@@ -678,7 +678,7 @@ export class AttemptsService {
     const maxFiles = content.maxFiles as number;
     if (fileIds.length > maxFiles) {
       throw new BadRequestException(
-        `No puedes adjuntar más de ${maxFiles} fichero(s)`,
+        `No puedes adjuntar más de ${maxFiles} ${maxFiles === 1 ? 'archivo' : 'archivos'}`,
       );
     }
 
@@ -693,7 +693,7 @@ export class AttemptsService {
         })
       : [];
     if (files.length !== fileIds.length) {
-      throw new BadRequestException('Uno o más ficheros no son válidos');
+      throw new BadRequestException('Uno o más archivos no son válidos.');
     }
 
     const acceptedTypes = Array.isArray(content.accept)
@@ -704,7 +704,7 @@ export class AttemptsService {
       files.some((file) => !this.isAcceptedFile(file, acceptedTypes))
     ) {
       throw new BadRequestException(
-        'Uno o más ficheros no cumplen el tipo permitido',
+        'Uno o más archivos no cumplen el tipo permitido.',
       );
     }
   }
@@ -760,7 +760,7 @@ export class AttemptsService {
     attemptNo: number,
   ) {
     await this.notifications.emit(userId, NotificationType.GRADE_PUBLISHED, {
-      title: 'Actividad calificada',
+      title: 'Tarea calificada',
       body: `Tu intento ${attemptNo} de «${activity.title}» ha sido calificado: ${score}/${activity.maxScore}`,
       link: `/activities?activityId=${activity.id}`,
     });

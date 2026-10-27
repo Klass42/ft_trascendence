@@ -144,7 +144,7 @@ export class NotificationsService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(`Notification ${id} not found`);
+      throw new NotFoundException('Notificación no encontrada.');
     }
 
     return { updated: result.count };

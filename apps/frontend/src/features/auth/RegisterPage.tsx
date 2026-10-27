@@ -28,11 +28,11 @@ export function RegisterPage() {
       next.organization = 'El código solo puede contener letras minúsculas, números y guiones.';
     }
     if (!email.trim()) {
-      next.email = 'El email es obligatorio';
+      next.email = 'El correo electrónico es obligatorio.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      next.email = 'Formato de email inválido';
+      next.email = 'Introduce un correo electrónico válido.';
     } else if (email.trim().length > 254) {
-      next.email = 'El correo no puede superar los 254 caracteres.';
+      next.email = 'El correo electrónico no puede superar los 254 caracteres.';
     }
     if (!password) {
       next.password = 'La contraseña es obligatoria';
@@ -56,7 +56,7 @@ export function RegisterPage() {
         form: mapped.form,
       });
     } else if (err.status === 409) {
-      setErrors({ email: 'Este email ya está registrado' });
+      setErrors({ email: 'Este correo electrónico ya está registrado.' });
     } else {
       setErrors({ form: err.message || 'Error al crear la cuenta. Inténtalo de nuevo.' });
     }
@@ -94,7 +94,7 @@ export function RegisterPage() {
         </div>
 
         <Card className={styles.card}>
-          <form onSubmit={handleSubmit} className={styles.form}>
+          <form onSubmit={handleSubmit} noValidate className={styles.form}>
             {errors.form && (
               <div className={styles.error} role="alert">{errors.form}</div>
             )}
@@ -126,8 +126,8 @@ export function RegisterPage() {
 
             <Input
               type="email"
-              label="Email"
-              placeholder="tu@email.com"
+              label="Correo electrónico"
+              placeholder="nombre@ejemplo.es"
               value={email}
               maxLength={254}
               onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}

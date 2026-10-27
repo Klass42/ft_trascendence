@@ -889,7 +889,7 @@ describe('AttemptsService', () => {
     const gradeNotifications = emitted.filter(
       (notification) => notification.type === NotificationType.GRADE_PUBLISHED,
     );
-    expect(gradeNotifications).toHaveLength(1);
+    expect(gradeNotifications[0]).toMatchObject({ userId: STUDENT, payload: { title: 'Tarea calificada' } });
     expect(gradeNotifications[0]).toMatchObject({ userId: STUDENT });
     expect(analyticsEvents).toHaveLength(2);
     expect(analyticsEvents[1]).toEqual({
@@ -997,6 +997,6 @@ describe('AttemptsService', () => {
       service.grade(started.id, STUDENT, {
         answers: [{ questionId: 'q1', awarded: 5 }],
       } as unknown as GradeAttemptDto),
-    ).rejects.toThrow(/staff/i);
+    ).rejects.toThrow(/profesorado/i);
   });
 });

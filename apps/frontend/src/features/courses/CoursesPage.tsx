@@ -15,14 +15,15 @@ import {
   Spinner,
   useToast,
 } from '@/components/ui';
+import { formatDayMonth } from '@/lib/format';
 import { CohortEditModal } from './CohortEditModal';
 import { CourseActionsMenu } from './CourseActionsMenu';
 import styles from './CoursesPage.module.css';
 
 function statusLabel(status: CohortStatus): string {
   if (status === 'ACTIVE') return 'En curso';
-  if (status === 'ARCHIVED') return 'Archivado';
-  return 'Planificado';
+  if (status === 'ARCHIVED') return 'Archivada';
+  return 'Planificada';
 }
 
 function statusVariant(status: CohortStatus): 'success' | 'neutral' | 'info' {
@@ -32,9 +33,7 @@ function statusVariant(status: CohortStatus): 'success' | 'neutral' | 'info' {
 }
 
 function formatDateRange(course: CourseDTO): string {
-  const format = (value: string) => new Intl.DateTimeFormat('es-ES', {
-    day: 'numeric', month: 'short', timeZone: 'UTC',
-  }).format(new Date(value));
+  const format = (value: string) => formatDayMonth(value, 'UTC');
   return `${format(course.startsOn)} – ${format(course.endsOn)}`;
 }
 
@@ -212,7 +211,7 @@ export function CoursesPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div>
-          <h1 className={styles.title}>Mis cursos</h1>
+          <h1 className={styles.title}>Cohortes</h1>
           <p className={styles.subtitle}>Cohortes y asignaturas de tu organización.</p>
         </div>
         {isAdmin && (
@@ -230,15 +229,15 @@ export function CoursesPage() {
       ) : isStudent ? (
         <>
           <section className={styles.courseSection}>
-            <h2>Curso actual</h2>
+            <h2>Cohorte actual</h2>
             {current.length === 0 ? (
               <p className={styles.sectionEmpty}>No tienes una cohorte activa.</p>
             ) : <CourseGrid courses={current} {...gridProps} />}
           </section>
           <section className={styles.courseSection}>
-            <h2>Cursos anteriores</h2>
+            <h2>Cohortes anteriores</h2>
             {previous.length === 0 ? (
-              <p className={styles.sectionEmpty}>Todavía no hay cursos anteriores.</p>
+              <p className={styles.sectionEmpty}>Todavía no hay cohortes anteriores.</p>
             ) : <CourseGrid courses={previous} {...gridProps} />}
           </section>
         </>
@@ -271,9 +270,9 @@ export function CoursesPage() {
                 value={status}
                 onChange={(event) => setStatus(event.target.value as CohortStatus)}
                 options={[
-                  { value: 'PLANNED', label: 'Planificado' },
+                  { value: 'PLANNED', label: 'Planificada' },
                   { value: 'ACTIVE', label: 'En curso' },
-                  { value: 'ARCHIVED', label: 'Archivado' },
+                  { value: 'ARCHIVED', label: 'Archivada' },
                 ]}
               />
             </div>

@@ -57,7 +57,7 @@ test('analytics KPIs update live after an attempt is submitted and graded', asyn
     );
     await page.goto('/analytics');
     await socketReady;
-    await page.getByRole('combobox', { name: 'Curso' }).selectOption(COURSE_ID);
+    await page.getByRole('combobox', { name: 'Asignatura' }).selectOption(COURSE_ID);
     const initialCount = `${initial.submissions.total}/${initial.submissions.expected} entregas`;
     await expect(page.getByText(initialCount, { exact: true })).toBeVisible();
     const navigationCount = mainFrameNavigations;

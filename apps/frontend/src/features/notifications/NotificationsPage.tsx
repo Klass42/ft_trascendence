@@ -109,7 +109,7 @@ export function NotificationsPage() {
           description={
             filter === 'unread'
               ? 'Estás al día.'
-              : 'Cuando haya novedades de tus cursos o de tu cuenta, aparecerán aquí.'
+              : 'Cuando haya novedades de tus asignaturas o de tu cuenta, aparecerán aquí.'
           }
         />
       )}

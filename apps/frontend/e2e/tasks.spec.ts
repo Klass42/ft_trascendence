@@ -195,7 +195,7 @@ async function archiveActivity(request: APIRequestContext, id: string) {
 }
 
 async function selectCourse(page: Page, courseId: string) {
-  const course = page.getByRole('combobox', { name: 'Curso' });
+  const course = page.getByRole('combobox', { name: 'Asignatura' });
   await expect(course).toBeVisible({ timeout: 8000 });
   await course.selectOption(courseId);
 }
@@ -414,7 +414,7 @@ test.describe('Tareas — unified E2E', () => {
     const library = page.getByRole('dialog', { name: 'Biblioteca de tareas' });
     await expect(library).toBeVisible();
     const templateRow = library.getByRole('row').filter({ hasText: title });
-    await templateRow.getByRole('button', { name: 'Usar en este curso' }).click();
+    await templateRow.getByRole('button', { name: 'Usar en esta asignatura' }).click();
     await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible({
       timeout: 8000,
     });
@@ -426,7 +426,7 @@ test.describe('Tareas — unified E2E', () => {
     await libraryAgain.getByRole('tab', { name: 'Anteriores' }).click();
     const previous = libraryAgain.getByRole('row').filter({ hasText: title }).first();
     await previous.getByRole('button', { name: 'Duplicar aquí' }).click();
-    await expect(page.getByText('Tarea duplicada en este curso.')).toBeVisible({
+    await expect(page.getByText('Tarea duplicada en esta asignatura.')).toBeVisible({
       timeout: 8000,
     });
 

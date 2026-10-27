@@ -82,9 +82,9 @@ repartidas en los últimos 9 días):
 | Tarea · Ensayo y fichero (máx. 10) | Calificada por Diego: 8,5/10, con comentario general y comentario en la respuesta del ensayo (hace 3 días, calificada hace 2) | Entregada hace 1 día, **por calificar** |
 | Quiz rápido · HTTP y HTML (máx. 10) | Sin intentos | Sin intentos; es su "Próxima entrega" |
 
-Notificaciones: Sam recibe "Actividad calificada" (quiz, leída), "Nueva tarea publicada" (quiz
+Notificaciones: Sam recibe "Tarea calificada" (quiz, leída), "Nueva tarea publicada" (quiz
 rápido) y "Tienes una nueva solicitud de amistad"; Lucía, "Nota publicada" (la original),
-"Nueva tarea publicada" y "Actividad calificada" (ensayo); Theo y Diego, "Nueva entrega para
+"Nueva tarea publicada" y "Tarea calificada" (ensayo); Theo y Diego, "Nueva entrega para
 corregir" (enlaza a `/grades` con el intento de Sam). Lecciones completadas: Lucía y Sam, la
 primera cada uno.
 

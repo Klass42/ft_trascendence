@@ -19,6 +19,7 @@ import {
   type LearningResourceType,
 } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
+import { plural } from '@/lib/format';
 import { FolderTree } from './FolderTree';
 import { ResourceCard } from './ResourceCard';
 import styles from './ResourcesPage.module.css';
@@ -43,8 +44,8 @@ interface PendingConfirm {
 interface Targets { resourceIds: string[]; folderIds: string[] }
 
 const countLabel = ({ resourceIds, folderIds }: Targets) => [
-  resourceIds.length && `${resourceIds.length} recurso${resourceIds.length === 1 ? '' : 's'}`,
-  folderIds.length && `${folderIds.length} carpeta${folderIds.length === 1 ? '' : 's'}`,
+  resourceIds.length && plural(resourceIds.length, 'recurso', 'recursos'),
+  folderIds.length && plural(folderIds.length, 'carpeta', 'carpetas'),
 ].filter(Boolean).join(' y ');
 
 /**
@@ -112,7 +113,7 @@ export function ResourcesPage() {
     }
     setConfirm({
       title: 'Archivar recursos',
-      message: `Se archivarán ${countLabel({ resourceIds: ids, folderIds: [] })}.${targets.folderIds.length ? ' Las carpetas seleccionadas no se archivan.' : ''}`,
+      message: `Se ${ids.length === 1 ? 'archivará' : 'archivarán'} ${countLabel({ resourceIds: ids, folderIds: [] })}.${targets.folderIds.length ? ' Las carpetas seleccionadas no se archivan.' : ''}`,
       confirmLabel: 'Archivar',
       variant: 'primary',
       run: async () => {
@@ -120,7 +121,7 @@ export function ResourcesPage() {
         for (const id of ids) {
           try { await mutations.update(id, { status: 'ARCHIVED' }); ok += 1; } catch { /* reported below */ }
         }
-        toast({ variant: ok === ids.length ? 'success' : 'error', message: `Archivados ${ok} de ${ids.length} recursos.` });
+        toast({ variant: ok === ids.length ? 'success' : 'error', message: ok === ids.length ? `Se ${ok === 1 ? 'ha archivado' : 'han archivado'} ${plural(ok, 'recurso', 'recursos')}.` : `Se ${ok === 1 ? 'ha archivado' : 'han archivado'} ${ok} de ${plural(ids.length, 'recurso', 'recursos')}.` });
       },
     });
   };
@@ -129,7 +130,7 @@ export function ResourcesPage() {
     const single = targets.resourceIds.length + targets.folderIds.length === 1;
     setConfirm({
       title: single ? (targets.folderIds.length ? 'Eliminar carpeta' : 'Eliminar recurso') : 'Eliminar selección',
-      message: `Se eliminarán ${countLabel(targets)} de la biblioteca.`
+      message: `Se ${single ? 'eliminará' : 'eliminarán'} ${countLabel(targets)} de la biblioteca.`
         + (targets.folderIds.length ? ' El contenido de las carpetas eliminadas pasa a la raíz.' : '')
         + ' Los archivos almacenados no se borrarán.',
       confirmLabel: 'Eliminar',
@@ -139,7 +140,7 @@ export function ResourcesPage() {
           if (single && targets.resourceIds.length) await mutations.remove(targets.resourceIds[0]);
           else if (single) await mutations.removeFolder(targets.folderIds[0]);
           else await mutations.batchDelete(targets);
-          toast({ variant: 'success', message: `Eliminados ${countLabel(targets)}.` });
+          toast({ variant: 'success', message: `Se ${single ? 'ha eliminado' : 'han eliminado'} ${countLabel(targets)}.` });
           if (targets.folderIds.includes(folderId ?? '')) setFolderId(null);
         } catch (err) {
           toast({ variant: 'error', message: errorMessage(err, 'No se pudo eliminar.') });
@@ -173,7 +174,7 @@ export function ResourcesPage() {
     }
     toast({
       variant: ok === total ? 'success' : 'error',
-      message: ok === total ? `Publicados ${countLabel(targets)} en el curso.` : `Publicados ${ok} de ${total} elementos.`,
+      message: ok === total ? `Se ${total === 1 ? 'ha publicado' : 'han publicado'} ${countLabel(targets)} en la asignatura.` : `Se ${ok === 1 ? 'ha publicado' : 'han publicado'} ${ok} de ${plural(total, 'elemento', 'elementos')}.`,
     });
     setPublishTargets(null);
     clearSelection();
@@ -189,7 +190,7 @@ export function ResourcesPage() {
     for (const id of targets.folderIds) {
       try { await mutations.updateFolder(id, { parentId: destination }); ok += 1; } catch { /* counted */ }
     }
-    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `Movidos ${countLabel(targets)}.` : `Movidos ${ok} de ${total} elementos.` });
+    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `Se ${total === 1 ? 'ha movido' : 'han movido'} ${countLabel(targets)}.` : `Se ${ok === 1 ? 'ha movido' : 'han movido'} ${ok} de ${plural(total, 'elemento', 'elementos')}.` });
     setMoveTargets(null);
     clearSelection();
     await reloadAll();
@@ -202,7 +203,7 @@ export function ResourcesPage() {
       <Dropdown
         trigger={<><MoreVertical size={18} aria-hidden="true" /><span style={visuallyHidden}>Acciones de {resource.title}</span></>}
         items={[
-          { label: 'Publicar en curso', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
+          { label: 'Publicar en asignatura', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
           { label: 'Archivar', icon: <Archive size={16} />, onClick: () => askArchive(one), disabled: !manage || resource.status === 'ARCHIVED' },
           { label: 'Mover a…', icon: <FolderInput size={16} />, onClick: () => setMoveTargets(one), disabled: !manage },
           { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: () => askDelete(one), danger: true, disabled: !manage },
@@ -220,7 +221,7 @@ export function ResourcesPage() {
         trigger={<><MoreVertical size={18} aria-hidden="true" /><span style={visuallyHidden}>Acciones de {folder.name}</span></>}
         items={[
           { label: 'Abrir', icon: <FolderOpen size={16} />, onClick: () => openFolder(folder.id) },
-          { label: 'Publicar en curso', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
+          { label: 'Publicar en asignatura', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
           { label: 'Renombrar', icon: <Pencil size={16} />, onClick: () => setFolderModal({ mode: 'rename', folder }), disabled: !manage },
           { label: 'Mover a…', icon: <FolderInput size={16} />, onClick: () => setMoveTargets(one), disabled: !manage },
           { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: () => askDelete(one), danger: true, disabled: !manage },
@@ -235,7 +236,7 @@ export function ResourcesPage() {
       ? (resources?.find((r) => r.id === publishTargets.resourceIds[0])?.title ?? folderById.get(publishTargets.folderIds[0])?.name ?? '')
       : countLabel(publishTargets))
     : '';
-  // Hide courses already linked when publishing a single item.
+  // Hide subjects already linked when publishing a single item.
   const publishExclude = publishTargets && publishTargets.resourceIds.length + publishTargets.folderIds.length === 1
     ? (resources?.find((r) => r.id === publishTargets.resourceIds[0])?.subjects.map((l) => l.subjectId)
       ?? folderById.get(publishTargets.folderIds[0])?.subjects.map((l) => l.subjectId) ?? [])
@@ -295,7 +296,7 @@ export function ResourcesPage() {
 
       {selectMode && (
         <div role="toolbar" aria-label="Acciones sobre la selección" style={batchBarStyle}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>{selectionCount ? `${countLabel(selection)} seleccionados` : 'Nada seleccionado'}</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{selectionCount ? `${selectionCount === 1 ? 'Seleccionado' : 'Seleccionados'}: ${countLabel(selection)}` : 'Nada seleccionado'}</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button size="sm" variant="secondary" disabled={!selectionCount} onClick={() => setPublishTargets(selection)}><Send size={14} /> Publicar</Button>
             <Button size="sm" variant="secondary" disabled={!selection.resourceIds.length} onClick={() => askArchive(selection)}><Archive size={14} /> Archivar</Button>
@@ -330,7 +331,7 @@ export function ResourcesPage() {
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontWeight: 700, fontSize: 15 }}>{folder.name}</span>
                   <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {folder._count.resources} recursos · {folder._count.children} subcarpetas
+                    {plural(folder._count.resources, 'recurso', 'recursos')} · {plural(folder._count.children, 'subcarpeta', 'subcarpetas')}
                     {folder.subjects.length > 0 && ` · publicada en ${folder.subjects.map((l) => l.subject.title).join(', ')}`}
                   </span>
                 </span>
@@ -416,6 +417,10 @@ export function ResourcesPage() {
   );
 }
 
+function isHttpUrl(value: string): boolean {
+  try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:'; } catch { return false; }
+}
+
 function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
   open: boolean; organizationId?: string; onClose: () => void;
   onCreated: (payload: CreateLearningResourceInput) => Promise<void>; loading: boolean;
@@ -425,6 +430,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
   const [files, setFiles] = useState<FileValue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | undefined>();
+  const [urlError, setUrlError] = useState<string | undefined>();
   const uploading = files.some((file) => file.status === 'pending' || file.status === 'uploading');
 
   const close = () => { setForm(EMPTY_FORM); setFiles([]); setError(null); onClose(); };
@@ -432,6 +438,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
     event.preventDefault();
     setError(null);
     setTitleError(undefined);
+    setUrlError(undefined);
     const isBook = form.type === 'BOOK';
     const effectiveSource = form.type === 'LINK' ? 'url' : source;
     const fileId = files.find((file) => file.status === 'done')?.id;
@@ -439,7 +446,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
     if (form.title.trim().length > 200) return setTitleError('El título no puede superar los 200 caracteres.');
     if (uploading) return setError('Espera a que termine la subida del archivo.');
     if (effectiveSource === 'file' && !fileId) return setError('Sube un archivo para continuar.');
-    if (effectiveSource === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
+    if (effectiveSource === 'url' && !isHttpUrl(form.externalUrl.trim())) return setUrlError('Introduce una dirección web válida que empiece por http:// o https://.');
     try {
       await onCreated({
         title: form.title.trim(), type: form.type, description: form.description.trim() || undefined,
@@ -462,7 +469,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
 
   return (
     <Modal open={open} onClose={close} title="Nuevo recurso" footer={<><Button variant="ghost" onClick={close}>Cancelar</Button><Button form="resource-form" type="submit" loading={loading} disabled={uploading}>Guardar recurso</Button></>}>
-      <form id="resource-form" onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
+      <form id="resource-form" noValidate onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
         <Input label="Título" required maxLength={200} value={form.title} error={titleError} onChange={(e) => { setForm({ ...form, title: e.target.value }); setTitleError(undefined); }} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => { const nextType = e.target.value as LearningResourceType; setForm({ ...form, type: nextType, ...(nextType !== 'BOOK' && { isbn: '', publisher: '' }) }); if (nextType === 'LINK') { setSource('url'); setFiles([]); } }} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
@@ -483,7 +490,7 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
           </div>}
-          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
+          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} error={urlError} onChange={(e) => { setForm({ ...form, externalUrl: e.target.value }); setUrlError(undefined); }} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>
@@ -502,10 +509,10 @@ function PublishModal({ title, hasFolders, excludeSubjectIds, courses, open, onC
   const submit = async () => { if (courseId) { await onPublish(courseId, required); setCourseId(''); } };
   return <Modal open={open} onClose={onClose} title={`Publicar: ${title}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading} disabled={!courseId}>Publicar</Button></>}>
     {eligible.length ? <div style={{ display: 'grid', gap: 12 }}>
-      <label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{subjectSelectorLabel(course)}</option>)}</select></label>
+      <label style={labelStyle}>Asignatura<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona una asignatura</option>{eligible.map((course) => <option key={course.id} value={course.id}>{subjectSelectorLabel(course)}</option>)}</select></label>
       <label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label>
-      {hasFolders && <p style={{ ...messageStyle, margin: 0 }}>Las carpetas quedan vinculadas: lo que añadas después dentro (también en subcarpetas) aparecerá en el curso automáticamente.</p>}
-    </div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
+      {hasFolders && <p style={{ ...messageStyle, margin: 0 }}>Las carpetas quedan vinculadas: lo que añadas después dentro (también en subcarpetas) aparecerá en la asignatura automáticamente.</p>}
+    </div> : <p style={messageStyle}>No tienes otras asignaturas publicadas donde vincular este recurso.</p>}
   </Modal>;
 }
 
@@ -552,7 +559,7 @@ function FolderNameModal({ state, onClose, onSave, loading }: {
   if (key !== lastKey) { setLastKey(key); setName(state?.mode === 'rename' ? state.folder.name : ''); }
   const submit = (event?: React.FormEvent) => { event?.preventDefault(); if (name.trim()) void onSave(name.trim()); };
   return <Modal open={!!state} onClose={onClose} title={state?.mode === 'rename' ? 'Renombrar carpeta' : 'Nueva carpeta'} size="sm" footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button form="folder-form" type="submit" loading={loading} disabled={!name.trim()}>Guardar</Button></>}>
-    <form id="folder-form" onSubmit={submit}><Input label="Nombre" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></form>
+    <form id="folder-form" noValidate onSubmit={submit}><Input label="Nombre" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></form>
   </Modal>;
 }
 

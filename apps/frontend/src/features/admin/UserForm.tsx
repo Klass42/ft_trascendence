@@ -25,7 +25,7 @@ export interface FormValues {
 
 const ROLE_OPTIONS: GlobalRole[] = ['STUDENT', 'TEACHER', 'ADMIN'];
 const ROLE_LABEL: Record<GlobalRole, string> = {
-  ADMIN: 'Admin',
+  ADMIN: 'Administrador',
   TEACHER: 'Profesor',
   STUDENT: 'Alumno',
 };
@@ -69,11 +69,11 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
     if (!name.trim()) errors.name = 'El nombre es obligatorio.';
     else if (name.trim().length > 100) errors.name = 'El nombre no puede superar los 100 caracteres.';
     if (!email.trim()) {
-      errors.email = 'El email es obligatorio.';
+      errors.email = 'El correo electrónico es obligatorio.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = 'Email no válido.';
+      errors.email = 'Introduce un correo electrónico válido.';
     } else if (email.length > 254) {
-      errors.email = 'El correo no puede superar los 254 caracteres.';
+      errors.email = 'El correo electrónico no puede superar los 254 caracteres.';
     }
     if (isCreate) {
       if (!password) {
@@ -155,7 +155,7 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
       />
 
       <Input
-        label="Email"
+        label="Correo electrónico"
         type="email"
         value={email}
         maxLength={254}

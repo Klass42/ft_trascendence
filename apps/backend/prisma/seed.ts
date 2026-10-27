@@ -683,7 +683,7 @@ async function seedStandardAcademicActivity(now: Date): Promise<void> {
   await prisma.notification.createMany({
     data: [
       {
-        userId: sam, type: NotificationType.GRADE_PUBLISHED, title: 'Actividad calificada',
+        userId: sam, type: NotificationType.GRADE_PUBLISHED, title: 'Tarea calificada',
         body: 'Tu intento 1 de «' + quizTitle + '» ha sido calificado: ' + quizScores.get('attempt-web-101-quiz-sam-1') + '/10',
         link: '/activities?activityId=' + QUIZ_ID, read: true, createdAt: at(5),
       },
@@ -694,7 +694,7 @@ async function seedStandardAcademicActivity(now: Date): Promise<void> {
       },
       { userId: lucia, ...published, createdAt: at(1) },
       {
-        userId: lucia, type: NotificationType.GRADE_PUBLISHED, title: 'Actividad calificada',
+        userId: lucia, type: NotificationType.GRADE_PUBLISHED, title: 'Tarea calificada',
         body: 'Tu intento 1 de «' + essayTitle + '» ha sido calificado: ' + luciaEssayAwarded + '/10',
         link: '/activities?activityId=' + ESSAY_ID, createdAt: luciaEssayGraded,
       },

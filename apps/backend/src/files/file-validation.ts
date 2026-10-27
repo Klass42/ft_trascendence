@@ -46,13 +46,13 @@ export function validateUpload(
   purpose: UploadPurpose = 'GENERAL',
 ): asserts file is Express.Multer.File {
   if (!file) {
-    throw new BadRequestException('File is required');
+    throw new BadRequestException('El archivo es obligatorio.');
   }
   if (!file.originalname?.trim()) {
-    throw new BadRequestException('File name is required');
+    throw new BadRequestException('El archivo debe tener nombre.');
   }
   if (!Number.isFinite(file.size) || file.size <= 0 || !file.buffer?.length) {
-    throw new BadRequestException('File must not be empty');
+    throw new BadRequestException('El archivo no puede estar vacío.');
   }
 
   const maxBytes = purpose === 'AVATAR' ? MAX_AVATAR_UPLOAD_BYTES : MAX_UPLOAD_BYTES;

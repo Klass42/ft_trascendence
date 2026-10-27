@@ -20,7 +20,7 @@ describe('plan limits (#106)', () => {
     await expect(assertUserLimit(db({ maxUsers: 2 }, { users: 1 }), 'o')).resolves.toBeUndefined();
   });
   it('maxCourses enforced', async () => {
-    await expect(assertCourseLimit(db({ maxCourses: 3 }, { courses: 3 }), 'o')).rejects.toThrow(/límite de cursos/);
+    await expect(assertCourseLimit(db({ maxCourses: 3 }, { courses: 3 }), 'o')).rejects.toThrow(/límite de cohortes/);
   });
   it('maxStorageMb enforced with incoming size', async () => {
     const mb = 1024 * 1024;

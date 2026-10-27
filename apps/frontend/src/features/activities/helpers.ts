@@ -1,3 +1,4 @@
+import { plural } from '@/lib/format';
 import type {
   ActivityStatus,
   AttemptStatus,
@@ -14,7 +15,7 @@ export const KIND_LABELS: Record<QuestionKind, string> = {
   ORDERING: 'Ordenar',
   SHORT_ANSWER: 'Respuesta corta',
   ESSAY: 'Desarrollar',
-  FILE_UPLOAD: 'Fichero',
+  FILE_UPLOAD: 'Archivo',
 };
 
 /** The kinds offered in the authoring picker, in a sensible teaching order. */
@@ -87,12 +88,10 @@ export function emptyContent(kind: QuestionKind): Record<string, unknown> {
   }
 }
 
-/** "1 bloque" / "2 bloques": the count followed by the right noun form. */
-export function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
+// `plural` lives in lib/format; re-exported so existing imports keep working.
+export { plural };
 
-export const blocksLabel = (count: number) => plural(count, 'bloque', 'bloques');
+export const questionsLabel = (count: number) => plural(count, 'pregunta', 'preguntas');
 export const pointsLabel = (count: number) => plural(count, 'pt', 'pts');
 export const longPointsLabel = (count: number) => plural(count, 'punto', 'puntos');
 export const attemptsLabel = (count: number) => plural(count, 'intento', 'intentos');
@@ -180,7 +179,7 @@ export function formatAnswer(question: QuestionDTO, response: Record<string, unk
     case 'ESSAY':
       return String(response.text ?? '');
     case 'FILE_UPLOAD':
-      return 'Fichero entregado';
+      return 'Archivo entregado';
   }
 }
 

@@ -5,6 +5,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { spanishValidationException } from './common/pipes/validation-errors';
 
 // Prisma BigInt fields (e.g. File.sizeBytes) are not JSON-serializable by
 // default. Emit them as strings so API responses don't throw.
@@ -29,6 +30,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: spanishValidationException,
     }),
   );
 

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Ban, Check, Copy, Link as LinkIcon, PlayCircle, UserPlus } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api';
 import { Badge, Button, Card, ConfirmDialog, Input, Select, Spinner, useToast } from '@/components/ui';
+import { plural } from '@/lib/format';
 import styles from './PlatformOrganizationDetailPage.module.css';
 
 type PlanValue = 'STARTER' | 'GROWTH' | 'ENTERPRISE' | 'CUSTOM';
@@ -145,7 +146,7 @@ export function PlatformOrganizationDetailPage() {
     event.preventDefault();
     if (!id) return;
     if (!EMAIL_PATTERN.test(adminEmail)) {
-      setAdminEmailError('Introduce un email válido.');
+      setAdminEmailError('Introduce un correo electrónico válido.');
       return;
     }
     setAdminEmailError(null);
@@ -206,8 +207,7 @@ export function PlatformOrganizationDetailPage() {
         <div>
           <h1>{org.name}</h1>
           <p>
-            klass.app/{org.slug} · {org._count.users} usuarios · {org._count.invitations} invitación
-            {org._count.invitations === 1 ? '' : 'es'} pendiente{org._count.invitations === 1 ? '' : 's'}
+            klass.app/{org.slug} · {plural(org._count.users, 'usuario', 'usuarios')} · {plural(org._count.invitations, 'invitación pendiente', 'invitaciones pendientes')}
           </p>
         </div>
         <Badge variant={org.status === 'ACTIVE' ? 'success' : 'warning'} dot>
@@ -230,7 +230,7 @@ export function PlatformOrganizationDetailPage() {
               placeholder="Ilimitado"
             />
             <Input
-              label="Máx. cursos"
+              label="Máx. cohortes"
               inputMode="numeric"
               value={maxCourses}
               onChange={(e) => setMaxCourses(e.target.value)}
@@ -303,7 +303,7 @@ export function PlatformOrganizationDetailPage() {
 
           <form onSubmit={inviteAdmin} noValidate className={styles.inviteForm}>
             <Input
-              label="Email del nuevo admin"
+              label="Correo electrónico del nuevo administrador"
               type="email"
               value={adminEmail}
               maxLength={254}

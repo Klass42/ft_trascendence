@@ -27,7 +27,7 @@ test.describe('Tareas — authoring & window', () => {
     const edited = `${title} (editada)`;
 
     await page.goto('/activities');
-    const course = page.getByRole('combobox', { name: 'Curso' });
+    const course = page.getByRole('combobox', { name: 'Asignatura' });
     await expect(course).toBeVisible({ timeout: 8000 });
     await course.selectOption(COURSE_ID);
 

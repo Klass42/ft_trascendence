@@ -67,7 +67,7 @@ export function CourseDetailPage() {
   ) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
-        Cargando curso...
+        Cargando asignatura...
       </div>
     );
   }
@@ -82,7 +82,7 @@ export function CourseDetailPage() {
           <EmptyState
             title="Esta asignatura ya no existe"
             description="Es posible que se haya eliminado."
-            action={<Button onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}>Volver a los cursos</Button>}
+            action={<Button onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}>Volver a la cohorte</Button>}
           />
         </div>
       );
@@ -115,10 +115,10 @@ export function CourseDetailPage() {
         category: editCategory.trim() || undefined,
       });
       setEditOpen(false);
-      toast({ message: 'Curso actualizado', variant: 'success' });
+      toast({ message: 'Asignatura actualizada', variant: 'success' });
       refetchCourse();
     } catch {
-      toast({ message: 'Error al actualizar el curso', variant: 'error' });
+      toast({ message: 'Error al actualizar la asignatura', variant: 'error' });
     }
   };
 
@@ -126,7 +126,7 @@ export function CourseDetailPage() {
     try {
       if (!fullCourse) return;
       await update(fullCourse.id, { status });
-      toast({ message: `Curso ${status === 'PUBLISHED' ? 'publicado' : status === 'ARCHIVED' ? 'archivado' : 'guardado como borrador'}`, variant: 'success' });
+      toast({ message: `Asignatura ${status === 'PUBLISHED' ? 'publicada' : status === 'ARCHIVED' ? 'archivada' : 'guardada como borrador'}`, variant: 'success' });
       refetchCourse();
     } catch {
       toast({ message: 'Error al cambiar el estado', variant: 'error' });
@@ -137,10 +137,10 @@ export function CourseDetailPage() {
     try {
       if (!fullCourse) return;
       await remove(fullCourse.id);
-      toast({ message: 'Curso eliminado', variant: 'success' });
+      toast({ message: 'Asignatura eliminada', variant: 'success' });
       navigate(courseId ? `/courses/${courseId}` : '/courses');
     } catch {
-      toast({ message: 'Error al eliminar el curso', variant: 'error' });
+      toast({ message: 'Error al eliminar la asignatura', variant: 'error' });
     }
   };
 
@@ -165,7 +165,7 @@ export function CourseDetailPage() {
                 marginBottom: 12,
               }}
             >
-              ← Mis cursos
+              ← Volver a la cohorte
             </button>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
               {course.title}
@@ -212,7 +212,7 @@ export function CourseDetailPage() {
               fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
               background: 'rgba(255,255,255,.18)', padding: '3px 10px', borderRadius: 6,
             }}>
-              {course.status === 'DRAFT' ? 'Borrador' : 'Archivado'}
+              {course.status === 'DRAFT' ? 'Borrador' : 'Archivada'}
             </span>
           </div>
         )}
@@ -361,7 +361,7 @@ export function CourseDetailPage() {
       <Modal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title="Editar curso"
+        title="Editar asignatura"
         footer={<Button loading={updating} onClick={handleUpdate}>Guardar cambios</Button>}
       >
         <FormField label="Título" required>
@@ -390,7 +390,7 @@ export function CourseDetailPage() {
         open={confirmDelete}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => { handleDelete(); setConfirmDelete(false); }}
-        title="Eliminar curso"
+        title="Eliminar asignatura"
         message={`¿Estás seguro de eliminar "${course.title}"? Esta acción no se puede deshacer.`}
         confirmLabel={deleting ? 'Eliminando...' : 'Eliminar'}
         variant="danger"
