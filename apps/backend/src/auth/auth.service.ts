@@ -400,6 +400,8 @@ export class AuthService {
     return { email: invitation.email, role: invitation.role, organization: { name: invitation.organization.name, slug: invitation.organization.slug, logoUrl: invitation.organization.logoUrl, primaryColor: invitation.organization.primaryColor } };
   }
 
+  // #74: aceptar invitación auto-verifica (emailVerifiedAt = now). El registro público queda sin
+  // verificación posible en prod (sin SMTP) por decisión de producto; el enlace solo se loguea fuera de prod.
   async acceptInvitation(token: string, dto: AcceptInvitationDto) {
     const tokenHash = this.hashToken(token);
     const now = new Date();

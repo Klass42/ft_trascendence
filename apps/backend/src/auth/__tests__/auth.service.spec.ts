@@ -727,4 +727,29 @@ describe('AuthService', () => {
       });
     });
   });
+
+  // #74: el alta por invitación auto-verifica el email (el admin de la org ya eligió ese email).
+  describe('acceptInvitation (#74)', () => {
+    it('creates the user with emailVerifiedAt set', async () => {
+      const txUserCreate = jest.fn(async (args: { data: Record<string, unknown> }) => ({ ...mockUser, ...args.data, id: 'user-invited' }));
+      const tx = {
+        organizationInvitation: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'inv-1', organizationId: SEED_ORG_ID, email: 'new@demo', role: 'TEACHER', status: 'PENDING',
+            expiresAt: new Date(Date.now() + 60_000), organization: { status: 'ACTIVE' },
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        user: { findFirst: jest.fn().mockResolvedValue(null), create: txUserCreate },
+        auditLog: { create: jest.fn() },
+      };
+      const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) } as unknown as PrismaService;
+      const svc = new AuthService(prisma, mkJwtService(), mkConfig());
+
+      const user = await svc.acceptInvitation('raw-token', { name: 'Nuevo', password: 'Password123!' } as never);
+
+      expect(txUserCreate.mock.calls[0][0].data.emailVerifiedAt).toBeInstanceOf(Date);
+      expect(user.emailVerifiedAt).toBeInstanceOf(Date);
+    });
+  });
 });
