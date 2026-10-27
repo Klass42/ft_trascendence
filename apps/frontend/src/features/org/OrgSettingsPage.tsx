@@ -222,7 +222,7 @@ export function OrgSettingsPage() {
               error={fieldErrors.name}
             />
             <Input
-              label="Logo URL"
+              label="URL del logo"
               value={editLogoUrl}
               onChange={(e) => {
                 setEditLogoUrl(e.target.value);

@@ -191,7 +191,7 @@ export function ForumsPage() {
                       style={{
                         fontSize: 10.5,
                         fontWeight: 700,
-                        color: '#d97706',
+                        color: '#92400e',
                         background: '#fdf0dc',
                         padding: '2px 8px',
                         borderRadius: 20,

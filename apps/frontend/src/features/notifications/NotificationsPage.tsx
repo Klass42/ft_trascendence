@@ -22,7 +22,7 @@ export function NotificationsPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <div className={styles.header}>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
           Notificaciones
@@ -121,6 +121,6 @@ export function NotificationsPage() {
           </div>
         </section>
       ))}
-    </main>
+    </div>
   );
 }

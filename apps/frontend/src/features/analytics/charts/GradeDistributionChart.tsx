@@ -46,7 +46,7 @@ export function GradeDistributionChart({ buckets }: Props) {
         className={styles.chart}
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
-        role="img"
+        role="group"
         aria-label={`Distribución de notas sobre ${total} entregas calificadas.`}
         onMouseLeave={() => setActive(null)}
       >
@@ -92,7 +92,7 @@ export function GradeDistributionChart({ buckets }: Props) {
                 width={slot}
                 height={PLOT_H}
                 tabIndex={0}
-                role="button"
+                role="img"
                 aria-label={`${b.label}%: ${b.count} entregas`}
                 onMouseEnter={() => setActive(i)}
                 onFocus={() => setActive(i)}

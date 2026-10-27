@@ -112,7 +112,7 @@ export function LoginPage() {
             {/* Email */}
             <Input
               label="Código de organización"
-              placeholder="your-school"
+              placeholder="tu-centro"
               value={organizationSlug}
               maxLength={63}
               onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setFieldErrors((current) => ({ ...current, organization: '' })); }}

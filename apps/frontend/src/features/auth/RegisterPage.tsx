@@ -115,7 +115,7 @@ export function RegisterPage() {
 
             <Input
               label="Código de organización"
-              placeholder="your-school"
+              placeholder="tu-centro"
               value={organizationSlug}
               maxLength={63}
               onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setErrors((p) => ({ ...p, organization: undefined })); }}
