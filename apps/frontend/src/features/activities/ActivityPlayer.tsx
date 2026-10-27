@@ -8,24 +8,50 @@ import {
 } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import { useActivity, useActivityAttempts, useAuth } from '@/lib/api';
-import type { AttemptDTO, QuestionDTO, SaveAnswersInput } from '@/lib/api';
+import type {
+  ActivityDTO,
+  AttemptDTO,
+  PreviewGradeResponse,
+  PreviewGradeResult,
+  QuestionDTO,
+  SaveAnswersInput,
+} from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
-import { KIND_LABELS } from './helpers';
+import { isSubjective, KIND_LABELS } from './helpers';
 
 type ResponseMap = Record<string, Record<string, unknown>>;
 
 interface Props {
-  activityId: string;
+  activityId?: string;
   onAttemptChanged?: () => void;
+  mode?: 'student' | 'preview';
+  previewActivity?: ActivityDTO;
+  previewGrade?: PreviewGradeResponse | null;
+  previewResponses?: ResponseMap;
+  previewBusy?: boolean;
+  onPreviewGrade?: (answers: SaveAnswersInput['answers']) => Promise<void>;
+  onPreviewResultClear?: () => void;
+  onPreviewResponsesChange?: (responses: ResponseMap) => void;
 }
 
-/**
- * Student-safe attempt player. Question content comes exclusively from the
- * student endpoints, which omit answer keys until the server permits reveal.
- */
-export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
+/** Student attempt player plus staff preview; preview content is injected so
+ * it never needs to start or autosave an attempt. */
+export function ActivityPlayer({
+  activityId,
+  onAttemptChanged,
+  mode = 'student',
+  previewActivity,
+  previewGrade,
+  previewResponses,
+  previewBusy = false,
+  onPreviewGrade,
+  onPreviewResultClear,
+  onPreviewResponsesChange,
+}: Props) {
   const { toast } = useToast();
-  const { data: activity, isLoading: activityLoading, error: activityError } = useActivity(activityId);
+  const isPreview = mode === 'preview';
+  const { data: loadedActivity, isLoading: activityLoading, error: activityError } = useActivity(isPreview ? null : activityId ?? null);
+  const activity = isPreview ? previewActivity ?? null : loadedActivity;
   const {
     attempts,
     isLoading: attemptsLoading,
@@ -34,7 +60,7 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
     save,
     submit,
     refetch,
-  } = useActivityAttempts(activityId);
+  } = useActivityAttempts(isPreview ? null : activityId ?? null);
   const [activeAttempt, setActiveAttempt] = useState<AttemptDTO | null>(null);
   const [responses, setResponses] = useState<ResponseMap>({});
   const responsesRef = useRef<ResponseMap>({});
@@ -106,7 +132,13 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
   }
 
   function updateResponse(questionId: string, response: Record<string, unknown>) {
-    setAllResponses({ ...responsesRef.current, [questionId]: response });
+    const next = { ...(previewResponses ?? responsesRef.current), [questionId]: response };
+    setAllResponses(next);
+    if (isPreview) {
+      onPreviewResponsesChange?.(next);
+      onPreviewResultClear?.();
+      return;
+    }
     // A saved indicator only describes the last server state. As soon as the
     // learner changes an answer again, make the pending autosave explicit.
     setSaveState('idle');
@@ -135,13 +167,60 @@ export function ActivityPlayer({ activityId, onAttemptChanged }: Props) {
     }
   }
 
-  if (activityLoading || attemptsLoading) return <Spinner size="md" label="Cargando actividad…" />;
-  if (!activity || activityError || attemptsError) {
+  if (!isPreview && (activityLoading || attemptsLoading)) return <Spinner size="md" label="Cargando actividad…" />;
+  if (!activity || (!isPreview && (activityError || attemptsError))) {
     return <p style={{ color: 'var(--color-error)' }}>No se pudo cargar esta tarea. Puede que ya no esté disponible.</p>;
   }
 
   const winBadge = WINDOW_BADGE[state];
   const resumable = attempts?.find((attempt) => attempt.status === 'IN_PROGRESS');
+
+  if (isPreview) {
+    const currentResponses = previewResponses ?? responses;
+    const checkPreview = () => {
+      const answers = Object.entries(currentResponses).map(([questionId, response]) => ({ questionId, response }));
+      void onPreviewGrade?.(answers);
+    };
+    return (
+      <section aria-label={`Vista previa de la tarea: ${activity.title}`}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{activity.title}</h2>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+              <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
+              <Badge variant="neutral">{activity.maxScore} pts</Badge>
+              <Badge variant="neutral">{activity.attemptsAllowed === 0 ? 'Intentos ilimitados' : `${activity.attemptsAllowed} intento(s)`}</Badge>
+            </div>
+          </div>
+        </div>
+
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '12px 0' }}>
+          {activity.openAt ? `Abre ${formatDate(activity.openAt)} · ` : ''}
+          {activity.dueAt ? `Entrega ${formatDate(activity.dueAt)}` : 'Sin fecha límite'}
+          {activity.closeAt ? ` · Cierra ${formatDate(activity.closeAt)}` : ''}
+          {activity.timeLimitSec ? ` · Tiempo recomendado: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
+        </p>
+        {activity.description && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{activity.description}</p>}
+
+        <AttemptForm
+          activity={activity}
+          responses={currentResponses}
+          onChange={updateResponse}
+          onSave={() => undefined}
+          onSubmit={checkPreview}
+          saving={false}
+          submitting={previewBusy}
+          previewGrade={previewGrade}
+          preview
+        />
+        {previewGrade && (
+          <p role="status" style={{ fontWeight: 700, marginBottom: 0 }}>
+            Resultado simulado: {previewGrade.score}/{previewGrade.maxScore} puntos
+          </p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section aria-label={`Tarea: ${activity.title}`}>
@@ -217,7 +296,7 @@ function AttemptHistory({ attempts, maxScore }: { attempts: AttemptDTO[]; maxSco
   );
 }
 
-function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, submitting }: {
+function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, submitting, preview = false, previewGrade }: {
   activity: NonNullable<AttemptDTO['activity']>;
   responses: ResponseMap;
   onChange: (questionId: string, response: Record<string, unknown>) => void;
@@ -225,22 +304,49 @@ function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, 
   onSubmit: () => void;
   saving: boolean;
   submitting: boolean;
+  preview?: boolean;
+  previewGrade?: PreviewGradeResponse | null;
 }) {
   const questions = activity.questions ?? [];
+  const results = new Map((previewGrade?.results ?? []).map((result) => [result.questionId, result]));
+  const solutions = new Map((previewGrade?.solutions ?? []).map((solution) => [solution.questionId, solution.content]));
   return (
     <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }} style={{ marginTop: 20, borderTop: '1px solid var(--color-border-primary)', paddingTop: 18 }}>
       {questions.length === 0 ? <p>No hay preguntas publicadas para esta tarea.</p> : questions.map((question, index) => (
-        <QuestionInput key={question.id} question={question} number={index + 1} response={responses[question.id] ?? {}} onChange={(response) => onChange(question.id, response)} />
+        <QuestionInput
+          key={question.id}
+          question={question}
+          number={index + 1}
+          response={responses[question.id] ?? {}}
+          onChange={(response) => onChange(question.id, response)}
+          preview={preview}
+          previewResult={results.get(question.id)}
+          solution={solutions.get(question.id)}
+        />
       ))}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 22 }}>
-        <Button type="button" variant="outline" onClick={onSave} loading={saving}>Guardar borrador</Button>
-        <Button type="submit" variant="primary" loading={submitting}>Enviar tarea</Button>
+        {preview ? (
+          <Button type="submit" variant="primary" loading={submitting}>Comprobar respuestas</Button>
+        ) : (
+          <>
+            <Button type="button" variant="outline" onClick={onSave} loading={saving}>Guardar borrador</Button>
+            <Button type="submit" variant="primary" loading={submitting}>Enviar tarea</Button>
+          </>
+        )}
       </div>
     </form>
   );
 }
 
-function QuestionInput({ question, number, response, onChange }: { question: QuestionDTO; number: number; response: Record<string, unknown>; onChange: (response: Record<string, unknown>) => void }) {
+function QuestionInput({ question, number, response, onChange, preview = false, previewResult, solution }: {
+  question: QuestionDTO;
+  number: number;
+  response: Record<string, unknown>;
+  onChange: (response: Record<string, unknown>) => void;
+  preview?: boolean;
+  previewResult?: PreviewGradeResult;
+  solution?: Record<string, unknown>;
+}) {
   const { user } = useAuth();
   const content = question.content;
   const fieldsetStyle = { border: '1px solid var(--color-border-primary)', borderRadius: 10, margin: '0 0 14px', padding: '14px 16px' };
@@ -253,6 +359,9 @@ function QuestionInput({ question, number, response, onChange }: { question: Que
       <legend style={{ fontWeight: 700, padding: '0 4px' }}>Pregunta {number} · {question.points} pts</legend>
       <p style={{ margin: '4px 0 5px', whiteSpace: 'pre-wrap' }}>{question.prompt}</p>
       <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{KIND_LABELS[question.kind]}</span>
+      {preview && isSubjective(question.kind, content) && (
+        <div style={{ marginTop: 6 }}><Badge variant="warning">Se corrige a mano</Badge></div>
+      )}
       {question.kind === 'MULTIPLE_CHOICE' && (
         <div role="group" aria-label={`Respuestas para pregunta ${number}`}>
           {(Array.isArray(content.options) ? content.options : []).map((option, index) => {
@@ -315,10 +424,72 @@ function QuestionInput({ question, number, response, onChange }: { question: Que
           accept={Array.isArray(content.accept) ? (content.accept as string[]).join(',') : undefined}
           existingCount={Array.isArray(response.fileIds) ? (response.fileIds as string[]).length : 0}
           onFileIds={(fileIds) => onChange({ fileIds })}
+          disabled={preview}
         />
+      )}
+      {preview && previewResult && (
+        <div aria-live="polite" style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--color-border-primary)' }}>
+          <Badge variant={!previewResult.autoGradable ? 'warning' : previewResult.correct ? 'success' : 'error'}>
+            {!previewResult.autoGradable ? 'Se corrige a mano' : previewResult.correct ? 'Correcta' : 'Incorrecta'}
+          </Badge>
+          {previewResult.autoGradable && (
+            <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              {previewResult.awarded ?? 0}/{previewResult.points} puntos
+            </span>
+          )}
+          <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
+            <strong>Solución:</strong> {formatSolution(question, solution ?? content)}
+          </p>
+        </div>
       )}
     </fieldset>
   );
+}
+
+function formatSolution(question: QuestionDTO, content: Record<string, unknown>): string {
+  const text = (value: unknown) => typeof value === 'string'
+    ? value
+    : value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
+      ? value.text
+      : String(value ?? '');
+  switch (question.kind) {
+    case 'MULTIPLE_CHOICE': {
+      const options = Array.isArray(content.options) ? content.options : [];
+      const correct = Array.isArray(content.correct) ? content.correct : [];
+      return correct.map((index) => text(options[Number(index)])).filter(Boolean).join(' · ') || 'Sin respuesta configurada';
+    }
+    case 'TRUE_FALSE':
+      return typeof content.answer === 'boolean' ? (content.answer ? 'Verdadero' : 'Falso') : 'Sin respuesta configurada';
+    case 'FILL_BLANK': {
+      const blanks = Array.isArray(content.blanks) ? content.blanks : [];
+      return blanks.map((blank) => {
+        const accepted = blank && typeof blank === 'object' && 'accepted' in blank && Array.isArray(blank.accepted)
+          ? blank.accepted
+          : [];
+        return accepted.map(text).join(' / ');
+      }).map((answer, index) => `Hueco ${index + 1}: ${answer}`).join(' · ');
+    }
+    case 'MATCHING': {
+      const left = Array.isArray(content.left) ? content.left : [];
+      const right = Array.isArray(content.right) ? content.right : [];
+      const pairs = Array.isArray(content.pairs) ? content.pairs : [];
+      return pairs.flatMap((pair) => Array.isArray(pair) && pair.length === 2
+        ? [`${text(left[Number(pair[0])])} → ${text(right[Number(pair[1])])}`]
+        : []).join(' · ');
+    }
+    case 'ORDERING': {
+      const items = Array.isArray(content.items) ? content.items : [];
+      const order = Array.isArray(content.correctOrder) ? content.correctOrder : [];
+      return order.map((index) => text(items[Number(index)])).filter(Boolean).join(' → ');
+    }
+    case 'SHORT_ANSWER': {
+      const accepted = Array.isArray(content.accepted) ? content.accepted : [];
+      return accepted.length ? accepted.map(text).join(' · ') : 'Se corrige a mano';
+    }
+    case 'ESSAY':
+    case 'FILE_UPLOAD':
+      return 'Se corrige a mano';
+  }
 }
 
 function FileUploadQuestion({
@@ -328,6 +499,7 @@ function FileUploadQuestion({
   accept,
   existingCount,
   onFileIds,
+  disabled = false,
 }: {
   organizationId: string;
   uploaderId: string;
@@ -335,6 +507,7 @@ function FileUploadQuestion({
   accept?: string;
   existingCount: number;
   onFileIds: (fileIds: string[]) => void;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -349,11 +522,12 @@ function FileUploadQuestion({
         multiple={maxFiles > 1}
         maxFiles={maxFiles}
         accept={accept}
+        disabled={disabled}
         onChange={(files: FileValue[]) => {
           const done = files.filter((f) => f.status === 'done').map((f) => f.id);
           if (done.length > 0) onFileIds(done);
         }}
-        hint={`Máximo ${maxFiles} fichero(s).`}
+        hint={disabled ? 'En una tarea real podrás subir los ficheros aquí.' : `Máximo ${maxFiles} fichero(s).`}
       />
     </div>
   );

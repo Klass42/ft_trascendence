@@ -48,6 +48,8 @@ export type {
   AnswerDTO,
   AttemptDTO,
   SaveAnswersInput,
+  PreviewGradeResult,
+  PreviewGradeResponse,
   GradeAttemptInput,
 } from './activity';
 export type {

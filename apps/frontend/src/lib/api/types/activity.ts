@@ -126,6 +126,21 @@ export interface SaveAnswersInput {
   answers: { questionId: string; response: Record<string, unknown> }[];
 }
 
+export interface PreviewGradeResult {
+  questionId: string;
+  autoGradable: boolean;
+  correct: boolean | null;
+  awarded: number | null;
+  points: number;
+}
+
+export interface PreviewGradeResponse {
+  score: number;
+  maxScore: number;
+  results: PreviewGradeResult[];
+  solutions: Array<{ questionId: string; content: Record<string, unknown> }>;
+}
+
 export interface GradeAttemptInput {
   answers: { questionId: string; awarded: number }[];
   feedback?: string;

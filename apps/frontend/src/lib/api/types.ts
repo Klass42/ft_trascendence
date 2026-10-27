@@ -168,6 +168,8 @@ export type {
   AnswerDTO,
   AttemptDTO,
   SaveAnswersInput,
+  PreviewGradeResult,
+  PreviewGradeResponse,
   GradeAttemptInput,
 } from './types/activity';
 

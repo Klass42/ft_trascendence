@@ -12,6 +12,7 @@ import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
 import { SaveAsTemplateDto } from './dto/save-as-template.dto';
 import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
 import { TaskTemplatesService } from './task-templates.service';
+import { SaveAnswersDto } from '../attempts/dto/save-answers.dto';
 
 @Controller()
 export class TaskTemplatesController {
@@ -33,6 +34,15 @@ export class TaskTemplatesController {
   @Get('task-templates/:id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.templates.findOne(id, user.userId);
+  }
+
+  @Post('task-templates/:id/preview/grade')
+  previewGrade(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: SaveAnswersDto,
+  ) {
+    return this.templates.previewGrade(id, user.userId, dto);
   }
 
   @Patch('task-templates/:id')

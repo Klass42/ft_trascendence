@@ -105,9 +105,24 @@ describe('AttemptsService', () => {
         findMany: async () => [{ userId: TEACHER }],
       },
       user: {
-        findUnique: async ({ where }: any) => ({ id: where.id, name: 'Alumno de prueba' }),
+        findUnique: async ({ where }: any) => ({
+          id: where.id,
+          name: 'Alumno de prueba',
+          organizationId: 'org-klass-0001',
+        }),
       },
       activity: {
+        findFirst: async ({ where }: any) => {
+          if (
+            where.id !== activity.id ||
+            where.subject?.is?.organizationId !== 'org-klass-0001'
+          ) return null;
+          return {
+            ...activity,
+            subject: { id: COURSE, organizationId: 'org-klass-0001' },
+            questions: [...opts.questions].sort((a, b) => a.order - b.order),
+          };
+        },
         findUnique: async ({ where, include }: any) => {
           if (where.id !== activity.id) return null;
           const base: any = { ...activity };
@@ -275,14 +290,19 @@ describe('AttemptsService', () => {
         analyticsEvents.push({ name, payload }),
     } as any;
 
+    const activitiesService = new ActivitiesService(
+      prisma as PrismaService,
+      accessFromPrisma(prisma as never),
+    );
     const service = new AttemptsService(
       prisma as PrismaService,
-      new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma as never)),
+      activitiesService,
       notifications,
       events,
     );
     return {
       service,
+      activitiesService,
       attempts,
       answers,
       emitted,
@@ -342,6 +362,31 @@ describe('AttemptsService', () => {
     const done = await service.submit(started.id, STUDENT);
     expect(done.status).toBe(AttemptStatus.GRADED);
     expect(done.score).toBe(5);
+  });
+
+  it('returns the same scaled score in preview as submit for the same responses', async () => {
+    const { service, activitiesService, attempts, answers, emitted, analyticsEvents } = build({
+      questions: [mcq('q1', [0], 0), mcq('q2', [2], 1)],
+      maxScore: 15,
+    });
+    const input = {
+      answers: [
+        { questionId: 'q1', response: { selected: [0] } },
+        { questionId: 'q2', response: { selected: [0] } },
+      ],
+    };
+
+    const preview = await activitiesService.previewGrade('act-1', TEACHER, input);
+    expect(preview.score).toBe(7.5);
+    expect(attempts).toHaveLength(0);
+    expect(answers).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
+    expect(analyticsEvents).toHaveLength(0);
+
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, input);
+    const submitted = await service.submit(started.id, STUDENT);
+    expect(submitted.score).toBe(preview.score);
   });
 
   it('leaves an attempt SUBMITTED and tells the staff when it has a subjective question', async () => {

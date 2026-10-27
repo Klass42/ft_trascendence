@@ -22,9 +22,10 @@ import {
 } from '@/lib/api';
 import type { ActivityDTO } from '@/lib/api';
 import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
-import { ATTEMPT_STATUS_BADGE, STATUS_BADGE } from './helpers';
+import { ATTEMPT_STATUS_BADGE, isSubjective, STATUS_BADGE } from './helpers';
 import { ActivityForm } from './ActivityForm';
 import { ActivityPlayer } from './ActivityPlayer';
+import { ActivityPreviewModal } from './ActivityPreviewModal';
 import { QuestionList } from './QuestionList';
 import { TaskLibrary } from './TaskLibrary';
 import { GradePanel, type GradeTarget } from '../gradebook/GradePanel';
@@ -106,6 +107,7 @@ export function ActivitiesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryPreview, setLibraryPreview] = useState<{ activity: ActivityDTO; gradeUrl: string } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedSubjectId = searchParams.get('subjectId');
   const linkedActivityId = searchParams.get('activityId');
@@ -287,6 +289,10 @@ export function ActivitiesPage() {
           courseId={courseId}
           open={libraryOpen}
           onClose={() => setLibraryOpen(false)}
+          onPreview={(activity, gradeUrl) => {
+            setLibraryOpen(false);
+            setLibraryPreview({ activity, gradeUrl });
+          }}
           onInstantiated={(a) => {
             setLibraryOpen(false);
             refetch();
@@ -294,6 +300,11 @@ export function ActivitiesPage() {
           }}
         />
       )}
+      <ActivityPreviewModal
+        activity={libraryPreview?.activity ?? null}
+        gradeUrl={libraryPreview?.gradeUrl ?? null}
+        onClose={() => setLibraryPreview(null)}
+      />
     </div>
   );
 }
@@ -391,6 +402,7 @@ function ActivityDetail({
   } = useStaffAttempts(activity.id);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [gradeTarget, setGradeTarget] = useState<GradeTarget | null>(null);
 
   const status = STATUS_BADGE[activity.status];
@@ -398,6 +410,10 @@ function ActivityDetail({
   const winBadge = WINDOW_BADGE[winState];
   const published = activity.status === 'PUBLISHED';
   const canPublish = (activity.questions?.length ?? 0) > 0;
+  const questions = activity.questions ?? [];
+  const manualCount = questions.filter((question) => isSubjective(question.kind, question.content)).length;
+  const autoCount = questions.length - manualCount;
+  const totalPoints = questions.reduce((sum, question) => sum + question.points, 0);
 
   async function togglePublish() {
     try {
@@ -433,6 +449,9 @@ function ActivityDetail({
           <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
         </div>
         <div className={styles.detailActions}>
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            Vista previa
+          </Button>
           <Button variant={published ? 'outline' : 'primary'} size="sm" onClick={togglePublish} disabled={isLoading}>
             {published ? 'Despublicar' : 'Publicar'}
           </Button>
@@ -472,6 +491,10 @@ function ActivityDetail({
         )}
       </div>
 
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>
+        {questions.length} {questions.length === 1 ? 'pregunta' : 'preguntas'} · {totalPoints} puntos totales · {autoCount} autocorregibles · {manualCount} de corrección manual
+      </p>
+
       {activity.description && (
         <p style={{ fontSize: 14.5, lineHeight: 1.55, color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', marginBottom: 18 }}>
           {activity.description}
@@ -488,6 +511,12 @@ function ActivityDetail({
         isLoading={attemptsLoading}
         error={attemptsError}
         onGrade={(target) => setGradeTarget(target)}
+      />
+
+      <ActivityPreviewModal
+        activity={previewOpen ? activity : null}
+        gradeUrl={`/activities/${encodeURIComponent(activity.id)}/preview/grade`}
+        onClose={() => setPreviewOpen(false)}
       />
 
       <Modal open={editing} onClose={() => setEditing(false)} title="Editar tarea" size="lg">
