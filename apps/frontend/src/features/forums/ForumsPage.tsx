@@ -183,9 +183,7 @@ export function ForumsPage() {
                   className={styles.threadTitle}
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  <span style={{ fontWeight: 700, fontSize: 15, overflowWrap: 'anywhere' }}>
-                    {t.title}
-                  </span>
+                  <span className={styles.threadTitleText}>{t.title}</span>
                   {t.pinned && (
                     <span
                       style={{

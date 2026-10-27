@@ -1,3 +1,4 @@
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { ForumsService } from './forums.service';
 import { accessFromPrisma } from '../test/access-from-prisma';
@@ -15,6 +16,10 @@ describe('ForumsService', () => {
   const ORG_ID = 'org-klass-0001';
   const STUDENT = 'user-lucia-001';
   const TEACHER = 'user-diego-001';
+  const OTHER_STUDENT = 'user-sam-002';
+  const OUTSIDER = 'user-student-outsider'; // same org, not enrolled in the course
+  const OTHER_ORG = 'user-student-otherorg'; // belongs to another tenant
+  const ADMIN = 'user-admin-001'; // org admin, neither staff nor enrolled
 
   function buildPrismaFake() {
     const threads: Array<Record<string, any>> = [];
@@ -32,7 +37,7 @@ describe('ForumsService', () => {
         findUnique: async ({ where }: any) => {
           const { courseId, userId } = where.courseId_userId;
           if (courseId !== COURSE_ID) return null;
-          if (userId === STUDENT)
+          if (userId === STUDENT || userId === OTHER_STUDENT || userId === OTHER_ORG)
             return { courseId, userId, role: 'STUDENT' as never };
           if (userId === TEACHER)
             return { courseId, userId, role: 'TEACHER' as never };
@@ -45,7 +50,9 @@ describe('ForumsService', () => {
       },
       user: {
         findUnique: async ({ where }: any) =>
-          where.id === TEACHER
+          where.id === OTHER_ORG
+            ? { name: 'Otra Org', organizationId: 'org-other-0002' }
+            : where.id === TEACHER
             ? { name: 'Diego Fernández' }
             : where.id === STUDENT
               ? { name: 'Lucía Molina' }
@@ -101,6 +108,40 @@ describe('ForumsService', () => {
         },
       },
       forumPost: {
+        findUnique: async ({ where }: any) => {
+          const post = posts.find((p) => p.id === where.id);
+          return post ? { ...post } : null;
+        },
+        update: async ({ where, data }: any) => {
+          const post = posts.find((p) => p.id === where.id);
+          if (!post) return null;
+          Object.assign(post, data);
+          return { ...post };
+        },
+        delete: async ({ where }: any) => {
+          // Mirror the schema's onDelete: Cascade for nested replies.
+          const doomed = new Set([where.id]);
+          for (let grew = true; grew; ) {
+            grew = false;
+            for (const p of posts) {
+              if (p.parentId && doomed.has(p.parentId) && !doomed.has(p.id)) {
+                doomed.add(p.id);
+                grew = true;
+              }
+            }
+          }
+          for (let i = posts.length - 1; i >= 0; i--) {
+            if (doomed.has(posts[i].id)) posts.splice(i, 1);
+          }
+        },
+        findMany: async ({ where }: any) =>
+          posts.filter((p) => p.threadId === where.threadId).map((p) => ({ ...p, author: null })),
+        count: async ({ where }: any) =>
+          posts.filter((p) =>
+            where.parentId !== undefined
+              ? p.parentId === where.parentId
+              : p.threadId === where.threadId && (p.authorId == null || p.authorId !== where.OR[1].authorId.not),
+          ).length,
         findFirst: async ({ where }: any) =>
           posts.find(
             (p) => p.id === where.id && p.threadId === where.threadId,
@@ -192,5 +233,113 @@ describe('ForumsService', () => {
       { userId: STUDENT, type: NotificationType.FORUM_THREAD },
       { userId: STUDENT, type: NotificationType.FORUM_THREAD },
     ]);
+  });
+  describe('editing and moderation', () => {
+    function setup() {
+      const prisma = buildPrismaFake();
+      const emitMany = jest.fn(async () => undefined);
+      const removeByLink = jest.fn(async () => 0);
+      const notifications = { emitMany, removeByLink } as unknown as NotificationsService;
+      const service = new ForumsService(prisma, notifications, accessFromPrisma(prisma));
+      return { service, emitMany, removeByLink };
+    }
+
+    async function threadWithReplies() {
+      const ctx = setup();
+      const thread = await ctx.service.createThread(COURSE_ID, STUDENT, {
+        title: 'Duda',
+        body: 'Mensaje inicial',
+      });
+      const reply = await ctx.service.addPost(thread.id, OTHER_STUDENT, { body: 'Respuesta' });
+      const nested = await ctx.service.addPost(thread.id, STUDENT, { body: 'Anidada', parentId: reply.id });
+      ctx.emitMany.mockClear();
+      return { ...ctx, thread, reply, nested };
+    }
+
+    it('lets the author edit their own post and trims the body', async () => {
+      const { service, reply } = await threadWithReplies();
+      const updated = await service.updatePost(reply.id, OTHER_STUDENT, { body: '  Corregido  ' });
+      expect(updated.body).toBe('Corregido');
+    });
+
+    it.each([
+      ['another student', OTHER_STUDENT, 'student'],
+      ['the subject teacher', TEACHER, 'teacher'],
+      ['an org admin', ADMIN, 'admin'],
+    ])('does not let %s edit a post they did not write', async (_label, actor) => {
+      const { service, nested } = await threadWithReplies();
+      await expect(service.updatePost(nested.id, actor, { body: 'Reescrito' })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('lets subject staff and an org admin delete a post with its replies', async () => {
+      for (const actor of [TEACHER, ADMIN]) {
+        const { service, reply, thread } = await threadWithReplies();
+        await service.deletePost(reply.id, actor);
+        const after = await service.getThread(thread.id, STUDENT);
+        // The opening post remains; the deleted reply and its nested answer are gone.
+        expect(after.posts.map((p: any) => p.body)).toEqual(['Mensaje inicial']);
+      }
+    });
+
+    it('lets the author delete their own post only while it has no replies', async () => {
+      const { service, reply, nested, thread } = await threadWithReplies();
+      await expect(service.deletePost(reply.id, OTHER_STUDENT)).rejects.toBeInstanceOf(ConflictException);
+      await service.deletePost(nested.id, STUDENT);
+      await service.deletePost(reply.id, OTHER_STUDENT);
+      const after = await service.getThread(thread.id, STUDENT);
+      expect(after.posts.map((p: any) => p.body)).toEqual(['Mensaje inicial']);
+    });
+
+    it('rejects deleting a post for another student, an unenrolled user and another tenant', async () => {
+      const { service, nested } = await threadWithReplies();
+      await expect(service.deletePost(nested.id, OTHER_STUDENT)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.deletePost(nested.id, OUTSIDER)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.deletePost(nested.id, OTHER_ORG)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('returns 404 for a missing post and hides posts from other tenants on edit', async () => {
+      const { service, nested } = await threadWithReplies();
+      await expect(service.deletePost('post-missing', STUDENT)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.updatePost('post-missing', STUDENT, { body: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.updatePost(nested.id, OTHER_ORG, { body: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('deleting a post sends no notifications and keeps thread-level links', async () => {
+      const { service, reply, emitMany, removeByLink } = await threadWithReplies();
+      await service.deletePost(reply.id, TEACHER);
+      expect(emitMany).not.toHaveBeenCalled();
+      expect(removeByLink).not.toHaveBeenCalled();
+    });
+
+    it('lets only the author rename a thread', async () => {
+      const { service, thread } = await threadWithReplies();
+      const updated = await service.updateThread(thread.id, STUDENT, { title: '  Duda resuelta ' });
+      expect(updated.title).toBe('Duda resuelta');
+      for (const actor of [OTHER_STUDENT, TEACHER, ADMIN]) {
+        await expect(service.updateThread(thread.id, actor, { title: 'Otro' })).rejects.toBeInstanceOf(ForbiddenException);
+      }
+      await expect(service.updateThread(thread.id, OTHER_ORG, { title: 'Otro' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.updateThread('thread-missing', STUDENT, { title: 'Otro' })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('deletes a thread for staff and admins, and for its author only while nobody else posted', async () => {
+      const { service, thread } = await threadWithReplies();
+      await expect(service.deleteThread(thread.id, OTHER_STUDENT)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.deleteThread(thread.id, STUDENT)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.deleteThread(thread.id, OTHER_ORG)).rejects.toBeInstanceOf(NotFoundException);
+      await service.deleteThread(thread.id, ADMIN);
+      await expect(service.getThread(thread.id, STUDENT)).rejects.toBeInstanceOf(NotFoundException);
+
+      const solo = await service.createThread(COURSE_ID, STUDENT, { title: 'Sola', body: 'Nadie respondió' });
+      await service.deleteThread(solo.id, STUDENT);
+      await expect(service.getThread(solo.id, STUDENT)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('flags who can moderate when loading a thread', async () => {
+      const { service, thread } = await threadWithReplies();
+      expect((await service.getThread(thread.id, STUDENT)).canModerate).toBe(false);
+      expect((await service.getThread(thread.id, TEACHER)).canModerate).toBe(true);
+      expect((await service.getThread(thread.id, ADMIN)).canModerate).toBe(true);
+    });
   });
 });

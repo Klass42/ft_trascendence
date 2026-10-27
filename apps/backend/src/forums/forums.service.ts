@@ -1,4 +1,6 @@
 import {
+  ConflictException,
+  ForbiddenException,
   Logger,
   Injectable,
   NotFoundException,
@@ -13,6 +15,8 @@ import { CourseAccessService } from '../courses/course-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+import { UpdateThreadDto } from './dto/update-thread.dto';
 
 /** Minimal author projection embedded in thread/post responses. */
 const AUTHOR_SELECT = {
@@ -61,6 +65,19 @@ export class ForumsService {
     }
     const access = await this.requireSubject(thread.subjectId, actingUserId, staffOnly);
     return { thread, access };
+  }
+
+  /**
+   * Load a post and gate on its thread's subject. A post of another tenant is
+   * indistinguishable from a missing one (404), as with threads.
+   */
+  private async requirePostMembership(postId: string, actingUserId: string) {
+    const post = await this.prisma.forumPost.findUnique({ where: { id: postId } });
+    if (!post) {
+      throw new NotFoundException(`Post ${postId} not found`);
+    }
+    const { thread, access } = await this.requireThreadMembership(post.threadId, actingUserId);
+    return { post, thread, access };
   }
 
   // ---------------------------------------------------------------------------
@@ -116,7 +133,7 @@ export class ForumsService {
 
   /** A thread with its posts nested into a reply tree, scoped to a member. */
   async getThread(threadId: string, actingUserId: string) {
-    const { thread: known } = await this.requireThreadMembership(
+    const { thread: known, access } = await this.requireThreadMembership(
       threadId,
       actingUserId,
     );
@@ -141,12 +158,35 @@ export class ForumsService {
 
     return {
       ...thread,
+      // Lets the client show moderation actions without guessing from the
+      // global role: true for the subject's staff and the org admin.
+      canModerate: access.isStaff,
       authorRole:
         thread?.authorId != null
           ? roleByUser.get(thread.authorId) ?? null
           : null,
       posts: this.buildTree(posts, roleByUser),
     };
+  }
+
+  /**
+   * Rename a thread. Only its author may edit it (moderators can delete or pin,
+   * not rewrite someone else's words). The opening message is a post and is
+   * edited through `updatePost`.
+   */
+  async updateThread(threadId: string, actingUserId: string, dto: UpdateThreadDto) {
+    const { thread } = await this.requireThreadMembership(threadId, actingUserId);
+    if (!thread.authorId || thread.authorId !== actingUserId) {
+      throw new ForbiddenException('Solo el autor puede editar el hilo.');
+    }
+    return this.prisma.forumThread.update({
+      where: { id: threadId },
+      data: { title: dto.title.trim() },
+      include: {
+        author: { select: AUTHOR_SELECT },
+        _count: { select: { posts: true } },
+      },
+    });
   }
 
   /** Toggle a thread's pinned flag (course staff only). */
@@ -177,8 +217,23 @@ export class ForumsService {
   }
 
   /** Delete a thread (staff only) and notify its author after deletion. */
+  /**
+   * Delete a thread — the subject's staff or an org admin always; its author
+   * only while nobody else has posted in it (their words would go with it).
+   */
   async deleteThread(threadId: string, actingUserId: string) {
-    const { thread, access } = await this.requireThreadMembership(threadId, actingUserId, true);
+    const { thread, access } = await this.requireThreadMembership(threadId, actingUserId);
+    if (!access.isStaff) {
+      if (!thread.authorId || thread.authorId !== actingUserId) {
+        throw new ForbiddenException('No tienes permiso para borrar este hilo.');
+      }
+      const othersPosts = await this.prisma.forumPost.count({
+        where: { threadId, OR: [{ authorId: null }, { authorId: { not: actingUserId } }] },
+      });
+      if (othersPosts > 0) {
+        throw new ConflictException('El hilo ya tiene respuestas de otras personas; pide a un profesor que lo borre.');
+      }
+    }
     await this.prisma.forumThread.delete({ where: { id: threadId } });
     // Pins, replies and new-thread notices link to a page that no longer exists.
     await this.notifications.removeByLink(access.subject.organizationId, { equals: [`/forums/${threadId}`] });
@@ -236,6 +291,41 @@ export class ForumsService {
     await this.notifyReply(thread, actingUserId, parentAuthorId);
 
     return post;
+  }
+
+  /** Edit a post's body (its author only). */
+  async updatePost(postId: string, actingUserId: string, dto: UpdatePostDto) {
+    const { post } = await this.requirePostMembership(postId, actingUserId);
+    if (!post.authorId || post.authorId !== actingUserId) {
+      throw new ForbiddenException('Solo el autor puede editar el mensaje.');
+    }
+    return this.prisma.forumPost.update({
+      where: { id: postId },
+      data: { body: dto.body.trim() },
+      include: { author: { select: AUTHOR_SELECT } },
+    });
+  }
+
+  /**
+   * Delete a post — its author while it has no replies, or the subject's staff
+   * or an org admin (nested replies go with it, cascade). Reply notices link to the thread,
+   * which stays valid, so there is nothing to clean up or announce.
+   */
+  async deletePost(postId: string, actingUserId: string) {
+    const { post, access } = await this.requirePostMembership(postId, actingUserId);
+    const isAuthor = !!post.authorId && post.authorId === actingUserId;
+    if (!isAuthor && !access.isStaff) {
+      throw new ForbiddenException('No tienes permiso para borrar este mensaje.');
+    }
+    // Replies cascade with the post: an author may not take other people's
+    // replies down with their own message; moderators may.
+    if (!access.isStaff) {
+      const replies = await this.prisma.forumPost.count({ where: { parentId: postId } });
+      if (replies > 0) {
+        throw new ConflictException('Este mensaje ya tiene respuestas y no se puede borrar.');
+      }
+    }
+    await this.prisma.forumPost.delete({ where: { id: postId } });
   }
 
   // ---------------------------------------------------------------------------

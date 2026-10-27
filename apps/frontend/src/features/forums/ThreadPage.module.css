@@ -1,0 +1,254 @@
+.page {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 26px var(--space-10);
+}
+
+.stateBox {
+  padding: var(--space-10);
+}
+
+.stateText {
+  color: var(--color-text-secondary);
+  margin-top: 18px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 18px 0 6px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.pinned {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 3px 9px;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+  background: #fdf0dc;
+  border-radius: 20px;
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.editTitle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fieldFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.meta {
+  margin-bottom: 22px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.topComposer {
+  margin-top: 22px;
+}
+
+/* ----- Posts ----- */
+
+.post {
+  /* --depth is set per node; the indent shrinks on small screens. */
+  margin-left: calc(var(--depth, 0) * 22px);
+}
+
+.postRow {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-accent-muted);
+  color: var(--color-accent-hover);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 15px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 12px;
+}
+
+.bubbleMine {
+  background: var(--color-accent-muted);
+}
+
+.postHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: 4px;
+}
+
+.author {
+  min-width: 0;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.authorStaff {
+  color: var(--color-accent-hover);
+}
+
+.roleBadge {
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-accent-hover);
+  background: var(--color-accent-muted);
+  border-radius: 20px;
+}
+
+.date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.body {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.linkAction {
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent-hover);
+  cursor: pointer;
+}
+
+.linkAction:hover {
+  text-decoration: underline;
+}
+
+.linkActionDanger {
+  color: var(--color-error);
+}
+
+.inlineForm {
+  margin-top: var(--space-2);
+}
+
+/* ----- Composer ----- */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.composerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .headerActions {
+    justify-content: flex-start;
+  }
+
+  .post {
+    margin-left: calc(var(--depth, 0) * 10px);
+  }
+
+  .postRow {
+    gap: var(--space-2);
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+
+  .bubble {
+    padding: 10px 12px;
+  }
+
+  .date {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

@@ -13,6 +13,8 @@ import { CurrentUser, AuthUser } from '@/common/auth';
 import { ForumsService } from './forums.service';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+import { UpdateThreadDto } from './dto/update-thread.dto';
 import { SearchForumDto } from './dto/search-forum.dto';
 
 @Controller()
@@ -53,6 +55,15 @@ export class ForumsController {
     return this.forums.getThread(id, user.userId);
   }
 
+  @Patch('threads/:id')
+  async updateThread(
+    @Param('id', ParseIdPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateThreadDto,
+  ) {
+    return this.forums.updateThread(id, user.userId, dto);
+  }
+
   @Post('threads/:id/posts')
   async addPost(
     @Param('id', ParseIdPipe) id: string,
@@ -70,6 +81,21 @@ export class ForumsController {
   @Delete('threads/:id')
   async deleteThread(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     await this.forums.deleteThread(id, user.userId);
+    return { deleted: true };
+  }
+
+  @Patch('posts/:id')
+  async updatePost(
+    @Param('id', ParseIdPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdatePostDto,
+  ) {
+    return this.forums.updatePost(id, user.userId, dto);
+  }
+
+  @Delete('posts/:id')
+  async deletePost(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
+    await this.forums.deletePost(id, user.userId);
     return { deleted: true };
   }
 }

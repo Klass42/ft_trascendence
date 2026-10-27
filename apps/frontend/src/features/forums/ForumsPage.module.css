@@ -48,6 +48,24 @@
   overflow-wrap: anywhere;
 }
 
+.threadTitleText {
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.counter {
+  align-self: flex-end;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.counterNear {
+  color: var(--color-error);
+}
+
 @media (max-width: 700px) {
   .page {
     padding: var(--space-6) var(--space-4);
