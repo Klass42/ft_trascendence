@@ -64,8 +64,8 @@ código, rutas y campos de la API **no cambian** (están en inglés: `Course`, `
 
 | En pantalla | Qué es | En el código | Nunca en la UI |
 |---|---|---|---|
-| **Cohorte** | Grupo de alumnos de un año académico, p. ej. «1º A · 2025-2026». Es lo que lista la sección «Cohortes». | `Course` | «Curso» |
-| **Asignatura** | Materia dentro de una cohorte. Los selectores de Tareas, Foros, Notas, Analíticas y Biblioteca eligen asignaturas. | `Subject` (`useMySubjects`) | «Curso» |
+| **Curso** (menú y listado) / **Cohorte** (gestión) | Grupo de alumnos de un año académico, p. ej. «1º A · 2025-2026». El menú y la página de listado dicen «Cursos» / «Mis cursos» (decisión del equipo, 28-oct-2026); los formularios de administración que crean o editan el grupo dicen «cohorte». | `Course` | — |
+| **Asignatura** | Materia dentro de un curso. Los selectores de Tareas, Foros, Notas, Analíticas y Biblioteca eligen asignaturas. | `Subject` (`useMySubjects`) | «Curso» (para una asignatura) |
 | **Año académico** | Periodo de la cohorte, p. ej. «2026-2027». | `academicYear` | — |
 | **Sección** y **Lección** | Estructura del contenido de una asignatura (libro → secciones → lecciones). | `Section`, `Lesson` | — |
 | **Recurso** / **Biblioteca** | Material reutilizable de la organización (libros, enlaces, documentos). Se «publica en una asignatura». | `LearningResource` | — |
@@ -85,7 +85,7 @@ código, rutas y campos de la API **no cambian** (están en inglés: `Course`, `
 | **Archivo** | Fichero subido. | `File` | «Fichero» |
 
 El menú lateral usa el mismo nombre que el título de la página: alumnos ven «Mis notas»,
-profesores «Calificaciones»; todos ven «Cohortes».
+profesores «Calificaciones»; todos ven «Cursos» (página «Mis cursos»).
 
 ### Personas y organización
 
