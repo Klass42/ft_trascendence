@@ -17,7 +17,7 @@ test.describe('F1 — CoursesPage', () => {
     await page.goto('/courses');
     await page.waitForTimeout(2000);
 
-    await expect(page.locator('h1')).toContainText('Cohortes');
+    await expect(page.locator('h1')).toContainText('Mis cursos');
 
     const courseCard = page.locator('text=1º A').first();
     await expect(courseCard).toBeVisible({ timeout: 8000 });
@@ -120,7 +120,7 @@ test.describe('F6+F7 — AppLayout', () => {
     // A student sees the shared items plus their role-flagged ones. Tareas and
     // Foros are student:true + teacher:true, so students must see them too — a
     // regression guard for the nav filter fix that previously hid them.
-    for (const item of ['Inicio', 'Cohortes', 'Tareas', 'Foros', 'Mis notas']) {
+    for (const item of ['Inicio', 'Cursos', 'Tareas', 'Foros', 'Mis notas']) {
       await expect(page.locator(`text=${item}`).first()).toBeVisible({ timeout: 5000 });
     }
     // Analytics is staff-only — the student must NOT see it.
