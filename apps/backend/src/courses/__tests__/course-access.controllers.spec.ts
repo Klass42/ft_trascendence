@@ -1,4 +1,6 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { AuthUser } from '@/common/auth';
+import { CourseAccessService } from '../course-access.service';
 import { EnrollmentsController } from '../enrollments/enrollments.controller';
 import { LessonsController } from '../lessons/lessons.controller';
 import { SectionsController } from '../sections/sections.controller';
@@ -98,5 +100,79 @@ describe('progress controller authorization', () => {
       ASSISTANT.organizationId,
       ASSISTANT.userId,
     );
+  });
+});
+
+describe('lesson progress endpoints', () => {
+  const ORG = 'org-1';
+  const OTHER_ORG_USER: AuthUser = { ...ASSISTANT, userId: 'other-1', organizationId: 'org-2' };
+  const TEACHER: AuthUser = { ...ASSISTANT, userId: 'teacher-1', role: 'TEACHER' };
+  const STUDENT: AuthUser = { ...ASSISTANT, userId: 'student-1', role: 'STUDENT' };
+
+  /** Real access service over a fake DB: one subject in ORG, teacher-1 is staff, student-1 is a member. */
+  const build = () => {
+    const prisma = {
+      subject: {
+        findFirst: jest.fn().mockImplementation(({ where }) =>
+          where.id === SUBJECT_ID && where.organizationId === ORG
+            ? Promise.resolve({ id: SUBJECT_ID, courseId: 'cohort-1', status: 'PUBLISHED', organizationId: ORG, course: { organizationId: ORG } })
+            : Promise.resolve(null)),
+      },
+      subjectStaff: {
+        findUnique: jest.fn().mockImplementation(({ where }) =>
+          Promise.resolve(where.subjectId_userId.userId === TEACHER.userId ? { role: 'TEACHER' } : null)),
+      },
+      courseMembership: {
+        findUnique: jest.fn().mockImplementation(({ where }) =>
+          Promise.resolve(where.courseId_userId.userId === STUDENT.userId ? { id: 'm1' } : null)),
+      },
+    };
+    const enrollments = {
+      findLessonSubjectId: jest.fn().mockResolvedValue({ subjectId: SUBJECT_ID }),
+      uncompleteLesson: jest.fn().mockResolvedValue({ completed: false, progress: 0 }),
+      getSubjectLessonProgress: jest.fn().mockResolvedValue([{ userId: 'student-1', completedLessonIds: ['l1'] }]),
+    };
+    const access = new CourseAccessService(prisma as never);
+    return { enrollments, controller: new EnrollmentsController(enrollments as never, access) };
+  };
+
+  it('lets subject staff read per-student lesson progress', async () => {
+    const { controller, enrollments } = build();
+    await expect(controller.getLessonProgress(SUBJECT_ID, TEACHER)).resolves.toEqual([
+      { userId: 'student-1', completedLessonIds: ['l1'] },
+    ]);
+    expect(enrollments.getSubjectLessonProgress).toHaveBeenCalledWith(SUBJECT_ID, ORG);
+  });
+
+  it('lets an org admin read per-student lesson progress without a staff row', async () => {
+    const { controller } = build();
+    await expect(
+      controller.getLessonProgress(SUBJECT_ID, { ...ASSISTANT, userId: 'admin-1', role: 'ADMIN' }),
+    ).resolves.toHaveLength(1);
+  });
+
+  it('rejects a student reading per-student lesson progress with 403', async () => {
+    const { controller, enrollments } = build();
+    await expect(controller.getLessonProgress(SUBJECT_ID, STUDENT)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(enrollments.getSubjectLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 for a subject of another organization', async () => {
+    const { controller, enrollments } = build();
+    await expect(controller.getLessonProgress(SUBJECT_ID, OTHER_ORG_USER)).rejects.toBeInstanceOf(NotFoundException);
+    expect(enrollments.getSubjectLessonProgress).not.toHaveBeenCalled();
+  });
+
+  it('unmarks only the caller completion after the readability check', async () => {
+    const { controller, enrollments } = build();
+    await expect(controller.uncompleteLesson('lesson-1', STUDENT)).resolves.toEqual({ completed: false, progress: 0 });
+    expect(enrollments.uncompleteLesson).toHaveBeenCalledWith('lesson-1', ORG, STUDENT.userId);
+  });
+
+  it('rejects unmarking a lesson of a subject the caller cannot read', async () => {
+    const { controller, enrollments } = build();
+    const outsider: AuthUser = { ...STUDENT, userId: 'outsider-1' };
+    await expect(controller.uncompleteLesson('lesson-1', outsider)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(enrollments.uncompleteLesson).not.toHaveBeenCalled();
   });
 });

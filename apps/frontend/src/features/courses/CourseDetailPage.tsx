@@ -50,8 +50,8 @@ export function CourseDetailPage() {
 
   const { data: fullCourse, isLoading: courseLoading, error: courseError, refetch: refetchCourse } = useCourseDetail(subjectId);
   const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? subjectId : undefined);
-  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? subjectId : undefined);
-  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? subjectId : undefined);
+  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse && !isTeacher ? subjectId : undefined);
+  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse && !isTeacher ? subjectId : undefined);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -222,6 +222,7 @@ export function CourseDetailPage() {
             {course.course.name} · {course.course.academicYear}
           </div>
         )}
+        {!isTeacher && (
           <>
             <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
               <span>Progreso {pct}%</span>
@@ -245,10 +246,23 @@ export function CourseDetailPage() {
               />
             </div>
           </>
+        )}
       </div>
 
       {(() => {
-        const lessonListContent = (
+        const lessonListContent = !sections?.some((sec) => (sec.lessons?.length ?? 0) > 0) ? (
+          <div className={styles.emptyContent}>
+            <EmptyState
+              title="Todavía no hay contenido"
+              description={isTeacher
+                ? 'Activa el modo edición para añadir secciones y lecciones.'
+                : 'Tu profesor aún no ha publicado lecciones en esta asignatura.'}
+              action={isTeacher && !editing
+                ? <Button size="sm" onClick={() => setEditing(true)}>Modo edición</Button>
+                : undefined}
+            />
+          </div>
+        ) : (
           <div style={{ padding: '26px 40px', maxWidth: 820 }}>
             {sections?.map((sec) => (
               <div key={sec.id}>

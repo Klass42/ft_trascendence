@@ -21,6 +21,7 @@ export { useLesson } from './useLesson';
 export { useLessonById } from './useLessonById';
 export { useProgress } from './useProgress';
 export { useCompleteLesson } from './useCompleteLesson';
+export { useLessonProgress, type StudentLessonProgress } from './useLessonProgress';
 export { useEnroll } from './useEnroll';
 export { useCompletedLessons } from './useCompletedLessons';
 export { useMyProgress } from './useMyProgress';

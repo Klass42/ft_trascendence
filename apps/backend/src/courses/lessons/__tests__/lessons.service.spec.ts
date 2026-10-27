@@ -350,6 +350,14 @@ describe('LessonsService', () => {
       expect(result.videoUrl).toBe('https://new.video');
     });
 
+    it('clears videoUrl when an empty string is sent', async () => {
+      const { prisma } = buildFake();
+      const service = buildService(prisma);
+
+      const result = await service.update(SECTION_ID, LESSON_ID, ORG_ID, { videoUrl: '' });
+      expect(result.videoUrl).toBeNull();
+    });
+
     it('updates order', async () => {
       const { prisma } = buildFake();
       const service = buildService(prisma);

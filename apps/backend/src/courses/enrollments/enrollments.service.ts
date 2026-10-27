@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuthUser } from '@/common/auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { subjectStudentsWhere } from '../../activities/gradable-activities';
 
 @Injectable()
 export class EnrollmentsService {
@@ -49,6 +50,63 @@ export class EnrollmentsService {
 
     const progress = await this.computeProgress(lesson.section.subjectId, userId);
     return { completed: true, progress: progress.progress };
+  }
+
+  async uncompleteLesson(lessonId: string, organizationId: string, userId: string) {
+    this.requireIds(userId, organizationId);
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { section: { include: { subject: true } } },
+    });
+    if (!lesson || lesson.section.subject.organizationId !== organizationId) {
+      throw new NotFoundException(`Lesson ${lessonId} not found`);
+    }
+
+    // Idempotent: unmarking a lesson that was never completed is a no-op.
+    await this.prisma.lessonCompletion.deleteMany({
+      where: {
+        lessonId,
+        userId,
+        lesson: { section: { subject: { organizationId } } },
+      },
+    });
+
+    const progress = await this.computeProgress(lesson.section.subjectId, userId);
+    return { completed: false, progress: progress.progress };
+  }
+
+  /**
+   * Completed lesson ids per student of the subject's cohort (students only,
+   * not staff enrolled in the cohort). Callers must have
+   * passed the subject-staff check; this only applies tenant scoping.
+   */
+  async getSubjectLessonProgress(subjectId: string, organizationId: string) {
+    const subject = await this.requireSubject(subjectId, organizationId);
+    // Same "student of this subject" as the gradebook and analytics.
+    const memberships = await this.prisma.courseMembership.findMany({
+      where: subjectStudentsWhere(subject),
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const userIds = memberships.map((membership) => membership.userId);
+    const completions = userIds.length === 0
+      ? []
+      : await this.prisma.lessonCompletion.findMany({
+          where: {
+            userId: { in: userIds },
+            lesson: { section: { subjectId, subject: { organizationId } } },
+          },
+          select: { userId: true, lessonId: true },
+        });
+
+    const byUser = new Map<string, string[]>(userIds.map((id) => [id, []]));
+    for (const completion of completions) {
+      byUser.get(completion.userId)?.push(completion.lessonId);
+    }
+    return userIds.map((userId) => ({
+      userId,
+      completedLessonIds: byUser.get(userId) ?? [],
+    }));
   }
 
   async getProgress(subjectId: string, organizationId: string, userId: string) {

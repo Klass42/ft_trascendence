@@ -164,7 +164,7 @@ test.describe('Content builder (TEACHER)', () => {
     await lessonRow(page, 'Mi lección').getByRole('button', { name: 'Editar' }).click();
     await page.getByLabel('Título', { exact: true }).fill('Lección editada');
     await page.getByLabel('Contenido (Markdown)').fill('# Nuevo contenido');
-    await page.getByLabel('URL del video').fill('https://youtube.com/watch?v=test');
+    await page.getByLabel('URL del video').fill('https://youtube.com/watch?v=dQw4w9WgXcQ');
     await page.getByRole('button', { name: 'Guardar' }).click();
 
     await expect(page.getByText('Lección actualizada')).toBeVisible({ timeout: 8000 });
@@ -175,8 +175,20 @@ test.describe('Content builder (TEACHER)', () => {
     expect(lesson).toMatchObject({
       title: 'Lección editada',
       contentMd: '# Nuevo contenido',
-      videoUrl: 'https://youtube.com/watch?v=test',
+      videoUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
     });
+  });
+
+  test('rejects a lesson video that is not an https URL', async ({ page, request }) => {
+    const sectionId = await addSection(request, subject.id, 'Video', 1);
+    await addLesson(request, sectionId, 'Mi lección', 1);
+    await openEditor(page, subject.id);
+
+    await lessonRow(page, 'Mi lección').getByRole('button', { name: 'Editar' }).click();
+    await page.getByLabel('URL del video').fill('no-es-url');
+
+    await expect(page.getByText('Introduce una URL válida que empiece por https://')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   });
 
   test('deletes a lesson', async ({ page, request }) => {
