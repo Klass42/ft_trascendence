@@ -179,6 +179,10 @@ export function AnalyticsPage() {
                 </div>
               </div>
 
+              <p className={`${styles.rangeNote} ${styles.noPrint}`}>
+                El rango filtra solo la gráfica de entregas; el resto de cifras cubre todo el curso.
+              </p>
+
               {rangeError ? (
                 <p className={styles.error}>{rangeError}</p>
               ) : overTime.isLoading ? (

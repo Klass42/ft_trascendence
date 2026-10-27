@@ -147,6 +147,12 @@
   color: var(--color-text-muted);
 }
 
+.rangeNote {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0 0 12px;
+}
+
 /* ===== Chart primitives ===== */
 
 .chartWrap {

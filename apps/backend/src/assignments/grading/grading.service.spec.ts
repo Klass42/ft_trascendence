@@ -261,7 +261,16 @@ describe('GradingService', () => {
           findMany: async () => [{ id: COURSE_ID, status: 'PUBLISHED', courseId: COURSE_ID }],
         },
         courseMembership: {
-          findMany: async () => [{ userId: STUDENT }, { userId: STUDENT }],
+          findMany: async () => [
+            { userId: STUDENT, courseId: COURSE_ID, user: { subjectStaff: [] } },
+            { userId: STUDENT, courseId: COURSE_ID, user: { subjectStaff: [] } },
+            // Staff of the taught subject who also holds a membership: not a student.
+            {
+              userId: TEACHER,
+              courseId: COURSE_ID,
+              user: { subjectStaff: [{ subjectId: COURSE_ID }] },
+            },
+          ],
         },
         enrollment: {
           findMany: async ({ where }: any) => {
@@ -308,7 +317,7 @@ describe('GradingService', () => {
       const summary = await service.getTeachingSummary(TEACHER);
 
       expect(summary.activeCourses).toBe(1);
-      expect(summary.totalStudents).toBe(1); // deduped
+      expect(summary.totalStudents).toBe(1); // deduped, staff excluded
       expect(summary.pendingCount).toBe(1);
       expect(summary.pending).toHaveLength(1);
       expect(summary.pending[0]).toMatchObject({
