@@ -128,6 +128,8 @@ export {
   type AnswerDTO,
   type AttemptDTO,
   type SaveAnswersInput,
+  type PreviewGradeResult,
+  type PreviewGradeResponse,
   type GradeAttemptInput,
   type GradebookDTO,
   type GradebookItemDTO,

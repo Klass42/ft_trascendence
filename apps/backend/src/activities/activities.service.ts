@@ -23,6 +23,8 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PreviewGradeDto } from './dto/preview-grade.dto';
+import { gradeResponses } from './grading/grade-responses';
 
 @Injectable()
 export class ActivitiesService {
@@ -178,6 +180,58 @@ export class ActivitiesService {
       include: { questions: { orderBy: { order: 'asc' } } },
     });
     return this.viewFor(full ?? activity, access.isStaff);
+  }
+
+  /** Grade a teacher's local preview without creating attempts or answers. */
+  async previewGrade(activityId: string, actingUserId: string, dto: PreviewGradeDto) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { organizationId: true },
+    });
+    if (!actor?.organizationId) {
+      throw new NotFoundException(`Activity ${activityId} not found`);
+    }
+
+    const activity = await this.prisma.activity.findFirst({
+      where: {
+        id: activityId,
+        subject: { is: { organizationId: actor.organizationId } },
+      },
+      include: {
+        subject: true,
+        questions: { orderBy: { order: 'asc' } },
+      },
+    });
+    if (!activity) {
+      throw new NotFoundException(`Activity ${activityId} not found`);
+    }
+
+    // Same authorship gate as authoring, including assistants and org admins.
+    await this.requireSubject(activity.subjectId, actingUserId, true);
+
+    const questions = new Map(activity.questions.map((question) => [question.id, question]));
+    for (const answer of dto.answers) {
+      const question = questions.get(answer.questionId);
+      if (!question) {
+        throw new BadRequestException(
+          `La pregunta ${answer.questionId} no pertenece a esta actividad`,
+        );
+      }
+      const adapter = getAdapter(question.kind);
+      adapter.validateContent(question.content);
+      adapter.validateResponse(answer.response);
+    }
+
+    const grade = gradeResponses(activity.questions, dto.answers, activity.maxScore);
+    return {
+      score: grade.score,
+      maxScore: activity.maxScore,
+      results: grade.results,
+      solutions: activity.questions.map((question) => ({
+        questionId: question.id,
+        content: question.content as Record<string, unknown>,
+      })),
+    };
   }
 
   async update(activityId: string, actingUserId: string, dto: UpdateActivityDto) {

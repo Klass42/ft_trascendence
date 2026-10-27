@@ -234,6 +234,8 @@ describe('TaskTemplatesService', () => {
       taskTemplate: {
         findUnique: async ({ where }: any) =>
           templates.find((t) => t.id === where.id) ?? null,
+        findFirst: async ({ where }: any) =>
+          templates.find((t) => t.id === where.id && t.organizationId === where.organizationId) ?? null,
         findMany: async ({ where }: any) =>
           templates.filter(
             (t) =>
@@ -350,6 +352,33 @@ describe('TaskTemplatesService', () => {
     expect(
       world.attempts.filter((a) => a.activityId === activity.id),
     ).toHaveLength(1);
+  });
+
+  it('grades a template preview without creating activities or attempts', async () => {
+    const world = buildWorld();
+    const source = await seedExam(world);
+    const template = await world.templatesService.saveFromActivity(source.id, TEACHER);
+    const activityCount = world.activities.length;
+    const attemptCount = world.attempts.length;
+
+    const preview = await world.templatesService.previewGrade(template.id, TEACHER, {
+      answers: [{ questionId: `${template.id}:0`, response: { selected: [1] } }],
+    });
+
+    expect(preview).toMatchObject({
+      score: 3,
+      maxScore: 10,
+      results: [
+        { questionId: `${template.id}:0`, autoGradable: true, correct: true, awarded: 3, points: 3 },
+        { questionId: `${template.id}:1`, autoGradable: false, correct: null, awarded: null, points: 7 },
+      ],
+    });
+    expect(preview.solutions[0]).toEqual({
+      questionId: `${template.id}:0`,
+      content: MCQ_CONTENT,
+    });
+    expect(world.activities).toHaveLength(activityCount);
+    expect(world.attempts).toHaveLength(attemptCount);
   });
 
   it('create from templateId hydrates questions with same kind/prompt/points/content', async () => {

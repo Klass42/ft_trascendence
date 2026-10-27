@@ -20,7 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ActivitiesService } from '../activities.service';
 import { getAdapter } from '../blocks/registry';
-import { gradeQuestion, isAutoGradable } from '../grading/graders';
+import { gradeResponses } from '../grading/grade-responses';
 import { SaveAnswersDto } from './dto/save-answers.dto';
 import { GradeAttemptDto } from './dto/grade-attempt.dto';
 
@@ -128,29 +128,30 @@ export class AttemptsService {
 
     const { activity } = attempt;
     const answersByQ = new Map(attempt.answers.map((a) => [a.questionId, a]));
-
-    let awardedSum = 0;
-    let totalPoints = 0;
-    let hasManual = false;
+    const grade = gradeResponses(
+      activity.questions,
+      attempt.answers.map((answer) => ({
+        questionId: answer.questionId,
+        response: answer.response,
+      })),
+      activity.maxScore,
+    );
+    const gradesByQuestion = new Map(grade.results.map((result) => [result.questionId, result]));
     const answerUpdates: Prisma.PrismaPromise<unknown>[] = [];
 
     for (const q of activity.questions) {
-      totalPoints += q.points;
       const answer = answersByQ.get(q.id);
+      const result = gradesByQuestion.get(q.id);
 
-      if (isAutoGradable(q.kind, q.content)) {
-        const { correct, awarded } = gradeQuestion(
-          q.kind,
-          q.content,
-          answer?.response ?? {},
-          q.points,
-        );
-        awardedSum += awarded;
+      if (result?.autoGradable) {
         if (answer) {
           answerUpdates.push(
             this.prisma.answer.update({
               where: { id: answer.id },
-              data: { correct, awarded },
+              data: {
+                correct: result.correct ?? false,
+                awarded: result.awarded ?? 0,
+              },
             }),
           );
         } else {
@@ -169,21 +170,19 @@ export class AttemptsService {
           );
         }
       } else {
-        hasManual = true;
+        // Manual work remains pending for staff, exactly as before.
       }
     }
 
     const now = new Date();
-    const scaledObjective =
-      totalPoints > 0 ? (awardedSum / totalPoints) * activity.maxScore : 0;
 
-    const attemptData: Prisma.AttemptUpdateInput = hasManual
+    const attemptData: Prisma.AttemptUpdateInput = grade.hasManual
       ? { status: AttemptStatus.SUBMITTED, submittedAt: now }
       : {
           status: AttemptStatus.GRADED,
           submittedAt: now,
           gradedAt: now,
-          score: round2(scaledObjective),
+          score: grade.score,
         };
 
     await this.prisma.$transaction([
@@ -195,11 +194,11 @@ export class AttemptsService {
       organizationId: activity.subject.organizationId,
     });
 
-    if (!hasManual) {
+    if (!grade.hasManual) {
       await this.notifyGraded(
         actingUserId,
         activity,
-        round2(scaledObjective),
+        grade.score,
       );
     } else {
       await this.notifySubmitted(actingUserId, activity);
