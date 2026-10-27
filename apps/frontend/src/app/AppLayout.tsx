@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/api';
 import { Avatar, Spinner } from '@/components/ui';
 import { NotificationsProvider, NotificationBell } from '@/features/notifications';
 import { PresenceProvider, FriendsPresence } from '@/features/presence';
+import { LegalFooter } from './LegalFooter';
 import styles from './AppLayout.module.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
@@ -49,7 +50,12 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/admin/users', icon: <Users size={20} />, label: 'Usuarios', adminOnly: true },
 ];
 
-export function AppLayout() {
+interface AppLayoutProps {
+  /** Content to render instead of the matched child route (used by the 404 page). */
+  children?: ReactNode;
+}
+
+export function AppLayout({ children }: AppLayoutProps = {}) {
   const { user, isLoading, logout } = useAuth();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -224,8 +230,12 @@ export function AppLayout() {
         tabIndex={-1}
         className={`${styles.main} ${isCollapsed ? styles.mainExpanded : ''}`}
       >
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
+
+      <div className={styles.footerArea}>
+        <LegalFooter />
+      </div>
     </div>
     </PresenceProvider>
     </NotificationsProvider>

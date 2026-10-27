@@ -25,6 +25,19 @@ test.describe('Diseño responsive y acceso por rol', () => {
     });
   }
 
+  test('404 dentro del layout con pie legal, sin desbordar a 375px', async ({ page }) => {
+    await actAs(page, STUDENT);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/ruta-que-no-existe');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Página no encontrada' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Volver al inicio' })).toHaveAttribute('href', '/dashboard');
+    const legal = page.getByRole('navigation', { name: 'Legal' });
+    await expect(legal.getByRole('link', { name: 'Privacidad' })).toBeVisible();
+    await expect(legal.getByRole('link', { name: 'Términos' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+
   test('redirige al alumno desde analíticas', async ({ page }) => {
     await actAs(page, STUDENT);
     await page.goto('/analytics');

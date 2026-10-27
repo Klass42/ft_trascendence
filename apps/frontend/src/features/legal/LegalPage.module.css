@@ -53,3 +53,10 @@
   color: var(--color-text-secondary);
   line-height: var(--leading-relaxed);
 }
+
+.section p a {
+  color: var(--color-accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}

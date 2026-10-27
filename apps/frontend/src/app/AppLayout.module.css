@@ -8,9 +8,10 @@
   display: grid;
   grid-template-areas:
     "navbar navbar"
-    "sidebar main";
+    "sidebar main"
+    "sidebar footer";
   grid-template-columns: var(--sidebar-width) 1fr;
-  grid-template-rows: var(--navbar-height) 1fr;
+  grid-template-rows: var(--navbar-height) 1fr auto;
   min-height: 100vh;
   background-color: var(--color-bg-primary);
 }
@@ -279,6 +280,11 @@
   /* grid handles this automatically */
 }
 
+.footerArea {
+  grid-area: footer;
+  min-width: 0;
+}
+
 /* ===== Mobile Overlay ===== */
 
 .mobileOverlay {
@@ -323,7 +329,8 @@
   .layout {
     grid-template-areas:
       "navbar"
-      "main";
+      "main"
+      "footer";
     grid-template-columns: 1fr;
   }
 
