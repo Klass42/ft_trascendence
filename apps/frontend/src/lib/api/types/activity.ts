@@ -99,9 +99,11 @@ export interface AnswerDTO {
   attemptId: string;
   questionId: string;
   response: Record<string, unknown>;
-  correct: boolean | null;
-  awarded: number | null;
-  /** Original file names are included only in the staff attempt list. */
+  /** Omitted from the learner's own view unless the activity shows solutions. */
+  correct?: boolean | null;
+  /** Omitted from the learner's own view unless the activity shows solutions. */
+  awarded?: number | null;
+  /** Upload names: the staff attempt list and the learner's single-attempt view. */
   files?: Array<{ id: string; originalName: string }>;
 }
 
