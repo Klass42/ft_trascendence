@@ -109,6 +109,9 @@ from its own CA). Demo accounts, organization code `klass`:
 Grafana: **https://localhost:4150**, user `admin`, password `GF_SECURITY_ADMIN_PASSWORD` from
 `.env` (`make urls` prints it).
 
+Preparing the evaluation demo (clean data, accounts, which seed data shows each module):
+[`docs/evaluation-checklist.md`](docs/evaluation-checklist.md).
+
 ### Configuration (`.env`)
 
 `.env` is git-ignored; [`.env.example`](.env.example) is the committed template. Only deployment

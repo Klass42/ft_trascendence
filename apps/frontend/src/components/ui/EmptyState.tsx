@@ -16,9 +16,11 @@ export interface EmptyStateProps {
   description?: ReactNode;
   action?: ReactNode;
   className?: string;
+  /** Element for the title; use a heading when the empty state is the page's main content. */
+  titleAs?: 'p' | 'h1' | 'h2' | 'h3';
 }
 
-export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className, titleAs: Title = 'p' }: EmptyStateProps) {
   return (
     <div className={[styles.wrapper, className].filter(Boolean).join(' ')}>
       {icon && (
@@ -26,7 +28,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
           {icon}
         </div>
       )}
-      <p className={styles.title}>{title}</p>
+      <Title className={styles.title}>{title}</Title>
       {description && <p className={styles.description}>{description}</p>}
       {action && <div className={styles.action}>{action}</div>}
     </div>

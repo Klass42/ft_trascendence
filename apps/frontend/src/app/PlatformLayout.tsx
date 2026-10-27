@@ -3,6 +3,7 @@ import { Building2, LogOut, Plus } from 'lucide-react';
 import { useAuth } from '@/lib/api';
 import { Button } from '@/components/ui';
 import { NotificationBell, NotificationsProvider } from '@/features/notifications';
+import { LegalFooter } from './LegalFooter';
 import styles from './PlatformLayout.module.css';
 
 export function PlatformLayout() {
@@ -21,7 +22,8 @@ export function PlatformLayout() {
             <button className={styles.logout} onClick={handleLogout} aria-label="Cerrar sesión"><LogOut size={18} /></button>
           </div>
         </header>
-        <main><Outlet /></main>
+        <main className={styles.content}><Outlet /></main>
+        <LegalFooter />
       </div>
     </NotificationsProvider>
   );
