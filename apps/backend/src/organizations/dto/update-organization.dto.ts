@@ -1,3 +1,4 @@
+import { OrgLogoUrl } from '../../common/validation/org-fields';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateOrganizationDto {
@@ -7,7 +8,7 @@ export class UpdateOrganizationDto {
   @IsOptional()
   name?: string;
 
-  @IsString()
-  @IsOptional()
-  logoUrl?: string;
+  /** https only; '' or null clears the logo. */
+  @OrgLogoUrl()
+  logoUrl?: string | null;
 }

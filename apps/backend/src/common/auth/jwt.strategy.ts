@@ -28,8 +28,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   /** Called by passport after the JWT is verified. Returns the AuthUser on req.user. */
   async validate(payload: JwtPayload): Promise<AuthUser> {
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub }, include: { organization: { select: { status: true } } } });
     if (!user) throw new UnauthorizedException('User no longer exists');
+    // Issue #106: cut access immediately when the organization is suspended.
+    if (user.organization && user.organization.status !== 'ACTIVE') throw new UnauthorizedException('Tu organización está suspendida.');
     return {
       userId: user.id,
       email: user.email,

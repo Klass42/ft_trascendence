@@ -77,7 +77,7 @@ describe('CoursesService visibility', () => {
 
   it('creates a cohort without making the admin staff or owner', async () => {
     const create = jest.fn(async ({ data }: any) => ({ id: 'course-1', ...data }));
-    const prisma = { course: { create } } as unknown as PrismaService;
+    const prisma = { organization: { findUnique: jest.fn(async () => null) }, course: { create } } as unknown as PrismaService;
     const service = new CoursesService(prisma, {} as never);
 
     const result = await service.create({

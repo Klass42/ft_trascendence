@@ -10,7 +10,7 @@ const userRow = {
 const prisma = {
   user: {
     findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-      where.id === 'user-x' ? userRow : null,
+      where.id === 'user-x' ? userRow : where.id === 'user-s' ? { ...userRow, id: 'user-s', organization: { status: 'SUSPENDED' } } : null,
     ),
   },
   getOrThrow: jest.fn(() => 'test-secret'),
@@ -31,5 +31,10 @@ describe('JwtStrategy.validate()', () => {
   it('throws when the user does not exist', async () => {
     const strategy = new JwtStrategy(prisma as any, prisma as any);
     await expect(strategy.validate({ sub: 'no-one' } as JwtPayload)).rejects.toThrow();
+  });
+
+  it('rejects users of a suspended organization (#106)', async () => {
+    const strategy = new JwtStrategy(prisma as any, prisma as any);
+    await expect(strategy.validate({ sub: 'user-s' } as JwtPayload)).rejects.toThrow(/suspendida/);
   });
 });

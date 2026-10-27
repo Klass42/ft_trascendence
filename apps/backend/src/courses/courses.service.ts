@@ -1,3 +1,4 @@
+import { assertUserLimit, assertCourseLimit, assertStorageLimit } from '@/common/plan-limits/plan-limits';
 import {
   BadRequestException,
   ConflictException,
@@ -38,6 +39,7 @@ export class CoursesService {
 
   async create(dto: CreateCourseDto, user: AuthUser) {
     this.assertDateWindow(dto.startsOn, dto.endsOn);
+    await assertCourseLimit(this.prisma as any, user.organizationId);
     const created = await this.prisma.course.create({
       data: {
         organizationId: user.organizationId,

@@ -54,6 +54,8 @@ export function LoginPage() {
         setError(mapped.form ?? null);
       } else if (err instanceof ApiError && err.status === 401) {
         setError('El correo electrónico o la contraseña no son correctos.');
+      } else if (err instanceof ApiError && err.status === 403 && /suspendida/i.test(err.message)) {
+        setError('Tu organización está suspendida. Contacta con el soporte de la plataforma.');
       } else if (err instanceof ApiError && err.status === 403) {
         setError('Confirma tu correo electrónico antes de iniciar sesión.');
       } else {

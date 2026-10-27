@@ -50,6 +50,7 @@ function buildService() {
     deleteObject: jest.fn(),
   };
   const prisma = {
+    organization: { findUnique: jest.fn(async () => null) }, 
     file: {
       create: jest.fn(),
       findFirst: jest.fn(async () => baseFile),

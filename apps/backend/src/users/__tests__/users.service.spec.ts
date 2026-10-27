@@ -20,6 +20,7 @@ const mockUser = {
 };
 
 const mkPrisma = () => ({
+  organization: { findUnique: jest.fn(async () => null) }, 
   user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), delete: jest.fn() },
   friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), delete: jest.fn() },
 }) as unknown as PrismaService;
