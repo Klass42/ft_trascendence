@@ -20,14 +20,14 @@ export function KpiTiles({ overview }: Props) {
     {
       label: 'Tasa de entrega',
       value: pct(overview.submissions.rate),
-      hint: `${overview.submissions.total}/${overview.submissions.expected} entregas`,
+      hint: `${overview.submissions.total} de ${overview.submissions.expected} entregas`,
     },
     {
       label: 'Nota media',
       value: overview.averageGrade != null ? `${overview.averageGrade}%` : '—',
       hint:
         overview.submissions.graded > 0
-          ? `${overview.submissions.graded} calificadas`
+          ? `${overview.submissions.graded} ${overview.submissions.graded === 1 ? 'calificada' : 'calificadas'}`
           : 'sin calificar',
     },
     {
