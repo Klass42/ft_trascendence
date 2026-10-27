@@ -432,19 +432,21 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
     event.preventDefault();
     setError(null);
     setTitleError(undefined);
+    const isBook = form.type === 'BOOK';
+    const effectiveSource = form.type === 'LINK' ? 'url' : source;
     const fileId = files.find((file) => file.status === 'done')?.id;
     if (!form.title.trim()) return setError('El título es obligatorio.');
     if (form.title.trim().length > 200) return setTitleError('El título no puede superar los 200 caracteres.');
     if (uploading) return setError('Espera a que termine la subida del archivo.');
-    if (source === 'file' && !fileId) return setError('Sube un archivo para continuar.');
-    if (source === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
+    if (effectiveSource === 'file' && !fileId) return setError('Sube un archivo para continuar.');
+    if (effectiveSource === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
     try {
       await onCreated({
         title: form.title.trim(), type: form.type, description: form.description.trim() || undefined,
-        authors: splitList(form.authors), publisher: form.publisher.trim() || undefined,
-        isbn: form.isbn.trim() || undefined, language: form.language.trim() || undefined,
+        authors: splitList(form.authors), publisher: isBook ? form.publisher.trim() || undefined : undefined,
+        isbn: isBook ? form.isbn.trim() || undefined : undefined, language: form.language.trim() || undefined,
         license: form.license.trim() || undefined, tags: splitList(form.tags), status: form.status,
-        ...(source === 'file' ? { fileId } : { externalUrl: form.externalUrl.trim() }),
+        ...(effectiveSource === 'file' ? { fileId } : { externalUrl: form.externalUrl.trim() }),
       });
       setForm(EMPTY_FORM); setFiles([]);
     } catch (err) {
@@ -463,25 +465,25 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
       <form id="resource-form" onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
         <Input label="Título" required maxLength={200} value={form.title} error={titleError} onChange={(e) => { setForm({ ...form, title: e.target.value }); setTitleError(undefined); }} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as LearningResourceType })} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => { const nextType = e.target.value as LearningResourceType; setForm({ ...form, type: nextType, ...(nextType !== 'BOOK' && { isbn: '', publisher: '' }) }); if (nextType === 'LINK') { setSource('url'); setFiles([]); } }} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label style={labelStyle}>Estado<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as LearningResourceStatus })} style={selectStyle}>{RESOURCE_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         </div>
         <Textarea label="Descripción" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
         <Input label="Autores (separados por comas)" value={form.authors} onChange={(e) => setForm({ ...form, authors: e.target.value })} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Input label="Editorial" value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
-          <Input label="ISBN" value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
+          {form.type === 'BOOK' && <Input label="Editorial" value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />}
+          {form.type === 'BOOK' && <Input label="ISBN" value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />}
           <Input label="Idioma" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
         </div>
         <Input label="Licencia" value={form.license} onChange={(e) => setForm({ ...form, license: e.target.value })} />
         <Input label="Etiquetas (separadas por comas)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Contenido</div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
+          {form.type !== 'LINK' && <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
-          </div>
-          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
+          </div>}
+          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>

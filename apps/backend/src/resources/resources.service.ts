@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   LearningResourceStatus,
+  LearningResourceType,
   NotificationType,
   PublicationStatus,
   Prisma,
@@ -49,6 +50,24 @@ function resourceIncludeForSubject(subjectId: string) {
       orderBy: { order: 'asc' },
     },
   } satisfies Prisma.LearningResourceInclude;
+}
+
+
+/** #24: per-type field rules shared by create/update. */
+export function assertResourceTypeRules(input: {
+  type: LearningResourceType;
+  isbn?: string | null;
+  publisher?: string | null;
+  fileId?: string | null;
+  externalUrl?: string | null;
+}) {
+  if (input.type !== LearningResourceType.BOOK && (input.isbn?.trim() || input.publisher?.trim())) {
+    throw new BadRequestException('ISBN y Editorial solo están permitidos en recursos de tipo Libro.');
+  }
+  if (input.type === LearningResourceType.LINK) {
+    if (input.fileId) throw new BadRequestException('Un recurso de tipo Enlace no puede tener archivo.');
+    if (!input.externalUrl?.trim()) throw new BadRequestException('Un recurso de tipo Enlace requiere una URL.');
+  }
 }
 
 @Injectable()
@@ -119,6 +138,7 @@ export class ResourcesService {
 
   async create(dto: CreateResourceDto, user: AuthUser) {
     this.assertLibraryStaff(user);
+    assertResourceTypeRules(dto);
     await this.assertSource(user.organizationId, dto.fileId, dto.externalUrl);
     await this.assertFolder(user.organizationId, dto.folderId);
 
@@ -185,6 +205,15 @@ export class ResourcesService {
     const nextFileId = dto.fileId === undefined ? existing.fileId : dto.fileId;
     const nextExternalUrl =
       dto.externalUrl === undefined ? existing.externalUrl : dto.externalUrl;
+    const nextType = dto.type ?? existing.type;
+    const clearBookFields = nextType !== LearningResourceType.BOOK;
+    assertResourceTypeRules({
+      type: nextType,
+      isbn: dto.isbn,
+      publisher: dto.publisher,
+      fileId: nextFileId,
+      externalUrl: nextExternalUrl,
+    });
     await this.assertSource(user.organizationId, nextFileId, nextExternalUrl);
     await this.assertFolder(user.organizationId, dto.folderId);
 
@@ -204,6 +233,7 @@ export class ResourcesService {
         ...(dto.authors !== undefined && { authors: this.cleanList(dto.authors) }),
         ...(dto.publisher !== undefined && { publisher: dto.publisher?.trim() || null }),
         ...(dto.isbn !== undefined && { isbn: dto.isbn?.trim() || null }),
+        ...(clearBookFields && { isbn: null, publisher: null }),
         ...(dto.language !== undefined && { language: dto.language?.trim() || null }),
         ...(dto.license !== undefined && { license: dto.license?.trim() || null }),
         ...(dto.tags !== undefined && { tags: this.cleanList(dto.tags) }),
