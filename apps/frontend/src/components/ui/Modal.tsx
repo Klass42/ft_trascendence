@@ -9,7 +9,7 @@
  *     …form…
  *   </Modal>
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import styles from './Modal.module.css';
@@ -35,6 +35,8 @@ export function Modal({
   closeOnBackdrop = true,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   // Keep a stable ref so the effect never re-runs just because the caller
   // passed a new inline arrow function on each render (which would steal
   // focus from inputs on every keystroke).
@@ -46,11 +48,10 @@ export function Modal({
     const previouslyFocused = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    const getFocusable = () => {
-      const dialog = dialogRef.current;
-      if (!dialog) return [];
+    const getFocusable = (root: HTMLElement | null = dialogRef.current) => {
+      if (!root) return [];
       return Array.from(
-        dialog.querySelectorAll<HTMLElement>(
+        root.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((element) => element.getClientRects().length > 0);
@@ -85,8 +86,12 @@ export function Modal({
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const firstFocusable = getFocusable()[0];
-    (firstFocusable ?? dialogRef.current)?.focus();
+    // Initial focus: first control of the content (not the "Cerrar" button);
+    // the dialog itself when there is none. Respect an `autoFocus` already set.
+    const body = bodyRef.current;
+    if (!(body && document.activeElement instanceof Node && body.contains(document.activeElement))) {
+      (getFocusable(body)[0] ?? dialogRef.current)?.focus();
+    }
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
@@ -108,12 +113,12 @@ export function Modal({
         className={[styles.dialog, styles[size]].join(' ')}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
+        aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
       >
         {title && (
           <header className={styles.header}>
-            <h2 className={styles.title}>{title}</h2>
+            <h2 id={titleId} className={styles.title}>{title}</h2>
             <button
               type="button"
               className={styles.close}
@@ -124,7 +129,7 @@ export function Modal({
             </button>
           </header>
         )}
-        <div className={styles.body}>{children}</div>
+        <div ref={bodyRef} className={styles.body}>{children}</div>
         {footer && <footer className={styles.footer}>{footer}</footer>}
       </div>
     </div>,

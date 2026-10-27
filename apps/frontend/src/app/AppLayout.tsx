@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -57,6 +57,8 @@ export function AppLayout() {
     return saved === 'true';
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
@@ -65,6 +67,18 @@ export function AppLayout() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, []);
+
+  // Escape closes the mobile drawer and gives focus back to the button that opened it.
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setIsMobileMenuOpen(false);
+      mobileToggleRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isMobileMenuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -76,7 +90,7 @@ export function AppLayout() {
   if (isLoading) {
     return (
       <div className={styles.loading}>
-        <Spinner size="lg" label="Loading..." />
+        <Spinner size="lg" label="Cargando…" />
       </div>
     );
   }
@@ -85,13 +99,27 @@ export function AppLayout() {
     <NotificationsProvider>
     <PresenceProvider>
     <div className={styles.layout}>
+      <a
+        href="#main-content"
+        className={styles.skipLink}
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+          mainRef.current?.scrollIntoView();
+        }}
+      >
+        Saltar al contenido
+      </a>
+
       {/* ===== Navbar ===== */}
       <header className={styles.navbar}>
         <div className={styles.navbarLeft}>
           <button
+            ref={mobileToggleRef}
             className={styles.mobileMenuToggle}
             onClick={() => setIsMobileMenuOpen((o) => !o)}
-            aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-label={isMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={isMobileMenuOpen}
           >
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -108,7 +136,7 @@ export function AppLayout() {
           <NavLink to="/profile" className={styles.avatar} aria-label="Perfil">
             <Avatar src={user?.avatarUrl} size="sm" />
           </NavLink>
-          <button className={styles.logoutBtn} onClick={handleLogout} aria-label="Logout">
+          <button className={styles.logoutBtn} onClick={handleLogout} aria-label="Cerrar sesión">
             <LogOut size={18} />
           </button>
         </div>
@@ -158,6 +186,7 @@ export function AppLayout() {
                   `${styles.navItem} ${isActive ? styles.active : ''}`
                 }
                 onClick={() => setIsMobileMenuOpen(false)}
+                aria-label={item.label}
               >
                 <span className={styles.navIcon}>{item.icon}</span>
                 {!isCollapsed && <span className={styles.navLabel}>{item.label}</span>}
@@ -173,6 +202,7 @@ export function AppLayout() {
               `${styles.navItem} ${isActive ? styles.active : ''}`
             }
             onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Perfil"
           >
             <span className={styles.navIcon}><User size={20} /></span>
             {!isCollapsed && <span className={styles.navLabel}>Perfil</span>}
@@ -180,7 +210,7 @@ export function AppLayout() {
           <button
             className={styles.collapseToggle}
             onClick={toggleSidebar}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'}
           >
             {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
@@ -188,7 +218,12 @@ export function AppLayout() {
       </aside>
 
       {/* ===== Main Content ===== */}
-      <main className={`${styles.main} ${isCollapsed ? styles.mainExpanded : ''}`}>
+      <main
+        id="main-content"
+        ref={mainRef}
+        tabIndex={-1}
+        className={`${styles.main} ${isCollapsed ? styles.mainExpanded : ''}`}
+      >
         <Outlet />
       </main>
     </div>

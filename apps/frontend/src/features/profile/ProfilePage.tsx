@@ -156,7 +156,7 @@ export function ProfilePage() {
     <div className={styles.page}>
       <h1 className={styles.title}>Perfil</h1>
 
-      <Card title="Identidad" className={styles.section}>
+      <Card title="Identidad" titleAs="h2" className={styles.section}>
         <div className={styles.identityRow}>
           <Avatar src={user.avatarUrl} size="lg" />
           <div>
@@ -214,7 +214,7 @@ export function ProfilePage() {
         </div>
       </Card>
 
-      <Card title="Seguridad" className={styles.section}>
+      <Card title="Seguridad" titleAs="h2" className={styles.section}>
         <div className={styles.passwordForm}>
           <Input
             label="Contraseña actual"
@@ -257,7 +257,7 @@ export function ProfilePage() {
         </div>
       </Card>
 
-      <Card title="Preferencias" className={styles.section}>
+      <Card title="Preferencias" titleAs="h2" className={styles.section}>
         <div className={styles.row}>
           <div>
             <div className={styles.rowTitle}>Notificaciones por email</div>

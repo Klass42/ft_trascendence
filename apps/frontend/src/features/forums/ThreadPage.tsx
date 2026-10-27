@@ -96,7 +96,7 @@ export function ThreadPage() {
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: '#d97706',
+                color: '#92400e',
                 background: '#fdf0dc',
                 padding: '3px 9px',
                 borderRadius: 20,

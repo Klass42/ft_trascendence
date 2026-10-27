@@ -23,6 +23,28 @@
   background-color: var(--color-bg-primary);
 }
 
+/* ===== Skip link ===== */
+
+.skipLink {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-toast);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-inverse);
+  background: var(--color-accent-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-decoration: none;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-200%);
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
+
 /* ===== Navbar ===== */
 
 .navbar {
@@ -247,6 +269,10 @@
   grid-area: main;
   overflow-y: auto;
   background: var(--color-bg-primary);
+}
+
+.main:focus {
+  outline: none;
 }
 
 .mainExpanded {

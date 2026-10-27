@@ -55,7 +55,7 @@ export function SubmissionsLineChart({ series }: Props) {
         className={styles.chart}
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
-        role="img"
+        role="group"
         aria-label={`Entregas por día. Máximo ${maxCount} en un día.`}
         onMouseLeave={() => setActive(null)}
       >
@@ -111,7 +111,7 @@ export function SubmissionsLineChart({ series }: Props) {
               width={w}
               height={PLOT_H}
               tabIndex={0}
-              role="button"
+              role="img"
               aria-label={`${p.date}: ${p.count} entregas`}
               onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}

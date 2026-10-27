@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   useCourseDetail,
   useSections,
@@ -262,55 +262,21 @@ export function CourseDetailPage() {
                   {sec.lessons?.map((l) => {
                     const isDone = completedLessons?.includes(l.id);
                     return (
-                      <div
+                      <Link
                         key={l.id}
-                        onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}/lessons/${l.id}`)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 13,
-                          padding: '13px 16px',
-                          borderBottom: '1px solid var(--color-border-primary)',
-                          cursor: 'pointer',
-                        }}
+                        to={`/courses/${courseId}/subjects/${subjectId}/lessons/${l.id}`}
+                        className={styles.lessonRow}
                       >
-                        {isDone ? (
-                          <span
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              background: '#0f766e',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 'none',
-                            }}
-                          >
+                        <span className={isDone ? styles.lessonDone : styles.lessonTodo} aria-hidden="true">
+                          {isDone ? (
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              background: 'var(--color-accent-primary)',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 'none',
-                            }}
-                          >
+                          ) : (
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                          </span>
-                        )}
-                        <span style={{ flex: 1, fontSize: 14.5, fontWeight: isDone ? 500 : 600, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
-                          {l.title}
+                          )}
                         </span>
-                      </div>
+                        <span className={isDone ? styles.lessonTitleDone : styles.lessonTitle}>{l.title}</span>
+                        {isDone && <span className={styles.srOnly}>(completada)</span>}
+                      </Link>
                     );
                   })}
                 </div>
