@@ -200,6 +200,8 @@ export type {
   ForumPostDTO,
   CreateThreadInput,
   CreatePostInput,
+  UpdateThreadInput,
+  UpdatePostInput,
 } from './types/forum';
 
 export type {

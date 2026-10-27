@@ -48,6 +48,10 @@ export {
   useCreateThread,
   useCreatePost,
   usePinThread,
+  useUpdateThread,
+  useDeleteThread,
+  useUpdatePost,
+  useDeletePost,
 } from './useForumMutations';
 export {
   useAnalyticsOverview,

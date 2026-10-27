@@ -49,6 +49,8 @@ export interface ForumThreadDTO {
   createdAt: string;
   author: ForumAuthorDTO | null;
   authorRole: SubjectStaffRole | null;
+  /** True for the subject's staff and org admins: they can delete any post/thread. */
+  canModerate: boolean;
   posts: ForumPostDTO[];
 }
 
@@ -64,4 +66,12 @@ export interface CreateThreadInput {
 export interface CreatePostInput {
   body: string;
   parentId?: string;
+}
+
+export interface UpdateThreadInput {
+  title: string;
+}
+
+export interface UpdatePostInput {
+  body: string;
 }
