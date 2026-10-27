@@ -49,7 +49,7 @@ flowchart LR
     subgraph compose network — nothing else is published
         caddy[caddy<br/>TLS, routing, headers]
         caddy -- "/" --> frontend[frontend<br/>nginx, static SPA]
-        caddy -- "/api /socket.io /uploads /health" --> backend[backend<br/>NestJS]
+        caddy -- "/api /socket.io /health" --> backend[backend<br/>NestJS]
         caddy -- ":4150" --> grafana
 
         migrate[[migrate<br/>one-shot]] --> postgres
@@ -99,7 +99,7 @@ random values. A plain `cp .env.example .env` also boots, with weak development 
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `ft` / generated / `ft_prod` | database |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | generated | token signing |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Google OAuth (disabled while empty) |
-| `PLATFORM_SUPERADMIN_EMAIL/PASSWORD/NAME` | see file | first platform admin |
+| `PLATFORM_SUPERADMIN_EMAIL/PASSWORD/NAME` | `admin@platform.local` / generated / see file | first platform admin (`make urls` prints the login) |
 | `STORAGE_DRIVER` | `local` | `local` volume or `s3` (Garage) |
 | `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET` | generated | Garage |
 | `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD` | `admin` / generated | Grafana admin |
@@ -128,9 +128,12 @@ answers with a redirect to HTTPS.
 - **Real domain:** set `CADDY_DOMAIN`, `CADDY_TLS=<e-mail>`, ports `80`/`443`.
 
 Routing (`infra/caddy/Caddyfile`): `/api/*` → backend with the prefix stripped (same as the Vite
-dev proxy), `/socket.io/*`, `/uploads/*`, `/health` → backend, everything else → frontend.
-Responses get `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, compression, and
-HSTS for any domain other than `localhost`.
+dev proxy), `/socket.io/*`, `/health` → backend, everything else → frontend. Uploaded files are
+never served statically: the backend streams them from `/api/files/:id/content` behind a
+short-lived signed URL. Responses get `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, a `Content-Security-Policy` (own scripts only; Google Fonts; HTTPS images and
+media; `blob:` previews; no plugins; no framing by other origins), compression, and HSTS for any
+domain other than `localhost`.
 
 ## 5. Images
 
@@ -201,7 +204,7 @@ docker compose start backend       # → resolves within a minute
 `.github/workflows/ci.yaml`, on pull requests and on pushes to `staging` / `master`:
 
 1. **checks** — `scripts/ci.sh` on Node 22 (same as `make ci`): actionlint, yamllint,
-   hadolint, `prisma validate`, build, backend unit + integration tests (348 tests); semgrep and
+   hadolint, `prisma validate`, build, backend unit + integration tests; semgrep and
    trivy are informational.
 2. **deploy** — `make check`, then `make` on a clean runner, `scripts/smoke.sh`, and the
    Playwright compose smoke suite (login through HTTPS with zero console errors).
