@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Archive, CheckSquare, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
+  Archive, CheckSquare, ChevronRight, Folder, FolderInput, FolderTree as FolderTreeIcon, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
 } from 'lucide-react';
 import { Button, ConfirmDialog, Dropdown, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
@@ -19,7 +19,9 @@ import {
   type LearningResourceType,
 } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
+import { FolderTree } from './FolderTree';
 import { ResourceCard } from './ResourceCard';
+import styles from './ResourcesPage.module.css';
 import { RESOURCE_STATUSES, RESOURCE_TYPES, splitList } from './resource-helpers';
 
 const EMPTY_FORM = {
@@ -46,7 +48,8 @@ const countLabel = ({ resourceIds, folderIds }: Targets) => [
 ].filter(Boolean).join(' y ');
 
 /**
- * Staff-only organization catalogue (#26): real folders with breadcrumbs, a ⋮
+ * Staff-only organization catalogue (#26, Drive-style layout #22: fixed
+ * folder-tree sidebar on the left, breadcrumbs + grid on the right): real folders with breadcrumbs, a ⋮
  * menu per item, a «Seleccionar» mode with batch actions and «Mover a…».
  * Files are uploaded first, then referenced by id.
  */
@@ -66,6 +69,7 @@ export function ResourcesPage() {
   const [folderModal, setFolderModal] = useState<{ mode: 'create' } | { mode: 'rename'; folder: ResourceFolderDTO } | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [busy, setBusy] = useState(false);
+  const [treeOpen, setTreeOpen] = useState(false);
   const { data: resources, isLoading, error, refresh } = useResources({ search, type: type || undefined, status: status || undefined });
   const { data: folders, refresh: refreshFolders } = useResourceFolders();
   // Staff also need to prepare resources for a draft course before it is
@@ -98,7 +102,7 @@ export function ResourcesPage() {
   const reloadAll = async () => { await Promise.all([refresh(), refreshFolders()]); };
   const errorMessage = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
-  const openFolder = (id: string | null) => { setFolderId(id); clearSelection(); };
+  const openFolder = (id: string | null) => { setFolderId(id); clearSelection(); setTreeOpen(false); };
 
   const askArchive = (targets: Targets) => {
     const ids = targets.resourceIds.filter((id) => resources?.find((r) => r.id === id)?.status !== 'ARCHIVED');
@@ -238,7 +242,7 @@ export function ResourcesPage() {
     : [];
 
   return (
-    <div style={{ padding: '28px 40px', maxWidth: 1100 }}>
+    <div style={{ padding: '28px 40px', maxWidth: 1360 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26 }}>Biblioteca</h1>
@@ -253,6 +257,16 @@ export function ResourcesPage() {
         </div>
       </div>
 
+      <div className={styles.layout}>
+      <div>
+        <div className={styles.sidebarToggle}><Button size="sm" variant="secondary" onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen} aria-controls="library-folder-tree">
+          <FolderTreeIcon size={14} /> {treeOpen ? 'Ocultar carpetas' : 'Carpetas'}
+        </Button></div>
+        <aside id="library-folder-tree" className={`${styles.sidebar} ${treeOpen ? '' : styles.sidebarCollapsed}`}>
+          <FolderTree folders={folderList} activeId={filtering ? null : folderId} onOpen={(id) => { openFolder(id); if (filtering) { setSearch(''); setType(''); setStatus(''); } }} />
+        </aside>
+      </div>
+      <div className={styles.main}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         <label style={searchStyle}><Search size={15} /><input aria-label="Buscar biblioteca" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Título, autor o etiqueta" style={inputStyle} /></label>
         <select aria-label="Tipo de recurso" value={type} onChange={(e) => setType(e.target.value as LearningResourceType | '')} style={selectStyle}>
@@ -296,7 +310,7 @@ export function ResourcesPage() {
       {!isLoading && !error && visibleResources.length === 0 && visibleFolders.length === 0 && (
         <p style={messageStyle}>{filtering ? 'No hay recursos con estos filtros.' : 'Esta carpeta está vacía.'}</p>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
         {visibleFolders.map((folder) => {
           const manage = canManage(folder);
           return (
@@ -338,6 +352,8 @@ export function ResourcesPage() {
             } : undefined}
           />
         ))}
+      </div>
+      </div>
       </div>
 
       <ResourceForm
@@ -416,19 +432,21 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
     event.preventDefault();
     setError(null);
     setTitleError(undefined);
+    const isBook = form.type === 'BOOK';
+    const effectiveSource = form.type === 'LINK' ? 'url' : source;
     const fileId = files.find((file) => file.status === 'done')?.id;
     if (!form.title.trim()) return setError('El título es obligatorio.');
     if (form.title.trim().length > 200) return setTitleError('El título no puede superar los 200 caracteres.');
     if (uploading) return setError('Espera a que termine la subida del archivo.');
-    if (source === 'file' && !fileId) return setError('Sube un archivo para continuar.');
-    if (source === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
+    if (effectiveSource === 'file' && !fileId) return setError('Sube un archivo para continuar.');
+    if (effectiveSource === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
     try {
       await onCreated({
         title: form.title.trim(), type: form.type, description: form.description.trim() || undefined,
-        authors: splitList(form.authors), publisher: form.publisher.trim() || undefined,
-        isbn: form.isbn.trim() || undefined, language: form.language.trim() || undefined,
+        authors: splitList(form.authors), publisher: isBook ? form.publisher.trim() || undefined : undefined,
+        isbn: isBook ? form.isbn.trim() || undefined : undefined, language: form.language.trim() || undefined,
         license: form.license.trim() || undefined, tags: splitList(form.tags), status: form.status,
-        ...(source === 'file' ? { fileId } : { externalUrl: form.externalUrl.trim() }),
+        ...(effectiveSource === 'file' ? { fileId } : { externalUrl: form.externalUrl.trim() }),
       });
       setForm(EMPTY_FORM); setFiles([]);
     } catch (err) {
@@ -447,25 +465,25 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
       <form id="resource-form" onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
         <Input label="Título" required maxLength={200} value={form.title} error={titleError} onChange={(e) => { setForm({ ...form, title: e.target.value }); setTitleError(undefined); }} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as LearningResourceType })} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => { const nextType = e.target.value as LearningResourceType; setForm({ ...form, type: nextType, ...(nextType !== 'BOOK' && { isbn: '', publisher: '' }) }); if (nextType === 'LINK') { setSource('url'); setFiles([]); } }} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
           <label style={labelStyle}>Estado<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as LearningResourceStatus })} style={selectStyle}>{RESOURCE_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         </div>
         <Textarea label="Descripción" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
         <Input label="Autores (separados por comas)" value={form.authors} onChange={(e) => setForm({ ...form, authors: e.target.value })} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Input label="Editorial" value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
-          <Input label="ISBN" value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
+          {form.type === 'BOOK' && <Input label="Editorial" value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />}
+          {form.type === 'BOOK' && <Input label="ISBN" value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />}
           <Input label="Idioma" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} />
         </div>
         <Input label="Licencia" value={form.license} onChange={(e) => setForm({ ...form, license: e.target.value })} />
         <Input label="Etiquetas (separadas por comas)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Contenido</div>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
+          {form.type !== 'LINK' && <div style={{ display: 'flex', gap: 12, marginBottom: 8, fontSize: 13 }}>
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
-          </div>
-          {source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
+          </div>}
+          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>

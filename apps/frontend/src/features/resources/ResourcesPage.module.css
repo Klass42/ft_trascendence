@@ -1,0 +1,80 @@
+/* Drive-style library layout (#22): fixed folder sidebar + breadcrumbs/grid. */
+.layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 12px;
+  background: var(--color-bg-secondary);
+  padding: 10px 6px;
+}
+
+.sidebarToggle { display: none; }
+
+.main { min-width: 0; }
+
+.treeList { list-style: none; margin: 0; padding: 0; }
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+  padding-right: 6px;
+}
+.treeRow:hover { background: var(--color-bg-tertiary); }
+.treeRowActive, .treeRowActive:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-accent-primary);
+  font-weight: 700;
+}
+
+.treeChevron {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+span.treeChevron { cursor: default; }
+
+.treeLabel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 7px 4px;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.treeLabel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.treeLabel svg { flex-shrink: 0; color: var(--color-accent-primary); }
+
+.treeEmpty { margin: 8px 12px; font-size: 13px; color: var(--color-text-muted); }
+
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; gap: 12px; }
+  .sidebar { position: static; max-height: none; }
+  .sidebarCollapsed { display: none; }
+  .sidebarToggle { display: block; margin-bottom: 8px; }
+}
