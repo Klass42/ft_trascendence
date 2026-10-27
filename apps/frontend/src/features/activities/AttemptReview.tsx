@@ -82,7 +82,7 @@ function AttemptReview({ attemptId, maxScore }: { attemptId: string; maxScore: n
         <h4 className={styles.reviewTitle}>Intento {attempt.attemptNo}</h4>
         <span className={styles.attemptMeta}>
           <Badge variant={badge.variant}>{badge.label}</Badge>
-          {graded && <strong>{attempt.score ?? 0}/{maxScore} puntos</strong>}
+          {graded && <strong>{attempt.score ?? 0}/{maxScore} {maxScore === 1 ? 'punto' : 'puntos'}</strong>}
         </span>
       </div>
       {attempt.status === 'SUBMITTED' && (
@@ -136,7 +136,12 @@ function ReviewQuestion({ question, number, answer }: { question: QuestionDTO; n
         </div>
       )}
       {typeof awarded === 'number' && (
-        <span className={styles.points}>{awarded}/{question.points} puntos</span>
+        <span className={styles.points}>{awarded}/{question.points} {question.points === 1 ? 'punto' : 'puntos'}</span>
+      )}
+      {answer?.feedback && (
+        <p className={styles.questionFeedback}>
+          <strong>Comentario del profesor:</strong> {answer.feedback}
+        </p>
       )}
       {hasVerdict && !subjective && (
         <p className={styles.solution}>

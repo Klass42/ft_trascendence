@@ -488,6 +488,74 @@ describe('AttemptsService', () => {
     expect(graded.answers[0]).not.toHaveProperty('correct');
   });
 
+  it('persists per-question feedback and returns it to the student once graded, even without showSolutions', async () => {
+    const { service, answers } = build({
+      questions: [
+        { id: 'essay-1', kind: ESSAY, content: {}, points: 2, order: 0 },
+        { id: 'essay-2', kind: ESSAY, content: {}, points: 2, order: 1 },
+      ],
+      config: { showSolutions: false },
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [
+        { questionId: 'essay-1', response: { text: 'uno' } },
+        { questionId: 'essay-2', response: { text: 'dos' } },
+      ],
+    });
+    await service.submit(started.id, STUDENT);
+
+    await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-1', awarded: 1, feedback: '  Revisa la tesis  ' }],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-1')).toMatchObject({
+      awarded: 1,
+      feedback: 'Revisa la tesis',
+    });
+    // Not published yet: the learner sees no per-question comment.
+    const pending = (await service.listMine('act-1', STUDENT))[0] as any;
+    expect(pending.status).toBe(AttemptStatus.SUBMITTED);
+    expect(pending.answers[0]).not.toHaveProperty('feedback');
+
+    // Feedback alone (no points) is accepted and keeps the awarded points.
+    await service.grade(started.id, TEACHER, {
+      answers: [
+        { questionId: 'essay-1', feedback: 'Revisa la tesis y las fuentes' },
+        { questionId: 'essay-2', awarded: 2, feedback: 'Muy bien' },
+      ],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-1')?.awarded).toBe(1);
+
+    const graded = (await service.listMine('act-1', STUDENT))[0] as any;
+    expect(graded.status).toBe(AttemptStatus.GRADED);
+    const byQuestion = new Map(graded.answers.map((a: any) => [a.questionId, a]));
+    expect(byQuestion.get('essay-1')).toHaveProperty('feedback', 'Revisa la tesis y las fuentes');
+    expect(byQuestion.get('essay-2')).toHaveProperty('feedback', 'Muy bien');
+    expect(byQuestion.get('essay-1')).not.toHaveProperty('awarded');
+
+    const mine = (await service.getMine(started.id, STUDENT)) as any;
+    expect(mine.answers.find((a: any) => a.questionId === 'essay-2').feedback).toBe('Muy bien');
+
+    // An empty comment clears it.
+    await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-2', feedback: '   ' }],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-2')?.feedback).toBeNull();
+  });
+
+  it('rejects a grade item with neither points nor feedback', async () => {
+    const { service } = build({
+      questions: [{ id: 'essay-1', kind: ESSAY, content: {}, points: 2, order: 0 }],
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.submit(started.id, STUDENT);
+    await expect(
+      service.grade(started.id, TEACHER, {
+        answers: [{ questionId: 'essay-1' }],
+      } as unknown as GradeAttemptDto),
+    ).rejects.toThrow(/nota o un comentario/);
+  });
+
   it('keeps answer results hidden when showSolutions is false while staff retain them', async () => {
     const { service } = build({
       questions: [mcq('q1', [0])],

@@ -88,8 +88,8 @@ export class ActivitiesService {
       dto,
     );
 
-    if (dto.status === PublicationStatus.PUBLISHED && blocks.length === 0) {
-      throw new BadRequestException('no se puede publicar vacía');
+    if (dto.status === PublicationStatus.PUBLISHED) {
+      this.assertPublishableBlocks(blocks, true);
     }
 
     const created = await this.prisma.activity.create({
@@ -251,7 +251,10 @@ export class ActivitiesService {
     this.assertWindow(merged.openAt, merged.dueAt, merged.closeAt);
 
     if (dto.status === PublicationStatus.PUBLISHED) {
-      await this.assertPublishable(activityId);
+      await this.assertPublishable(
+        activityId,
+        activity.status !== PublicationStatus.PUBLISHED,
+      );
     }
 
     const updated = await this.prisma.activity.update({
@@ -659,14 +662,44 @@ export class ActivitiesService {
     }
   }
 
-  private async assertPublishable(activityId: string): Promise<void> {
+  private async assertPublishable(
+    activityId: string,
+    checkEachQuestion: boolean,
+  ): Promise<void> {
     const questions = await this.prisma.question.findMany({
       where: { activityId },
-      select: { points: true },
+      orderBy: { order: 'asc' },
+      select: { kind: true, points: true },
     });
-    const total = questions.reduce((sum, q) => sum + q.points, 0);
-    if (questions.length === 0 || total === 0) {
+    this.assertPublishableBlocks(questions, checkEachQuestion);
+  }
+
+  /** A task can only be published with at least one question, a total above 0
+   * and, when `checkEachQuestion`, no 0-point question. FILE_UPLOAD may carry
+   * 0 points: it is the optional evidence companion of an essay (seed data and
+   * migrated assignments). `checkEachQuestion` is false when re-saving an
+   * already-published task so legacy data keeps being editable. */
+  private assertPublishableBlocks(
+    questions: Array<{ kind: QuestionKind; points: number }>,
+    checkEachQuestion: boolean,
+  ): void {
+    if (questions.length === 0) {
       throw new BadRequestException('no se puede publicar vacía');
+    }
+    const total = questions.reduce((sum, q) => sum + q.points, 0);
+    if (total === 0) {
+      throw new BadRequestException(
+        'No se puede publicar una tarea con 0 puntos en total: asigna puntos a sus preguntas.',
+      );
+    }
+    if (!checkEachQuestion) return;
+    const zero = questions.findIndex(
+      (q) => q.points <= 0 && q.kind !== QuestionKind.FILE_UPLOAD,
+    );
+    if (zero !== -1) {
+      throw new BadRequestException(
+        `La pregunta ${zero + 1} tiene 0 puntos: asigna al menos 1 punto antes de publicar.`,
+      );
     }
   }
 

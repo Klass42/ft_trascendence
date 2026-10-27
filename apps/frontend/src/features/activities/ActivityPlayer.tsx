@@ -21,11 +21,13 @@ import { formatDate, windowState, WINDOW_BADGE } from '../assignments/helpers';
 import { AttemptHistory } from './AttemptReview';
 import {
   attemptsAllowedLabel,
+  attemptsLabel,
   attemptsRemainingLabel,
   countUnanswered,
   formatSolution,
   isSubjective,
   KIND_LABELS,
+  pointsLabel,
 } from './helpers';
 
 type ResponseMap = Record<string, Record<string, unknown>>;
@@ -210,7 +212,7 @@ export function ActivityPlayer({
       ? ''
       : attemptsRemaining === 0
         ? 'Este es tu último intento.'
-        : `Después de enviarla ${attemptsRemaining === 1 ? 'te quedará 1 intento' : `te quedarán ${attemptsRemaining} intentos`}.`,
+        : `Después de enviarla ${attemptsRemaining === 1 ? 'te quedará 1 intento' : `te quedarán ${attemptsLabel(attemptsRemaining)}`}.`,
   ].filter(Boolean).join(' ');
 
   if (isPreview) {
@@ -226,7 +228,7 @@ export function ActivityPlayer({
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{activity.title}</h2>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
               <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
-              <Badge variant="neutral">{activity.maxScore} pts</Badge>
+              <Badge variant="neutral">{pointsLabel(activity.maxScore)}</Badge>
               <Badge variant="neutral">{attemptsAllowedLabel(activity.attemptsAllowed)}</Badge>
             </div>
           </div>
@@ -253,7 +255,7 @@ export function ActivityPlayer({
         />
         {previewGrade && (
           <p role="status" style={{ fontWeight: 700, marginBottom: 0 }}>
-            Resultado simulado: {previewGrade.score}/{previewGrade.maxScore} puntos
+            Resultado simulado: {previewGrade.score}/{previewGrade.maxScore} {previewGrade.maxScore === 1 ? 'punto' : 'puntos'}
           </p>
         )}
       </section>
@@ -268,7 +270,7 @@ export function ActivityPlayer({
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
             <Badge variant={winBadge.variant}>{winBadge.label}</Badge>
             {exhausted && <Badge variant="neutral">Intentos agotados</Badge>}
-            <Badge variant="neutral">{activity.maxScore} pts</Badge>
+            <Badge variant="neutral">{pointsLabel(activity.maxScore)}</Badge>
             <Badge variant="neutral">{attemptsAllowedLabel(activity.attemptsAllowed)}</Badge>
             {attemptsRemaining !== null && !exhausted && (
               <Badge variant="neutral">{attemptsRemaining === 0 ? 'Último intento en curso' : attemptsRemainingLabel(attemptsRemaining)}</Badge>
@@ -396,7 +398,7 @@ function QuestionInput({ question, number, response, onChange, preview = false, 
 
   return (
     <fieldset style={fieldsetStyle}>
-      <legend style={{ fontWeight: 700, padding: '0 4px' }}>Pregunta {number} · {question.points} pts</legend>
+      <legend style={{ fontWeight: 700, padding: '0 4px' }}>Pregunta {number} · {pointsLabel(question.points)}</legend>
       <p style={{ margin: '4px 0 5px', whiteSpace: 'pre-wrap' }}>{question.prompt}</p>
       <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{KIND_LABELS[question.kind]}</span>
       {preview && isSubjective(question.kind, content) && (
@@ -474,7 +476,7 @@ function QuestionInput({ question, number, response, onChange, preview = false, 
           </Badge>
           {previewResult.autoGradable && (
             <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              {previewResult.awarded ?? 0}/{previewResult.points} puntos
+              {previewResult.awarded ?? 0}/{previewResult.points} {previewResult.points === 1 ? 'punto' : 'puntos'}
             </span>
           )}
           <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>

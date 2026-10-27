@@ -323,7 +323,12 @@ export class AttemptsService {
           `La pregunta ${item.questionId} no pertenece a esta actividad`,
         );
       }
-      if (item.awarded > question.points) {
+      if (item.awarded === undefined && item.feedback === undefined) {
+        throw new BadRequestException(
+          `Indica la nota o un comentario para la pregunta ${item.questionId}`,
+        );
+      }
+      if (item.awarded !== undefined && item.awarded > question.points) {
         throw new BadRequestException(
           `La nota no puede superar ${question.points}`,
         );
@@ -331,6 +336,12 @@ export class AttemptsService {
     }
 
     for (const item of dto.answers) {
+      const feedback =
+        item.feedback === undefined ? undefined : item.feedback.trim() || null;
+      const patch = {
+        ...(item.awarded !== undefined && { awarded: item.awarded }),
+        ...(feedback !== undefined && { feedback }),
+      };
       await this.prisma.answer.upsert({
         where: {
           attemptId_questionId: {
@@ -342,9 +353,9 @@ export class AttemptsService {
           attemptId,
           questionId: item.questionId,
           response: {} as Prisma.InputJsonValue,
-          awarded: item.awarded,
+          ...patch,
         },
-        update: { awarded: item.awarded },
+        update: patch,
       });
     }
 
@@ -512,6 +523,11 @@ export class AttemptsService {
         attemptId: answer.attemptId,
         questionId: answer.questionId,
         response: answer.response,
+        // Like the attempt-level comment, a per-question comment is not a
+        // solution: it is not gated by `showSolutions`, only by publication.
+        ...(attempt.status === AttemptStatus.GRADED && {
+          feedback: answer.feedback,
+        }),
         ...(reveal && {
           correct: answer.correct,
           awarded: answer.awarded,
