@@ -86,6 +86,10 @@ export function OrgSettingsPage() {
   async function handleSave() {
     const errors: Record<string, string> = {};
     if (!editName.trim()) errors.name = 'El nombre es obligatorio.';
+    const logoCandidate = editLogoUrl.trim();
+    if (logoCandidate && !isHttpsUrl(logoCandidate)) {
+      errors.logoUrl = 'La URL del logo debe ser una dirección https válida.';
+    }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -335,4 +339,13 @@ export function OrgSettingsPage() {
       />
     </div>
   );
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !!url.hostname;
+  } catch {
+    return false;
+  }
 }
