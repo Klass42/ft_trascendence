@@ -1,13 +1,16 @@
 /**
  * TeacherDashboard — OWNER: David (Plan 2, A4-teacher).
  * Real data via GET /me/teaching/summary: courses taught, distinct students and
- * ungraded attempts. Clicking "Por calificar" (card or a row) opens the
- * gradebook. No mock data.
+ * ungraded attempts. Clicking "Por calificar" (card) opens the
+ * gradebook; a row opens the grading panel of that submission. Refreshes live on
+ * the analytics socket event. No mock data.
  */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState, Spinner } from '@/components/ui';
 import { useAuth, useTeachingSummary } from '@/lib/api';
 import type { PendingAttemptDTO } from '@/lib/api';
+import { useNotifications } from '@/features/notifications';
 import { DashboardHeader } from './DashboardHeader';
 
 function initials(name: string): string {
@@ -97,9 +100,26 @@ export function TeacherDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useTeachingSummary();
+  const { analyticsUpdate } = useNotifications();
   const userName = user?.name?.split(' ')[0] || '';
 
+  // A submission or a grade changed somewhere in the teacher's subjects: refresh
+  // the count and the list (same socket event the analytics page listens to).
+  useEffect(() => {
+    if (!analyticsUpdate) return;
+    const timer = window.setTimeout(refetch, 500);
+    return () => window.clearTimeout(timer);
+  }, [analyticsUpdate, refetch]);
+
   const goToGradebook = () => navigate('/grades');
+  const goToSubmission = (s: PendingAttemptDTO) =>
+    navigate(
+      `/grades?${new URLSearchParams({
+        subjectId: s.subjectId,
+        activityId: s.activityId,
+        attemptId: s.attemptId,
+      })}`,
+    );
 
   return (
     <>
@@ -189,11 +209,11 @@ export function TeacherDashboard() {
                   key={s.attemptId}
                   role="button"
                   tabIndex={0}
-                  onClick={goToGradebook}
+                  onClick={() => goToSubmission(s)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      goToGradebook();
+                      goToSubmission(s);
                     }
                   }}
                   style={{

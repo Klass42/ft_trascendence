@@ -51,11 +51,21 @@ export interface GradebookCell {
   activityId: string;
   /** Best GRADED attempt, or a SUBMITTED one if none is graded yet. */
   attemptId: string | null;
+  /** Final score. Only set for a GRADED cell: a SUBMITTED one is not graded yet. */
   score: number | null;
+  /**
+   * Auto-graded partial score of a SUBMITTED attempt that still has manual
+   * questions to correct. Informative only: it is never a grade and nothing
+   * (final average, analytics, CSV) may count it.
+   */
+  partialScore: number | null;
   status: AttemptStatus | null;
 }
 
-/** Best GRADED attempt wins; else a SUBMITTED one; else empty cell. */
+/**
+ * Best GRADED attempt wins; else the latest SUBMITTED one (exposed without a
+ * final `score`, only its `partialScore`); else empty cell.
+ */
 export function pickCell(
   activityId: string,
   attempts: Array<{
@@ -74,6 +84,7 @@ export function pickCell(
       activityId,
       attemptId: best.id ?? null,
       score: best.score,
+      partialScore: null,
       status: best.status,
     };
   }
@@ -84,11 +95,12 @@ export function pickCell(
     return {
       activityId,
       attemptId: submitted[0].id ?? null,
-      score: submitted[0].score,
+      score: null,
+      partialScore: submitted[0].score,
       status: submitted[0].status,
     };
   }
-  return { activityId, attemptId: null, score: null, status: null };
+  return { activityId, attemptId: null, score: null, partialScore: null, status: null };
 }
 
 export interface SubjectResultsSummary {
