@@ -46,21 +46,28 @@ test('teacher sends a request, student accepts it and sees live presence', async
     await actAs(teacher, TEACHER_DEMO);
     await actAs(student, STUDENT_DEMO);
 
-    await student.goto('/dashboard');
+    // The student already has the page open: the request must show up live.
+    await student.goto('/friends');
     await teacher.goto('/friends');
     await teacher.getByLabel('Nombre o correo electrónico').fill('Sam');
     await teacher.getByRole('button', { name: 'Buscar' }).click();
-    await expect(teacher.getByText('Sam Student')).toBeVisible();
+    const results = teacher.getByRole('region', { name: 'Buscar personas' });
+    await expect(results.getByText('Sam Student')).toBeVisible();
+    await expect(results.getByText('Alumno')).toBeVisible();
     await teacher.getByRole('button', { name: 'Añadir' }).click();
     await expect(teacher.getByText('Solicitud enviada a Sam Student')).toBeVisible();
+    // The result stays and is marked, instead of an empty-results block.
+    await expect(results.getByText('Solicitud enviada', { exact: true })).toBeVisible();
+    await expect(results.getByText('No encontramos personas')).toHaveCount(0);
 
-    await student.goto('/friends');
     const acceptButton = student.getByRole('button', { name: 'Aceptar solicitud de Theo Teacher' });
-    await expect(acceptButton).toBeVisible();
+    await expect(acceptButton).toBeVisible({ timeout: 10000 });
     await acceptButton.click();
     await expect(student.getByText('Ahora eres amigo de Theo Teacher')).toBeVisible();
 
-    await expect(teacher.getByText('Sam Student')).toBeVisible();
+    // The teacher's lists refresh live when the request is accepted.
+    await expect(teacher.getByRole('button', { name: 'Eliminar a Sam Student de tus amigos' })).toBeVisible({ timeout: 10000 });
+    await expect(results.getByText('Amigos', { exact: true })).toBeVisible();
     await expect(teacher.getByText('En línea')).toBeVisible({ timeout: 12000 });
   } finally {
     await removeExistingFriendship(teacherApi.request);

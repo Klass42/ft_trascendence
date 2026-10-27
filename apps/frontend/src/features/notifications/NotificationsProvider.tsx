@@ -23,6 +23,8 @@ interface NotificationsContextValue {
   /** Live socket status (badge/UX hint; the app works without it). */
   connected: boolean;
   analyticsUpdate: { courseId: string; receivedAt: number } | null;
+  /** Set when a FRIEND_REQUEST notification arrives (new request or accepted one). */
+  friendsUpdate: { receivedAt: number } | null;
   refetch: () => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
@@ -53,6 +55,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     courseId: string;
     receivedAt: number;
   } | null>(null);
+  const [friendsUpdate, setFriendsUpdate] = useState<{ receivedAt: number } | null>(null);
 
   const refetch = useCallback(() => setNonce((n) => n + 1), []);
   // Latest list for handlers that must decide before touching state.
@@ -105,6 +108,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
           ? prev
           : [notification, ...prev],
       );
+      if (notification.type === 'FRIEND_REQUEST') setFriendsUpdate({ receivedAt: Date.now() });
       if (!notification.read) setUnread((count) => count + 1);
       setToasts((prev) => [notification, ...prev].slice(0, 4));
       window.setTimeout(() => dismissToast(notification.id), TOAST_TTL);
@@ -158,11 +162,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       error,
       connected,
       analyticsUpdate,
+      friendsUpdate,
       refetch,
       markRead,
       markAllRead,
     }),
-    [items, unread, isLoading, error, connected, analyticsUpdate, refetch, markRead, markAllRead],
+    [items, unread, isLoading, error, connected, analyticsUpdate, friendsUpdate, refetch, markRead, markAllRead],
   );
 
   return (

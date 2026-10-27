@@ -18,6 +18,8 @@ import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
 
+export type FriendRelation = 'NONE' | 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED';
+
 function isPrismaUniqueViolation(err: unknown): err is PrismaClientKnownRequestError {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002';
 }
@@ -152,32 +154,65 @@ export class UsersService {
       throw new BadRequestException('Search query must contain at least 2 characters');
     }
 
-    const friendships = await this.prisma.friendship.findMany({
-      where: {
-        OR: [{ requesterId: callerId }, { addresseeId: callerId }],
-        requester: { is: { organizationId } },
-        addressee: { is: { organizationId } },
-      },
-      select: { requesterId: true, addresseeId: true },
-    });
-    const excludedIds = new Set<string>([callerId]);
-    friendships.forEach(({ requesterId, addresseeId }) => {
-      excludedIds.add(requesterId);
-      excludedIds.add(addresseeId);
-    });
+    const [friendships, callerMemberships] = await Promise.all([
+      this.prisma.friendship.findMany({
+        where: {
+          OR: [{ requesterId: callerId }, { addresseeId: callerId }],
+          requester: { is: { organizationId } },
+          addressee: { is: { organizationId } },
+        },
+        select: { id: true, requesterId: true, addresseeId: true, status: true },
+      }),
+      this.prisma.courseMembership.findMany({
+        where: { userId: callerId, course: { organizationId } },
+        select: { courseId: true },
+      }),
+    ]);
 
-    return this.prisma.user.findMany({
+    // Existing relationships stay in the results so the UI can show their state.
+    // BLOCKED pairs are hidden in both directions (never reveal a block).
+    const relations = new Map<string, { relation: FriendRelation; friendshipId: string }>();
+    const hiddenIds = new Set<string>([callerId]);
+    for (const { id, requesterId, addresseeId, status } of friendships) {
+      const otherId = requesterId === callerId ? addresseeId : requesterId;
+      if (status === 'BLOCKED') hiddenIds.add(otherId);
+      else if (status === 'ACCEPTED') relations.set(otherId, { relation: 'FRIEND', friendshipId: id });
+      else relations.set(otherId, { relation: requesterId === callerId ? 'PENDING_SENT' : 'PENDING_RECEIVED', friendshipId: id });
+    }
+
+    const sharedCourseIds = callerMemberships.map((membership) => membership.courseId);
+    const users = await this.prisma.user.findMany({
       where: {
         organizationId,
-        id: { notIn: [...excludedIds] },
+        id: { notIn: [...hiddenIds] },
         OR: [
           { name: { contains: normalizedQuery, mode: 'insensitive' } },
           { email: { contains: normalizedQuery, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, name: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+        courseMemberships: {
+          where: { courseId: { in: sharedCourseIds }, course: { organizationId } },
+          select: { course: { select: { name: true } } },
+          take: 1,
+        },
+      },
       orderBy: { name: 'asc' },
       take: 20,
+    });
+
+    return users.map(({ courseMemberships, ...user }) => {
+      const known = relations.get(user.id);
+      return {
+        ...user,
+        sharedCourse: courseMemberships[0]?.course.name ?? null,
+        relation: known?.relation ?? ('NONE' as FriendRelation),
+        friendshipId: known?.friendshipId ?? null,
+      };
     });
   }
 
@@ -207,7 +242,7 @@ export class UsersService {
     await this.notifications?.emitMany(
       [targetId],
       NotificationType.FRIEND_REQUEST,
-      { title: 'Tienes una nueva solicitud de amistad', body: 'Puedes revisar las amistades desde tu perfil.', link: '/profile' },
+      { title: 'Tienes una nueva solicitud de amistad', body: 'Puedes revisar tus solicitudes desde Amigos.', link: '/friends' },
       { organizationId: callerOrgId, actorId: callerId },
     );
     return friendship;
