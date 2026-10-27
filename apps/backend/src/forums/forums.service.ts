@@ -180,6 +180,8 @@ export class ForumsService {
   async deleteThread(threadId: string, actingUserId: string) {
     const { thread, access } = await this.requireThreadMembership(threadId, actingUserId, true);
     await this.prisma.forumThread.delete({ where: { id: threadId } });
+    // Pins, replies and new-thread notices link to a page that no longer exists.
+    await this.notifications.removeByLink(access.subject.organizationId, { equals: [`/forums/${threadId}`] });
     if (thread.authorId) {
       await this.notifications.emitMany(
         [thread.authorId],

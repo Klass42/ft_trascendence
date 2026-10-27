@@ -33,6 +33,7 @@ describe('RealtimeGateway (integration)', () => {
   const FRIENDS = new Set(['p-alice', 'p-bob']);
   const prismaMock = {
     notification: {
+      findMany: async () => [],
       create: async ({ data }: { data: Record<string, unknown> }) => ({
         id: `n-${Math.round(Math.random() * 1e9)}`,
         read: false,

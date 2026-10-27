@@ -143,7 +143,7 @@ describe('OrganizationsService', () => {
       expect(notifications.emitMany).toHaveBeenCalledWith(
         expect.any(Function),
         NotificationType.ORGANIZATION_CHANGED,
-        expect.objectContaining({ title: 'La organización se ha actualizado' }),
+        expect.objectContaining({ title: 'La organización se ha actualizado', link: '/org' }),
         { organizationId: ORG_ID, actorId: actor.userId },
       );
     });

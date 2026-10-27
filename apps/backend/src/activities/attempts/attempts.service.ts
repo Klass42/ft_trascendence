@@ -199,6 +199,7 @@ export class AttemptsService {
         actingUserId,
         activity,
         grade.score,
+        attempt.attemptNo,
       );
     } else {
       await this.notifySubmitted(actingUserId, activity);
@@ -387,6 +388,7 @@ export class AttemptsService {
         attempt.userId,
         attempt.activity,
         graded.score ?? 0,
+        attempt.attemptNo,
       );
     }
     return graded;
@@ -735,10 +737,11 @@ export class AttemptsService {
     userId: string,
     activity: Activity,
     score: number,
+    attemptNo: number,
   ) {
     await this.notifications.emit(userId, NotificationType.GRADE_PUBLISHED, {
       title: 'Actividad calificada',
-      body: `Tu intento de «${activity.title}» ha sido calificado: ${score}/${activity.maxScore}`,
+      body: `Tu intento ${attemptNo} de «${activity.title}» ha sido calificado: ${score}/${activity.maxScore}`,
       link: `/activities?activityId=${activity.id}`,
     });
   }

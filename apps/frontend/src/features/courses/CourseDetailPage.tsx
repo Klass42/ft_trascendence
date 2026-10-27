@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
+  ApiError,
   useCourseDetail,
   useSections,
   useProgress,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/api';
 import {
   Button,
+  EmptyState,
   Modal,
   FormField,
   useToast,
@@ -46,7 +48,7 @@ export function CourseDetailPage() {
   const { update, isLoading: updating } = useUpdateCourse();
   const { remove, isLoading: deleting } = useDeleteCourse();
 
-  const { data: fullCourse, isLoading: courseLoading, refetch: refetchCourse } = useCourseDetail(subjectId);
+  const { data: fullCourse, isLoading: courseLoading, error: courseError, refetch: refetchCourse } = useCourseDetail(subjectId);
   const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? subjectId : undefined);
   const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? subjectId : undefined);
   const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? subjectId : undefined);
@@ -73,6 +75,18 @@ export function CourseDetailPage() {
   const course = fullCourse;
 
   if (!course) {
+    // A deleted subject (e.g. opened from an old notification) is not an error.
+    if (courseError instanceof ApiError && courseError.isNotFound) {
+      return (
+        <div style={{ padding: '40px' }}>
+          <EmptyState
+            title="Esta asignatura ya no existe"
+            description="Es posible que se haya eliminado."
+            action={<Button onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}>Volver a los cursos</Button>}
+          />
+        </div>
+      );
+    }
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
         Asignatura no encontrada

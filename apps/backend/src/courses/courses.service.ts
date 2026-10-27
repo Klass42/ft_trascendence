@@ -18,7 +18,7 @@ import { AddStaffDto } from './dto/add-staff.dto';
 import { UpdateStaffRoleDto } from './dto/update-staff-role.dto';
 import { AuthUser } from '@/common/auth';
 import { CourseAccessService } from './course-access.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsService, type LinkMatchers } from '../notifications/notifications.service';
 
 const subjectLabelSelect = {
   id: true,
@@ -143,7 +143,15 @@ export class CoursesService {
     const courseName = this.notifications
       ? (await this.requireCourse(id, user.organizationId)).name
       : '';
+    const staleLinks = await this.deletedLinks(
+      user.organizationId,
+      this.notifications
+        ? await this.prisma.subject.findMany({ where: { courseId: id, organizationId: user.organizationId }, select: { id: true, courseId: true } })
+        : [],
+      { equals: [`/courses/${id}`], startsWith: [`/courses/${id}/`] },
+    );
     await this.prisma.course.delete({ where: { id } });
+    await this.notifications?.removeByLink(user.organizationId, staleLinks);
     await this.emitUsers(recipients, user.organizationId, user.userId, `Cohorte eliminada: ${courseName}`, `/courses`);
   }
 
@@ -245,7 +253,9 @@ export class CoursesService {
     const recipients = this.notifications
       ? await this.subjectRecipients(subjectId, user.organizationId, subject.status === 'PUBLISHED')
       : [];
+    const staleLinks = await this.deletedLinks(user.organizationId, [{ id: subject.id, courseId: subject.courseId }]);
     await this.prisma.subject.delete({ where: { id: subject.id } });
+    await this.notifications?.removeByLink(user.organizationId, staleLinks);
     await this.emitUsers(recipients, user.organizationId, user.userId, `Asignatura eliminada: ${subject.title}`, `/courses`);
   }
 
@@ -585,6 +595,44 @@ export class CoursesService {
 
   private async emitUsers(userIds: readonly string[], organizationId: string, actorId: string, title: string, link: string, type: NotificationType = NotificationType.COURSE_CHANGED) {
     await this.notifications?.emitMany(userIds, type, { title, link }, { organizationId, actorId });
+  }
+
+  /**
+   * Links of the notifications that stop resolving once `subjects` are deleted:
+   * the subject pages, their activity/grade views and their forum threads.
+   * Collected before the delete because the threads cascade with the subject.
+   */
+  private async deletedLinks(
+    organizationId: string,
+    subjects: Array<{ id: string; courseId: string }>,
+    extra: LinkMatchers = {},
+  ): Promise<LinkMatchers> {
+    if (!this.notifications) return {};
+    try {
+      const threads = subjects.length
+        ? await this.prisma.forumThread.findMany({
+            where: { subjectId: { in: subjects.map(({ id }) => id) }, subject: { organizationId } },
+            select: { id: true },
+          })
+        : [];
+      return {
+        equals: [
+          ...(extra.equals ?? []),
+          ...subjects.map(({ id, courseId }) => `/courses/${courseId}/subjects/${id}`),
+          ...threads.map(({ id }) => `/forums/${id}`),
+        ],
+        startsWith: [
+          ...(extra.startsWith ?? []),
+          ...subjects.flatMap(({ id, courseId }) => [
+            `/courses/${courseId}/subjects/${id}/`,
+            `/activities?subjectId=${id}&`,
+            `/grades?subjectId=${id}&`,
+          ]),
+        ],
+      };
+    } catch {
+      return {};
+    }
   }
 
   private async orgAdminIds(organizationId: string): Promise<string[]> {

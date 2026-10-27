@@ -31,6 +31,7 @@ describe('NotificationsService', () => {
       findMany: async ({ where, skip = 0, take = 20 }: any) => {
         return store
           .filter((r) => r.userId === where.userId)
+          .filter((r) => where.read === undefined || r.read === where.read)
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
           .slice(skip, skip + take);
       },
@@ -95,7 +96,7 @@ describe('NotificationsService', () => {
         : [],
     );
     const service = new NotificationsService(
-      { user: { findMany }, notification: { create } } as unknown as PrismaService,
+      { user: { findMany }, notification: { create, findMany: jest.fn(async () => []) } } as unknown as PrismaService,
       { emit: jest.fn() } as unknown as EventEmitter2,
     );
 
@@ -121,7 +122,10 @@ describe('NotificationsService', () => {
     const service = new NotificationsService(
       {
         user: { findMany: jest.fn(async () => [{ id: 'target' }]) },
-        notification: { create: jest.fn(async () => { throw new Error('database unavailable'); }) },
+        notification: {
+          findMany: jest.fn(async () => []),
+          create: jest.fn(async () => { throw new Error('database unavailable'); }),
+        },
       } as unknown as PrismaService,
       { emit: jest.fn() } as unknown as EventEmitter2,
     );
@@ -135,5 +139,85 @@ describe('NotificationsService', () => {
 
     expect(loggerError).toHaveBeenCalled();
     loggerError.mockRestore();
+  });
+
+  describe('listMine', () => {
+    function build() {
+      const findMany = jest.fn(async () => []);
+      const count = jest.fn(async () => 0);
+      const service = new NotificationsService(
+        { notification: { findMany, count }, $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops) } as unknown as PrismaService,
+        { emit: jest.fn() } as unknown as EventEmitter2,
+      );
+      return { service, findMany, count };
+    }
+
+    it('filters by unread, pages with a stable order, and keeps the global unread count', async () => {
+      const { service, findMany, count } = build();
+
+      await service.listMine('lucia', { page: 3, pageSize: 10, unreadOnly: true });
+
+      expect(findMany).toHaveBeenCalledWith({
+        where: { userId: 'lucia', read: false },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: 20,
+        take: 10,
+      });
+      expect(count).toHaveBeenNthCalledWith(1, { where: { userId: 'lucia', read: false } });
+      expect(count).toHaveBeenNthCalledWith(2, { where: { userId: 'lucia', read: false } });
+    });
+
+    it('lists everything of the caller by default', async () => {
+      const { service, findMany, count } = build();
+
+      const result = await service.listMine('lucia');
+
+      expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'lucia' }, skip: 0, take: 20 }));
+      expect(count).toHaveBeenNthCalledWith(1, { where: { userId: 'lucia' } });
+      expect(result).toMatchObject({ page: 1, pageSize: 20 });
+    });
+  });
+
+  describe('removeByLink', () => {
+    it('deletes only the organization notifications that match any link pattern', async () => {
+      const deleteMany = jest.fn(async () => ({ count: 3 }));
+      const service = new NotificationsService(
+        { notification: { deleteMany } } as unknown as PrismaService,
+        { emit: jest.fn() } as unknown as EventEmitter2,
+      );
+
+      const removed = await service.removeByLink('org-one', {
+        equals: ['/forums/t1'],
+        startsWith: ['/activities?subjectId=s1&'],
+        endsWith: ['activityId=a1'],
+      });
+
+      expect(removed).toBe(3);
+      expect(deleteMany).toHaveBeenCalledWith({
+        where: {
+          user: { organizationId: 'org-one' },
+          OR: [
+            { link: '/forums/t1' },
+            { link: { startsWith: '/activities?subjectId=s1&' } },
+            { link: { endsWith: 'activityId=a1' } },
+          ],
+        },
+      });
+    });
+
+    it('does nothing without patterns and never throws', async () => {
+      const loggerError = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const deleteMany = jest.fn(async () => { throw new Error('db down'); });
+      const service = new NotificationsService(
+        { notification: { deleteMany } } as unknown as PrismaService,
+        { emit: jest.fn() } as unknown as EventEmitter2,
+      );
+
+      await expect(service.removeByLink('org-one', {})).resolves.toBe(0);
+      expect(deleteMany).not.toHaveBeenCalled();
+      await expect(service.removeByLink('org-one', { equals: ['/forums/t1'] })).resolves.toBe(0);
+      expect(loggerError).toHaveBeenCalled();
+      loggerError.mockRestore();
+    });
   });
 });

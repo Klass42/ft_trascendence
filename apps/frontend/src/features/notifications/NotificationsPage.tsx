@@ -1,6 +1,9 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EmptyState } from '@/components/ui';
+import { Button, EmptyState, Spinner } from '@/components/ui';
+import type { NotificationDTO } from '@/lib/api';
 import { useNotifications } from './NotificationsProvider';
+import { useNotificationsFeed, type NotificationFilter } from './useNotificationsFeed';
 import {
   dotColor,
   formatRelativeTime,
@@ -10,117 +13,155 @@ import {
 } from './display';
 import styles from './NotificationsPage.module.css';
 
-/** Full notification center, sharing live state with the navbar bell. */
+const FILTERS: Array<{ id: NotificationFilter; label: string }> = [
+  { id: 'all', label: 'Todas' },
+  { id: 'unread', label: 'No leídas' },
+];
+
+/**
+ * Full notification center. The list is paged and filtered by the server
+ * (see useNotificationsFeed); read state and live arrivals are shared with the
+ * navbar bell through NotificationsProvider.
+ */
 export function NotificationsPage() {
-  const { items, unread, isLoading, error, markRead, markAllRead } =
-    useNotifications();
+  const { items: live, unread, markRead, markAllRead } = useNotifications();
+  const [filter, setFilter] = useState<NotificationFilter>('all');
+  const feed = useNotificationsFeed(filter);
   const navigate = useNavigate();
-  const groups = new Map<string, typeof items>();
+
+  // Fetched rows + notifications that arrived live after the first fetch, with
+  // the read state changed from the bell applied on top.
+  const items = useMemo<NotificationDTO[]>(() => {
+    const fetchedIds = new Set(feed.items.map((n) => n.id));
+    const newest = feed.items[0]?.createdAt;
+    const arrivals = feed.isLoading
+      ? []
+      : live.filter((n) => !fetchedIds.has(n.id) && (!newest || n.createdAt > newest));
+    const readIds = new Set(live.filter((n) => n.read).map((n) => n.id));
+    return [...arrivals, ...feed.items]
+      .map((n) => (readIds.has(n.id) && !n.read ? { ...n, read: true } : n))
+      .filter((n) => filter === 'all' || !n.read);
+  }, [feed.items, feed.isLoading, live, filter]);
+
+  const groups = new Map<string, NotificationDTO[]>();
   for (const item of items) {
     const label = notificationDateGroup(item.createdAt);
     groups.set(label, [...(groups.get(label) ?? []), item]);
   }
 
+  function open(notification: NotificationDTO) {
+    if (!notification.read) {
+      markRead(notification.id);
+      feed.markReadLocal(notification.id);
+    }
+    if (notification.link) navigate(notification.link);
+  }
+
+  function readAll() {
+    markAllRead();
+    feed.markAllReadLocal();
+  }
+
+  const showList = !feed.isLoading && !feed.error;
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
-          Notificaciones
-        </h1>
-        <button
-          type="button"
-          onClick={markAllRead}
-          disabled={unread === 0}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--color-border-secondary)',
-            color: 'var(--color-text-secondary)',
-            fontWeight: 600,
-            fontSize: 13,
-            padding: '8px 14px',
-            borderRadius: 9,
-            cursor: unread === 0 ? 'default' : 'pointer',
-            opacity: unread === 0 ? 0.5 : 1,
-            fontFamily: 'inherit',
-          }}
-        >
+        <h1 className={styles.title}>Notificaciones</h1>
+        <Button variant="outline" size="sm" onClick={readAll} disabled={unread === 0}>
           Marcar todas como leídas
-        </button>
+        </Button>
       </div>
 
-      {isLoading && (
-        <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Cargando…</div>
+      <div className={styles.filters} role="group" aria-label="Filtrar notificaciones">
+        {FILTERS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`${styles.filter} ${filter === id ? styles.filterActive : ''}`}
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+          >
+            {label}
+            {id === 'unread' && unread > 0 && <span className={styles.filterCount}>{unread > 99 ? '99+' : unread}</span>}
+          </button>
+        ))}
+      </div>
+
+      {feed.isLoading && (
+        <div className={styles.status}>
+          <Spinner size="md" label="Cargando notificaciones…" />
+        </div>
       )}
-      {error && !isLoading && (
-        <p role="alert" style={{ color: 'var(--color-error)', fontSize: 14 }}>
-          No se pudieron cargar las notificaciones.
-        </p>
+      {feed.error && !feed.isLoading && (
+        <div className={styles.status}>
+          <p role="alert" className={styles.error}>
+            No se pudieron cargar las notificaciones.
+          </p>
+          <Button variant="outline" size="sm" onClick={feed.retry}>
+            Reintentar
+          </Button>
+        </div>
       )}
-      {!isLoading && !error && items.length === 0 && (
+      {showList && items.length === 0 && (
         <EmptyState
-          title="No tienes notificaciones"
-          description="Cuando haya novedades de tus cursos o de tu cuenta, aparecerán aquí."
+          title={filter === 'unread' ? 'No tienes notificaciones sin leer' : 'No tienes notificaciones'}
+          description={
+            filter === 'unread'
+              ? 'Estás al día.'
+              : 'Cuando haya novedades de tus cursos o de tu cuenta, aparecerán aquí.'
+          }
         />
       )}
 
-      {!isLoading && !error && [...groups.entries()].map(([label, notifications]) => (
-        <section key={label} aria-label={label} style={{ marginBottom: 22 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
-            {label}
-          </h2>
-          <div style={{ borderTop: '1px solid var(--color-border-primary)' }}>
+      {showList && [...groups.entries()].map(([label, notifications]) => (
+        <section key={label} aria-label={label} className={styles.group}>
+          <h2 className={styles.groupTitle}>{label}</h2>
+          <div className={styles.list}>
             {notifications.map((notification) => {
               const Icon = notificationIcon(notification.type);
               return (
                 <button
                   type="button"
                   key={notification.id}
-                  onClick={() => {
-                    if (!notification.read) markRead(notification.id);
-                    if (notification.link) navigate(notification.link);
-                  }}
+                  onClick={() => open(notification)}
                   aria-label={`${notificationTypeLabel(notification.type)}: ${notification.title}`}
-                  className={styles.item}
-                  style={{
-                    background: notification.read ? 'var(--color-bg-secondary)' : 'var(--color-accent-muted)',
-                    cursor: 'pointer',
-                  }}
+                  className={`${styles.item} ${notification.read ? '' : styles.unreadItem}`}
                 >
                   <Icon
                     size={17}
                     aria-hidden="true"
-                    style={{ color: dotColor(notification.type), flex: 'none', marginTop: 2 }}
+                    className={styles.icon}
+                    style={{ color: dotColor(notification.type) }}
                   />
                   <span className={styles.itemBody}>
-                    <span style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
-                        {notification.title}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                        {notificationTypeLabel(notification.type)}
-                      </span>
+                    <span className={styles.itemHead}>
+                      <span className={styles.itemTitle}>{notification.title}</span>
+                      <span className={styles.itemType}>{notificationTypeLabel(notification.type)}</span>
                     </span>
-                    {notification.body && (
-                      <span style={{ display: 'block', fontSize: 13.5, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-                        {notification.body}
-                      </span>
-                    )}
-                    <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      {formatRelativeTime(notification.createdAt)}
-                    </span>
+                    {notification.body && <span className={styles.itemText}>{notification.body}</span>}
+                    <span className={styles.itemTime}>{formatRelativeTime(notification.createdAt)}</span>
                   </span>
-                  {!notification.read && (
-                    <span
-                      aria-label="Sin leer"
-                      style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-accent-primary)', flex: 'none', marginTop: 6 }}
-                    />
-                  )}
+                  {!notification.read && <span aria-label="Sin leer" className={styles.unreadDot} />}
                 </button>
               );
             })}
           </div>
         </section>
       ))}
+
+      {showList && feed.hasMore && (
+        <div className={styles.more}>
+          {feed.loadMoreFailed && (
+            <p role="alert" className={styles.error}>
+              No se pudieron cargar más notificaciones.
+            </p>
+          )}
+          <Button variant="outline" onClick={() => void feed.loadMore()} loading={feed.isLoadingMore}>
+            Cargar más
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

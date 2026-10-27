@@ -63,7 +63,7 @@ export function NotificationBell() {
             <span className={styles.title}>Notificaciones</span>
             {unread > 0 && (
               <button className={styles.markAll} onClick={markAllRead}>
-                Marcar todo como leído
+                Marcar todas como leídas
               </button>
             )}
           </div>

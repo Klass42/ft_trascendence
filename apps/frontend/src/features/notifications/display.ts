@@ -40,25 +40,26 @@ const DOT_COLORS: Record<NotificationType, string> = {
   SYSTEM: 'var(--color-text-secondary)',
 };
 
+/** Short, human label shown under each notification title. */
 const TYPE_LABELS: Record<NotificationType, string> = {
-  NEW_ASSIGNMENT: 'Entrega recibida',
+  NEW_ASSIGNMENT: 'Nueva tarea',
   ACTIVITY_PUBLISHED: 'Tarea publicada',
-  ACTIVITY_CHANGED: 'Tarea actualizada',
+  ACTIVITY_CHANGED: 'Tarea modificada',
   ACTIVITY_REMOVED: 'Tarea eliminada',
   SUBMISSION_RECEIVED: 'Entrega recibida',
-  COURSE_CHANGED: 'Curso o asignatura',
+  COURSE_CHANGED: 'Novedades del curso',
   COURSE_CONTENT_CHANGED: 'Contenido del curso',
-  MEMBERSHIP_CHANGED: 'Matrícula o equipo',
-  FORUM_THREAD: 'Hilo del foro',
-  RESOURCE_CHANGED: 'Biblioteca de recursos',
-  USER_CHANGED: 'Cuenta de usuario',
+  MEMBERSHIP_CHANGED: 'Cambio en tu participación',
+  FORUM_THREAD: 'Foro',
+  RESOURCE_CHANGED: 'Biblioteca',
+  USER_CHANGED: 'Tu cuenta',
   ORGANIZATION_CHANGED: 'Organización',
   GRADE_PUBLISHED: 'Nota publicada',
   FORUM_REPLY: 'Respuesta en el foro',
-  ENROLLMENT: 'Matrícula',
+  ENROLLMENT: 'Nueva matrícula',
   DEADLINE_REMINDER: 'Fecha límite',
-  FRIEND_REQUEST: 'Solicitud de amistad',
-  SYSTEM: 'Aviso',
+  FRIEND_REQUEST: 'Amistad',
+  SYSTEM: 'Aviso del sistema',
 };
 
 const TYPE_ICONS: Record<NotificationType, LucideIcon> = {
