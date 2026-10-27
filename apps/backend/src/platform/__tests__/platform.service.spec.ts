@@ -118,7 +118,7 @@ describe('PlatformService', () => {
       expect(organization.update).toHaveBeenCalledWith({
         where: { id: ORG_ID },
         data: { plan: 'ENTERPRISE', maxUsers: null },
-        include: { _count: { select: { users: true, invitations: true } } },
+        include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } },
       });
       expect(result.plan).toBe('ENTERPRISE');
       expect(result._count).toEqual({ users: 3, invitations: 2 });
@@ -133,6 +133,27 @@ describe('PlatformService', () => {
   });
 
   describe('suspend', () => {
+    it('returns 404 for an unknown organization (#106)', async () => {
+      const { prisma, organization } = buildFake();
+      (organization.findUnique as jest.Mock).mockResolvedValue(null);
+      const service = new PlatformService(prisma, noOpFiles);
+      await expect(service.suspend('missing', ACTOR_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('PATCH of an unknown organization maps P2025 to 404 (#106)', async () => {
+      const { prisma, organization } = buildFake();
+      (organization.update as jest.Mock).mockRejectedValue(Object.assign(new Error('nf'), { code: 'P2025' }));
+      const service = new PlatformService(prisma, noOpFiles);
+      await expect(service.updateOrganization('missing', { plan: 'PRO' } as any, ACTOR_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('PATCH status=SUSPENDED goes through suspend() and revokes sessions (#106)', async () => {
+      const { prisma, session } = buildFake();
+      const service = new PlatformService(prisma, noOpFiles);
+      await service.updateOrganization(ORG_ID, { status: 'SUSPENDED' } as any, ACTOR_ID);
+      expect(session.deleteMany).toHaveBeenCalled();
+    });
+
     it('sets status to SUSPENDED and revokes active sessions', async () => {
       const { prisma, organization, user, session, auditLog } = buildFake();
       (user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1' }, { id: 'user-2' }]);
@@ -144,7 +165,7 @@ describe('PlatformService', () => {
       expect(organization.update).toHaveBeenCalledWith({
         where: { id: ORG_ID },
         data: { status: 'SUSPENDED' },
-        include: { _count: { select: { users: true, invitations: true } } },
+        include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } },
       });
       expect(session.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['user-1', 'user-2'] } } });
       expect(auditLog.create).toHaveBeenCalled();

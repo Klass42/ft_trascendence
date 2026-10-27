@@ -158,7 +158,7 @@ describe('notification emitters', () => {
     const courseCreate = jest.fn(async () => createdCourse);
     const service = new CoursesService(
       {
-        course: { create: courseCreate },
+        organization: { findUnique: jest.fn(async () => null) }, course: { create: courseCreate },
         user: { findMany: jest.fn(async () => [{ id: ACTOR_ID }, { id: 'other-admin' }]) },
       } as unknown as PrismaService,
       {} as never,

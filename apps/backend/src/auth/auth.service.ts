@@ -1,3 +1,4 @@
+import { assertUserLimit, assertCourseLimit, assertStorageLimit } from '@/common/plan-limits/plan-limits';
 import {
   BadRequestException,
   ConflictException,
@@ -133,6 +134,7 @@ export class AuthService {
       throw new ConflictException('Email already registered in this organization');
     }
 
+    await assertUserLimit(this.prisma as any, organization.id);
     const isDev = process.env.NODE_ENV !== 'production';
     const passwordHash = await argon2.hash(dto.password);
 
@@ -165,7 +167,7 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const user = await this.prisma.user.findFirst({ where: { organization: { slug: dto.organizationSlug!, status: 'ACTIVE' }, email: dto.email } });
+    const user = await this.prisma.user.findFirst({ where: { organization: { slug: dto.organizationSlug! }, email: dto.email }, include: { organization: { select: { status: true } } } });
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -173,6 +175,11 @@ export class AuthService {
     const valid = await argon2.verify(user.passwordHash, dto.password);
     if (!valid) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Issue #106: only after a valid password, tell the user the org is suspended.
+    if (user.organization && user.organization.status !== 'ACTIVE') {
+      throw new ForbiddenException('Tu organización está suspendida. Contacta con el soporte de la plataforma.');
     }
 
     if (!user.emailVerifiedAt) {
@@ -222,7 +229,7 @@ export class AuthService {
     }
     if (session.user.organization && session.user.organization.status !== 'ACTIVE') {
       await this.prisma.session.deleteMany({ where: { userId: session.userId } });
-      throw new UnauthorizedException('Organization is suspended');
+      throw new UnauthorizedException('Tu organización está suspendida.');
     }
 
     await this.prisma.session.delete({ where: { id: session.id } });
@@ -359,6 +366,7 @@ export class AuthService {
     });
 
     if (!user) {
+      await assertUserLimit(this.prisma as any, organization.id);
       user = await this.prisma.user.create({
         data: {
           organizationId: organization.id,
@@ -411,6 +419,7 @@ export class AuthService {
         if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= now || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid or expired invitation');
         const existing = await tx.user.findFirst({ where: { organizationId: invitation.organizationId, email: invitation.email } });
         if (existing) throw new ConflictException('Email already registered in this organization');
+        await assertUserLimit(tx as any, invitation.organizationId);
         const claimed = await tx.organizationInvitation.updateMany({ where: { id: invitation.id, status: 'PENDING' }, data: { status: 'ACCEPTED', acceptedAt: now } });
         if (claimed.count !== 1) throw new UnauthorizedException('Invalid or expired invitation');
         const user = await tx.user.create({ data: { organizationId: invitation.organizationId, email: invitation.email, name: dto.name, passwordHash: await argon2.hash(dto.password), role: invitation.role, emailVerifiedAt: now } });

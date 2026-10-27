@@ -124,7 +124,10 @@ export function PlatformOrganizationDetailPage() {
     setTogglingStatus(true);
     try {
       const nextStatus: OrgStatus = org.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-      const updated = await apiClient.patch<OrganizationDetail>(`/platform/organizations/${id}`, { status: nextStatus });
+      // Suspend goes through POST /suspend so sessions are revoked (issue #106).
+      const updated = nextStatus === 'SUSPENDED'
+        ? await apiClient.post<OrganizationDetail>(`/platform/organizations/${id}/suspend`)
+        : await apiClient.patch<OrganizationDetail>(`/platform/organizations/${id}`, { status: nextStatus });
       setOrg(updated);
       toast({
         message: nextStatus === 'SUSPENDED' ? 'Organización suspendida.' : 'Organización reactivada.',

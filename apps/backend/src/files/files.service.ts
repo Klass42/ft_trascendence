@@ -1,3 +1,4 @@
+import { assertUserLimit, assertCourseLimit, assertStorageLimit } from '@/common/plan-limits/plan-limits';
 import {
   ConflictException,
   ForbiddenException,
@@ -57,6 +58,7 @@ export class FilesService {
     purpose: UploadPurpose = 'GENERAL',
   ) {
     validateUpload(file, purpose);
+    await assertStorageLimit(this.prisma as any, organizationId, file.size);
     const stored: StoredFile = await this.storage.putObject(
       file,
       organizationId,

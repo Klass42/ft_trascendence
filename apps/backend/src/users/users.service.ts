@@ -1,3 +1,4 @@
+import { assertUserLimit, assertCourseLimit, assertStorageLimit } from '@/common/plan-limits/plan-limits';
 import {
   BadRequestException,
   ConflictException,
@@ -68,6 +69,7 @@ export class UsersService {
   async create(dto: CreateUserDto, organizationId: string, actorId?: string) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
     if (existing) throw new ConflictException('Email already registered in this organization');
+    await assertUserLimit(this.prisma as any, organizationId);
     try {
       const created = await this.prisma.user.create({
         data: {

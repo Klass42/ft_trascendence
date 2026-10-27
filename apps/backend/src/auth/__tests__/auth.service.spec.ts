@@ -228,6 +228,14 @@ describe('AuthService', () => {
         service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' }),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('throws 403 «organización suspendida» for a suspended org with valid password (#106)', async () => {
+      const hash = await argon2.hash('demo1234');
+      mockUserFindFirst.mockResolvedValue({ ...mockUser, passwordHash: hash, organization: { status: 'SUSPENDED' } });
+      await expect(
+        service.login({ email: 'student@demo', password: 'demo1234', organizationSlug: 'klass' }),
+      ).rejects.toThrow(/suspendida/);
+    });
   });
 
   describe('refresh', () => {
@@ -740,7 +748,7 @@ describe('AuthService', () => {
           }),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
-        user: { findFirst: jest.fn().mockResolvedValue(null), create: txUserCreate },
+        organization: { findUnique: jest.fn(async () => null) }, user: { findFirst: jest.fn().mockResolvedValue(null), create: txUserCreate },
         auditLog: { create: jest.fn() },
       };
       const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) } as unknown as PrismaService;

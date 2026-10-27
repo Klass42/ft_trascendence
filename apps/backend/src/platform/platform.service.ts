@@ -27,23 +27,29 @@ export class PlatformService {
   }); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Organization slug already exists'); throw error; }
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
- async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: true } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
+ async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); if (!org) throw new NotFoundException('Organization not found'); return org; }
  async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) {
+  // Suspending through PATCH must also revoke sessions (issue #106).
+  if (dto.status === 'SUSPENDED') { const { status: _s, ...rest } = dto; if (Object.keys(rest).length) await this.updateOrganization(id, rest as UpdatePlatformOrganizationDto, actorId); return this.suspend(id, actorId); }
+  try {
   const org = await this.prisma.organization.update({
    where: { id },
    data: dto,
-   include: { _count: { select: { users: true, invitations: true } } },
+   include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } },
   });
   await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } });
   await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha actualizado`, 'Se han cambiado sus datos o configuración.');
   return org;
+  } catch (error: any) { if (error?.code === 'P2025') throw new NotFoundException('Organización no encontrada'); throw error; }
  }
  async suspend(id: string, actorId: string) {
+  const exists = await this.prisma.organization.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) throw new NotFoundException('Organización no encontrada');
   const org = await this.prisma.$transaction(async tx => {
    const updated = await tx.organization.update({
     where: { id },
     data: { status: 'SUSPENDED' },
-    include: { _count: { select: { users: true, invitations: true } } },
+    include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } },
    });
    const users = await tx.user.findMany({ where: { organizationId: id }, select: { id: true } });
    await tx.session.deleteMany({ where: { userId: { in: users.map(u => u.id) } } });
