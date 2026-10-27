@@ -28,7 +28,10 @@ export interface GradebookCellDTO {
   activityId: string;
   /** Best GRADED attempt, or a SUBMITTED one if none is graded yet. */
   attemptId: string | null;
+  /** Final score; only set when the cell is GRADED (null while SUBMITTED). */
   score: number | null;
+  /** Auto-graded partial score of a SUBMITTED attempt. Never a grade: show "Por calificar". */
+  partialScore: number | null;
   status: AttemptStatus | null;
 }
 

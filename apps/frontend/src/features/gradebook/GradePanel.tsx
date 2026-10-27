@@ -54,6 +54,10 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
       .then(([act, attempts]) => {
         if (cancelled) return;
         const found = attempts.find((a) => a.id === target.attemptId) ?? null;
+        if (!found) {
+          setLoadError('No se encontró la entrega. Puede que ya no exista.');
+          return;
+        }
         setActivity(act);
         setAttempt(found);
         setFeedback(found?.feedback ?? '');
@@ -133,7 +137,7 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
     <Modal open onClose={onClose} title="Calificar" size="md">
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.context}>
-          {target.studentName} · {target.title}
+          {[attempt?.user?.name ?? target.studentName, target.title].filter(Boolean).join(' · ')}
         </div>
 
         {!activity && !loadError && <Spinner size="md" label="Cargando intento…" />}

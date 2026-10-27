@@ -202,7 +202,7 @@ export class AttemptsService {
         attempt.attemptNo,
       );
     } else {
-      await this.notifySubmitted(actingUserId, activity);
+      await this.notifySubmitted(actingUserId, activity, attemptId);
     }
     return this.studentView(attemptId, actingUserId);
   }
@@ -724,7 +724,11 @@ export class AttemptsService {
   }
 
   /** Tell the subject's staff that an attempt is waiting for manual grading. */
-  private async notifySubmitted(studentId: string, activity: ActivityWithSubject) {
+  private async notifySubmitted(
+    studentId: string,
+    activity: ActivityWithSubject,
+    attemptId: string,
+  ) {
     const student = await this.prisma.user
       .findUnique({ where: { id: studentId }, select: { name: true } })
       .catch(() => null);
@@ -743,7 +747,7 @@ export class AttemptsService {
       {
         title: 'Nueva entrega para corregir',
         body: `${student?.name ?? 'Un alumno'} ha entregado «${activity.title}»`,
-        link: `/grades?subjectId=${activity.subjectId}&activityId=${activity.id}`,
+        link: `/grades?subjectId=${activity.subjectId}&activityId=${activity.id}&attemptId=${attemptId}`,
       },
       { organizationId: activity.subject.organizationId, actorId: studentId },
     );

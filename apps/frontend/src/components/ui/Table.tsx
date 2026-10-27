@@ -24,6 +24,8 @@ export interface Column<T> {
   render?: (row: T) => ReactNode;
   align?: 'left' | 'right' | 'center';
   width?: string;
+  /** Extra class for this column's header and body cells (e.g. to highlight it). */
+  className?: string;
 }
 
 export interface TableProps<T> {
@@ -52,7 +54,7 @@ export function Table<T>({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className={styles.th}
+                className={[styles.th, col.className].filter(Boolean).join(' ')}
                 style={{ textAlign: col.align, width: col.width }}
               >
                 {col.header}
@@ -75,7 +77,7 @@ export function Table<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={styles.td} style={{ textAlign: col.align }}>
+                  <td key={col.key} className={[styles.td, col.className].filter(Boolean).join(' ')} style={{ textAlign: col.align }}>
                     {col.render ? col.render(row) : ((row as Record<string, ReactNode>)[col.key] ?? null)}
                   </td>
                 ))}

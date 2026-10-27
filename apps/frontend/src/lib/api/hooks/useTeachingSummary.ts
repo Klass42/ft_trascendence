@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
 import type { TeachingSummaryDTO } from '../types';
@@ -22,6 +22,8 @@ export function useTeachingSummary(): UseTeachingSummaryResult {
   const [error, setError] = useState<Error | null>(null);
   const [nonce, setNonce] = useState(0);
   const { user } = useAuth();
+  // Refetches after the first load are silent so a live update does not blank the dashboard.
+  const loadedRef = useRef(false);
 
   const refetch = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -29,22 +31,27 @@ export function useTeachingSummary(): UseTeachingSummaryResult {
     if (!user) {
       setData(null);
       setIsLoading(false);
+      loadedRef.current = false;
       return;
     }
 
     let cancelled = false;
-    setIsLoading(true);
+    if (!loadedRef.current) setIsLoading(true);
     setError(null);
 
     apiClient
       .get<TeachingSummaryDTO>('/me/teaching/summary')
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (!cancelled) {
+          setData(result);
+          loadedRef.current = true;
+        }
       })
       .catch((err) => {
         if (!cancelled) {
           setError(err as Error);
           setData(null);
+          loadedRef.current = false;
         }
       })
       .finally(() => {

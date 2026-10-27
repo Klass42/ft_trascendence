@@ -419,6 +419,9 @@ describe('AttemptsService', () => {
       type: NotificationType.SUBMISSION_RECEIVED,
     });
     expect(emitted[0].payload.body).toContain('Alumno de prueba');
+    expect(emitted[0].payload.link).toBe(
+      `/grades?subjectId=${COURSE}&activityId=act-1&attemptId=${started.id}`,
+    );
     expect(analyticsEvents).toEqual([
       {
         name: ANALYTICS_UPDATED,

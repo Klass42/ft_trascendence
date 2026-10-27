@@ -396,7 +396,13 @@ export class GradingService {
     const rows = gradebook.students.map((student) => [
       student.user.name ?? '',
       student.user.email ?? '',
-      ...student.cells.map((c) => (c.score != null ? String(c.score) : '')),
+      ...student.cells.map((c) =>
+        c.status === AttemptStatus.SUBMITTED
+          ? 'Por calificar'
+          : c.score != null
+            ? String(c.score)
+            : '',
+      ),
       student.final == null ? '' : (Math.round(student.final * 1000) / 10).toFixed(1),
     ]);
 
