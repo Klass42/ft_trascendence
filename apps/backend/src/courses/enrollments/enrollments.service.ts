@@ -82,7 +82,11 @@ export class EnrollmentsService {
             ? { staff: { some: { userId: user.userId } } }
             : {
                 status: 'PUBLISHED',
-                course: { memberships: { some: { userId: user.userId } } },
+                // Archived cohorts are history: they must not drag the average.
+                course: {
+                  status: { not: 'ARCHIVED' },
+                  memberships: { some: { userId: user.userId } },
+                },
               }),
       },
       select: { id: true, courseId: true },

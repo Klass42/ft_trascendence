@@ -43,6 +43,11 @@ export class ActivitiesController {
     return this.activities.findAllForCourse(subjectId, user.userId);
   }
 
+  @Get('me/pending-activities')
+  listMyPending(@CurrentUser() user: AuthUser) {
+    return this.activities.listMyPendingActivities(user);
+  }
+
   @Get('me/teaching/activities')
   listTeaching(@CurrentUser() user: AuthUser) {
     return this.activities.listTeachingActivities(user.userId);

@@ -43,7 +43,7 @@ test.describe('StudentDashboard (real data)', () => {
 
   test('shows progress ring with real percentage', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByText('Progreso del semestre')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Progreso de lecciones')).toBeVisible({ timeout: 8000 });
     await expect(page.getByTestId('progress-ring-value')).toHaveText(`${expected.average}%`);
   });
 
@@ -53,17 +53,39 @@ test.describe('StudentDashboard (real data)', () => {
     await expect(row).toHaveText(`${WEB_101_LABEL} · ${expected.web101}%`, { timeout: 8000 });
   });
 
-  test('shows PROGRESO PROMEDIO card with real value', async ({ page }) => {
+  test('labels progress as lessons, not grades', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.getByText('PROGRESO PROMEDIO').waitFor({ timeout: 8000 });
+    await expect(
+      page.getByText('Lecciones completadas en tus asignaturas activas'),
+    ).toBeVisible({ timeout: 8000 });
+  });
+
+  test('shows PROMEDIO DE LECCIONES card with real value', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.getByText('PROMEDIO DE LECCIONES').waitFor({ timeout: 8000 });
     await expect(page.getByTestId('avg-progress')).toHaveText(`${expected.average}%`);
   });
 
-  test('shows PRÓXIMA ENTREGA card with upcoming activity', async ({ page }) => {
+  test('PRÓXIMA ENTREGA shows the first pending activity from the backend', async ({ page, request }) => {
+    const res = await request.get(`${BASE_URL}/me/pending-activities`, {
+      headers: { 'x-dev-user': STUDENT },
+    });
+    expect(res.ok()).toBeTruthy();
+    const pending: { id: string; title: string; attemptsAllowed: number; attemptsUsed: number; inProgress: boolean; closeAt: string | null }[] = await res.json();
+    // Nothing the endpoint returns may be finished or closed.
+    for (const a of pending) {
+      expect(a.inProgress || a.attemptsUsed === 0).toBe(true);
+      expect(a.closeAt === null || new Date(a.closeAt).getTime() > Date.now()).toBe(true);
+    }
+
     await page.goto('/dashboard');
+    if (pending.length === 0) {
+      await expect(page.getByText('No hay entregas pendientes')).toBeVisible({ timeout: 8000 });
+      return;
+    }
     await expect(page.getByText('PRÓXIMA ENTREGA')).toBeVisible({ timeout: 8000 });
     await expect(
-      page.getByText(/Autoevaluación de la unidad|Tarea · Ensayo y fichero/).first(),
+      page.getByRole('link', { name: `Próxima entrega: ${pending[0].title}` }),
     ).toBeVisible();
   });
 
@@ -90,15 +112,15 @@ test.describe('StudentDashboard (real data)', () => {
     page.on('pageerror', (err) => errors.push(err.message));
 
     await page.goto('/dashboard');
-    await expect(page.getByText('Progreso del semestre')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Progreso de lecciones')).toBeVisible({ timeout: 8000 });
 
     expect(errors).toEqual([]);
   });
 
   test('dashboard layout is 3-column grid', async ({ page }) => {
     await page.goto('/dashboard');
-    await expect(page.getByText('Progreso del semestre')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText('PROGRESO PROMEDIO')).toBeVisible();
+    await expect(page.getByText('Progreso de lecciones')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('PROMEDIO DE LECCIONES')).toBeVisible();
     // The grid renders course cards; at least one should be visible.
     await expect(page.getByText('Introducción al Desarrollo Web').first()).toBeVisible();
   });

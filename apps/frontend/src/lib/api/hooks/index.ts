@@ -11,7 +11,7 @@ export { useDeleteLesson } from './useDeleteLesson';
 export { useReorderLessons } from './useReorderLessons';
 export { useAttachFile } from './useAttachFile';
 export { useDetachFile } from './useDetachFile';
-export { useUpcomingAssignments } from './useUpcomingAssignments';
+export { useMyPendingActivities } from './useMyPendingActivities';
 export { useCourses } from './useCourses';
 export { useMySubjects } from './useMySubjects';
 export { useCourseDetail } from './useCourseDetail';
