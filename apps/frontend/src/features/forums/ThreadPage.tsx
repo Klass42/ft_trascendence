@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Spinner } from '@/components/ui';
+import { Button, EmptyState, Spinner } from '@/components/ui';
 import {
+  ApiError,
   useAuth,
   useForumThread,
   useCreatePost,
@@ -47,6 +48,19 @@ export function ThreadPage() {
     return (
       <div style={{ padding: 40 }}>
         <Spinner size="md" label="Cargando hilo…" />
+      </div>
+    );
+  }
+
+  // A deleted thread (e.g. opened from an old notification) is not an error.
+  if (error instanceof ApiError && error.isNotFound) {
+    return (
+      <div style={{ padding: 40 }}>
+        <EmptyState
+          title="Este hilo ya no existe"
+          description="Es posible que se haya eliminado."
+          action={<Button onClick={() => navigate('/forums')}>Volver a los foros</Button>}
+        />
       </div>
     );
   }

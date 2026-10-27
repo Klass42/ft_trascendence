@@ -308,7 +308,7 @@ export class ActivitiesService {
   }
 
   async remove(activityId: string, actingUserId: string) {
-    const { activity, subject } = await this.requireActivity(activityId, actingUserId, true);
+    const { activity, subject, access } = await this.requireActivity(activityId, actingUserId, true);
     const attempts = await this.prisma.attempt.count({
       where: { activityId },
     });
@@ -316,6 +316,8 @@ export class ActivitiesService {
       throw new ConflictException('archivar en su lugar');
     }
     await this.prisma.activity.delete({ where: { id: activityId } });
+    // Publish/change/grade notices deep-link to `…activityId=<id>`, now a 404.
+    await this.notifications?.removeByLink(access.subject.organizationId, { endsWith: [`activityId=${activityId}`] });
     if (activity.status === PublicationStatus.PUBLISHED) {
       await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_REMOVED, `Tarea eliminada: ${activity.title} en ${subject.title}`, activity.id, `/courses/${subject.courseId}/subjects/${subject.id}`);
     }

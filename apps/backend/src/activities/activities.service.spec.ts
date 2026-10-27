@@ -144,7 +144,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     content: { options: ['3', '4'], correct: [1] },
   };
 
-  function build() {
+  function build(notifications?: unknown) {
     const activities: any[] = [];
     const questions: any[] = [];
     const attempts: any[] = [];
@@ -273,7 +273,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     };
 
     return {
-      service: new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma)),
+      service: new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma), notifications as never),
       activities,
       questions,
       attempts,
@@ -355,6 +355,19 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     await expect(service.remove(created.id, TEACHER)).rejects.toThrow(
       /archivar en su lugar/,
     );
+  });
+
+  it('remove deletes the notifications that deep-link to the deleted activity', async () => {
+    const notify = { emitMany: jest.fn(), removeByLink: jest.fn() };
+    const { service, activities } = build(notify);
+    const created = await service.create(COURSE, TEACHER, { title: 'Borrador' });
+
+    await service.remove(created.id, TEACHER);
+
+    expect(activities.find((a: any) => a.id === created.id)).toBeUndefined();
+    expect(notify.removeByLink).toHaveBeenCalledWith(expect.any(String), {
+      endsWith: [`activityId=${created.id}`],
+    });
   });
 
   it('publishing with no questions throws BadRequestException', async () => {

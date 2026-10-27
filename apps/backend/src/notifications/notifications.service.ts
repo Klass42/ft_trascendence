@@ -24,6 +24,18 @@ export type NotificationRecipientLoader = () => Promise<readonly string[]>;
 export interface ListMineOptions {
   page?: number;
   pageSize?: number;
+  /** Return only unread notifications (`total` then counts only those). */
+  unreadOnly?: boolean;
+}
+
+/**
+ * Link patterns of the notifications that point at a deleted entity.
+ * `equals`/`startsWith`/`endsWith` are OR-ed together.
+ */
+export interface LinkMatchers {
+  equals?: string[];
+  startsWith?: string[];
+  endsWith?: string[];
 }
 
 /**
@@ -46,23 +58,27 @@ export class NotificationsService {
    */
   async emit(userId: string, type: NotificationType, payload: EmitPayload) {
     try {
-      const notification = await this.prisma.notification.create({
-        data: {
-          userId,
-          type,
-          title: payload.title,
-          body: payload.body,
-          link: payload.link,
-        },
-      });
-
-      // RealtimeGateway escucha el bus y publica en la sala del usuario.
-      this.events.emit(NOTIFICATION_CREATED, notification);
-      return notification;
+      return await this.persist(userId, type, payload);
     } catch (error) {
       this.logger.error(`No se pudo emitir ${type} para ${userId}`, error instanceof Error ? error.stack : undefined);
       return null;
     }
+  }
+
+  private async persist(userId: string, type: NotificationType, payload: EmitPayload) {
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId,
+        type,
+        title: payload.title,
+        body: payload.body,
+        link: payload.link,
+      },
+    });
+
+    // RealtimeGateway escucha el bus y publica en la sala del usuario.
+    this.events.emit(NOTIFICATION_CREATED, notification);
+    return notification;
   }
 
   /**
@@ -97,17 +113,19 @@ export class NotificationsService {
    * List the notifications that belong to `userId`, newest first, paginated.
    * Scoped by `userId` — a user never sees another user's notifications.
    */
-  async listMine(userId: string, { page = 1, pageSize = 20 }: ListMineOptions = {}) {
+  async listMine(userId: string, { page = 1, pageSize = 20, unreadOnly = false }: ListMineOptions = {}) {
     const skip = (page - 1) * pageSize;
+    const where = unreadOnly ? { userId, read: false } : { userId };
 
     const [items, total, unread] = await this.prisma.$transaction([
       this.prisma.notification.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
+        where,
+        // `id` breaks ties so rows created in the same ms keep a stable page order.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: pageSize,
       }),
-      this.prisma.notification.count({ where: { userId } }),
+      this.prisma.notification.count({ where }),
       this.prisma.notification.count({ where: { userId, read: false } }),
     ]);
 
@@ -140,5 +158,29 @@ export class NotificationsService {
     });
 
     return { updated: result.count };
+  }
+
+  /**
+   * Delete the notifications of `organizationId` whose link points at an entity
+   * that no longer exists, so they never open a 404. The recipient's
+   * organization is part of the filter: `Notification` has no tenant column.
+   * Best effort — the delete that triggered it must not fail because of this.
+   */
+  async removeByLink(organizationId: string, matchers: LinkMatchers): Promise<number> {
+    const link = [
+      ...(matchers.equals ?? []).map((value) => ({ link: value })),
+      ...(matchers.startsWith ?? []).map((value) => ({ link: { startsWith: value } })),
+      ...(matchers.endsWith ?? []).map((value) => ({ link: { endsWith: value } })),
+    ];
+    if (link.length === 0) return 0;
+    try {
+      const result = await this.prisma.notification.deleteMany({
+        where: { user: { organizationId }, OR: link },
+      });
+      return result.count;
+    } catch (error) {
+      this.logger.error('No se pudieron limpiar las notificaciones de un elemento eliminado', error instanceof Error ? error.stack : undefined);
+      return 0;
+    }
   }
 }

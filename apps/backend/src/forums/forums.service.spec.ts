@@ -168,8 +168,10 @@ describe('ForumsService', () => {
       const userIds = typeof loader === 'function' ? await loader() : loader;
       for (const userId of userIds) emitted.push({ userId, type });
     });
+    const removeByLink = jest.fn(async () => 0);
     const notifications = {
       emitMany,
+      removeByLink,
     } as unknown as NotificationsService;
     const service = new ForumsService(prisma, notifications, accessFromPrisma(prisma));
     const thread = await service.createThread(COURSE_ID, STUDENT, { title: 'Pregunta para el profesor' });
@@ -178,6 +180,9 @@ describe('ForumsService', () => {
 
     await service.togglePin(thread.id, TEACHER);
     await service.deleteThread(thread.id, TEACHER);
+
+    // Notices linking to the deleted thread are removed, scoped to its organization.
+    expect(removeByLink).toHaveBeenCalledWith(expect.any(String), { equals: [`/forums/${thread.id}`] });
 
     expect(emitMany.mock.calls.map(([recipients]) => recipients)).toEqual([
       [STUDENT],

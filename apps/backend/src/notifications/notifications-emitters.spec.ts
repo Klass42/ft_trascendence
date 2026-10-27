@@ -32,6 +32,7 @@ function buildNotifications() {
       }),
     },
     notification: {
+      findMany: jest.fn(async () => []),
       create: jest.fn(async ({ data }: any) => {
         const row = { id: `notification-${created.length + 1}`, ...data };
         created.push(row);

@@ -82,7 +82,7 @@ export class OrganizationsService {
         return members.map(({ id: memberId }) => memberId);
       },
       NotificationType.ORGANIZATION_CHANGED,
-      { title: 'La organización se ha actualizado', body: `Se han actualizado los datos de «${updated.name}».`, link: '/profile' },
+      { title: 'La organización se ha actualizado', body: `Se han actualizado los datos de «${updated.name}».`, link: '/org' },
       { organizationId: id, actorId: callerUserId },
     );
     return updated;

@@ -170,3 +170,23 @@
 .footer:hover {
   background: var(--color-bg-tertiary);
 }
+
+/* On narrow screens the bell sits mid-navbar, so a panel anchored to it would
+   spill past the left edge. Anchor it to the navbar instead (the nearest
+   positioned ancestor) and keep a 16px gutter on both sides. */
+@media (max-width: 560px) {
+  .root {
+    position: static;
+  }
+
+  .dropdown {
+    top: calc(100% + var(--space-2));
+    right: var(--space-4);
+    left: var(--space-4);
+    width: auto;
+  }
+
+  .list {
+    max-height: min(380px, 60vh);
+  }
+}
