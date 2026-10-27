@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Search, UserPlus, Users } from 'lucide-react';
+import { Inbox, Search, Send, UserPlus, Users } from 'lucide-react';
 import { Avatar, Badge, Button, ConfirmDialog, EmptyState, Input, Spinner, useToast } from '@/components/ui';
 import { apiClient } from '@/lib/api';
+import type { GlobalRole } from '@/lib/api';
 import { usePresence } from '@/features/presence';
+import { useNotifications } from '@/features/notifications';
 import styles from './FriendsPage.module.css';
 
 interface FriendPerson {
@@ -12,11 +14,25 @@ interface FriendPerson {
   avatarUrl: string | null;
 }
 
+type FriendRelation = 'NONE' | 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED';
+
 interface SearchResult {
   id: string;
   name: string;
   avatarUrl: string | null;
+  role: GlobalRole;
+  /** Name of a cohort the person shares with the current user, if any. */
+  sharedCourse: string | null;
+  relation: FriendRelation;
+  /** Friendship row behind `relation` (null when there is none). */
+  friendshipId: string | null;
 }
+
+const ROLE_LABEL: Record<GlobalRole, string> = {
+  ADMIN: 'Administrador',
+  TEACHER: 'Profesor',
+  STUDENT: 'Alumno',
+};
 
 interface FriendshipListDTO {
   friends: FriendPerson[];
@@ -38,7 +54,9 @@ export function FriendsPage() {
     hasError: presenceError,
     refresh: refreshPresence,
   } = usePresence();
+  const { friendsUpdate } = useNotifications();
   const searchInput = useRef<HTMLInputElement>(null);
+  const lastQuery = useRef<string | null>(null);
   const previousPresenceIds = useRef<string | null>(null);
   const [list, setList] = useState<FriendshipListDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,6 +99,24 @@ export function FriendsPage() {
     previousPresenceIds.current = presenceIds;
   }, [isPresenceLoading, presenceIds, refreshList]);
 
+  const fetchSearch = useCallback(async (normalizedQuery: string) => {
+    const results = await apiClient.get<SearchResult[]>(
+      `/users/search?q=${encodeURIComponent(normalizedQuery)}`,
+    );
+    lastQuery.current = normalizedQuery;
+    setSearchResults(results);
+  }, []);
+
+  /** Re-runs the last search without flicker so relations stay accurate. */
+  const refreshSearch = useCallback(async () => {
+    if (lastQuery.current === null) return;
+    try {
+      await fetchSearch(lastQuery.current);
+    } catch {
+      // Keep showing the previous results; the lists above are still correct.
+    }
+  }, [fetchSearch]);
+
   const searchUsers = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuery = query.trim();
@@ -94,10 +130,7 @@ export function FriendsPage() {
     setSearchError(null);
     setIsSearching(true);
     try {
-      const results = await apiClient.get<SearchResult[]>(
-        `/users/search?q=${encodeURIComponent(normalizedQuery)}`,
-      );
-      setSearchResults(results);
+      await fetchSearch(normalizedQuery);
     } catch {
       setSearchError('No se pudo completar la búsqueda. Inténtalo de nuevo.');
       setSearchResults(null);
@@ -106,11 +139,26 @@ export function FriendsPage() {
     }
   };
 
+  // A FRIEND_REQUEST notification (new request received, or ours accepted)
+  // arrives over the socket: refresh the lists, presence and visible results.
+  const lastFriendsUpdate = useRef(friendsUpdate?.receivedAt ?? null);
+  useEffect(() => {
+    if (!friendsUpdate || friendsUpdate.receivedAt === lastFriendsUpdate.current) return;
+    lastFriendsUpdate.current = friendsUpdate.receivedAt;
+    void refreshList();
+    void refreshPresence();
+    void refreshSearch();
+  }, [friendsUpdate, refreshList, refreshPresence, refreshSearch]);
+
   const sendRequest = async (person: SearchResult) => {
     setBusyId(person.id);
     try {
-      await apiClient.post(`/users/${person.id}/friend`);
-      setSearchResults((current) => current?.filter((result) => result.id !== person.id) ?? null);
+      const friendship = await apiClient.post<{ id: string }>(`/users/${person.id}/friend`);
+      setSearchResults((current) => current?.map((result) => (
+        result.id === person.id
+          ? { ...result, relation: 'PENDING_SENT', friendshipId: friendship?.id ?? null }
+          : result
+      )) ?? null);
       await refreshList();
       toast({ variant: 'success', message: `Solicitud enviada a ${person.name}` });
     } catch {
@@ -123,12 +171,13 @@ export function FriendsPage() {
     }
   };
 
-  const acceptRequest = async (request: FriendPerson) => {
+  const acceptRequest = async (request: Pick<FriendPerson, 'friendshipId' | 'name'>) => {
     setBusyId(request.friendshipId);
     try {
       await apiClient.patch(`/friendships/${request.friendshipId}`, { status: 'ACCEPTED' });
       await refreshList();
       await refreshPresence();
+      await refreshSearch();
       toast({ variant: 'success', message: `Ahora eres amigo de ${request.name}` });
     } catch {
       toast({
@@ -145,6 +194,7 @@ export function FriendsPage() {
     try {
       await apiClient.delete(`/friendships/${request.friendshipId}`);
       await refreshList();
+      await refreshSearch();
       toast({ variant: 'success', message: successMessage });
     } catch {
       toast({
@@ -164,6 +214,7 @@ export function FriendsPage() {
       setFriendToRemove(null);
       await refreshList();
       await refreshPresence();
+      await refreshSearch();
       toast({ variant: 'success', message: `Has eliminado a ${friendToRemove.name} de tus amigos` });
     } catch {
       toast({
@@ -238,6 +289,7 @@ export function FriendsPage() {
             <h3 className={styles.subheading}>Resultados</h3>
             {searchResults.length === 0 ? (
               <EmptyState
+                icon={<Search size={24} />}
                 title="No encontramos personas"
                 description="Prueba con otro nombre o correo de tu organización."
               />
@@ -247,17 +299,38 @@ export function FriendsPage() {
                   <li className={styles.personRow} key={person.id}>
                     <div className={styles.personInfo}>
                       <Avatar src={person.avatarUrl} size="md" />
-                      <span className={styles.personName}>{person.name}</span>
+                      <div className={styles.personText}>
+                        <div className={styles.personName}>{person.name}</div>
+                        <div className={styles.muted}>
+                          {ROLE_LABEL[person.role]}
+                          {person.sharedCourse && ` · Cohorte: ${person.sharedCourse}`}
+                        </div>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      loading={busyId === person.id}
-                      disabled={busyId !== null && busyId !== person.id}
-                      leftIcon={<UserPlus size={16} />}
-                      onClick={() => void sendRequest(person)}
-                    >
-                      Añadir
-                    </Button>
+                    {person.relation === 'FRIEND' && <Badge variant="success">Amigos</Badge>}
+                    {person.relation === 'PENDING_SENT' && <Badge variant="neutral">Solicitud enviada</Badge>}
+                    {person.relation === 'PENDING_RECEIVED' && person.friendshipId && (
+                      <Button
+                        size="sm"
+                        loading={busyId === person.friendshipId}
+                        disabled={busyId !== null && busyId !== person.friendshipId}
+                        onClick={() => void acceptRequest({ friendshipId: person.friendshipId as string, name: person.name })}
+                        aria-label={`Aceptar a ${person.name} en los resultados`}
+                      >
+                        Aceptar
+                      </Button>
+                    )}
+                    {person.relation === 'NONE' && (
+                      <Button
+                        size="sm"
+                        loading={busyId === person.id}
+                        disabled={busyId !== null && busyId !== person.id}
+                        leftIcon={<UserPlus size={16} />}
+                        onClick={() => void sendRequest(person)}
+                      >
+                        Añadir
+                      </Button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -287,7 +360,11 @@ export function FriendsPage() {
             {data.receivedRequests.length > 0 && <Badge variant="accent">{data.receivedRequests.length}</Badge>}
           </div>
           {data.receivedRequests.length === 0 ? (
-            <EmptyState title="No tienes solicitudes pendientes" />
+            <EmptyState
+              icon={<Inbox size={24} />}
+              title="No tienes solicitudes pendientes"
+              description="Cuando alguien quiera ser tu amigo, aparecerá aquí."
+            />
           ) : (
             <ul className={styles.peopleList}>
               {data.receivedRequests.map((request) => (
@@ -328,7 +405,11 @@ export function FriendsPage() {
             {data.sentRequests.length > 0 && <Badge variant="neutral">{data.sentRequests.length}</Badge>}
           </div>
           {data.sentRequests.length === 0 ? (
-            <EmptyState title="No has enviado solicitudes" />
+            <EmptyState
+              icon={<Send size={24} />}
+              title="No has enviado solicitudes"
+              description="Las solicitudes que envíes aparecerán aquí hasta que las respondan."
+            />
           ) : (
             <ul className={styles.peopleList}>
               {data.sentRequests.map((request) => (
