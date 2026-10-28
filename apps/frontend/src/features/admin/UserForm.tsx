@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
+import { isValidEmail } from '@/lib/email';
 import { Mail, Lock, User as UserIcon } from 'lucide-react';
 import { Input, Button } from '@/components/ui';
 import { ApiError, type GlobalRole } from '@/lib/api/types';
@@ -61,6 +62,8 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const roleId = useId();
+  const bioId = useId();
   const isCreate = mode === 'create';
   const roleDisabled = !isCreate && isSelf === true;
 
@@ -70,7 +73,7 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
     else if (name.trim().length > 100) errors.name = 'El nombre no puede superar los 100 caracteres.';
     if (!email.trim()) {
       errors.email = 'El email es obligatorio.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!isValidEmail(email.trim())) {
       errors.email = 'Email no válido.';
     } else if (email.length > 254) {
       errors.email = 'El correo no puede superar los 254 caracteres.';
@@ -185,8 +188,9 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
       )}
 
       <div className={styles.selectWrapper}>
-        <label className={styles.label}>Rol</label>
+        <label className={styles.label} htmlFor={roleId}>Rol</label>
         <select
+          id={roleId}
           className={styles.select}
           value={role}
           onChange={(e) => setRole(e.target.value as GlobalRole)}
@@ -204,8 +208,9 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
       </div>
 
       <div className={styles.textareaWrapper}>
-        <label className={styles.label}>Bio</label>
+        <label className={styles.label} htmlFor={bioId}>Bio</label>
         <textarea
+          id={bioId}
           className={styles.textarea}
           value={bio}
           onChange={(e) => {

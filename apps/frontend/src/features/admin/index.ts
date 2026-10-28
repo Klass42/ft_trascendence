@@ -4,3 +4,6 @@ export { AdminUserInvitePage } from './AdminUserInvitePage';
 export { AdminUserEditPage } from './AdminUserEditPage';
 export type { UserDTO, CreateUserInput, UpdateUserInput } from './types';
 export { DeleteUserDialog, DELETE_USER_COPY } from './DeleteUserDialog';
+export { AdminInvitationsPage } from './AdminInvitationsPage';
+export { AdminUserImportPage } from './AdminUserImportPage';
+export { AdminAuditPage } from './AdminAuditPage';

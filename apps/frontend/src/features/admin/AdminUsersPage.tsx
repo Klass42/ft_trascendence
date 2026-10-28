@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Search, UserPlus, Users } from 'lucide-react';
+import { FileUp, History, MailPlus, Pencil, Search, UserPlus, Users } from 'lucide-react';
 import { apiClient, useAuth } from '@/lib/api';
 import type { GlobalRole } from '@/lib/api/types';
 import { Badge, Button, EmptyState, Input, Select, Spinner, Table } from '@/components/ui';
@@ -105,6 +105,11 @@ export function AdminUsersPage() {
     ) },
   ], [navigate]);
 
+  const hasFilters = Boolean(debouncedSearch || search.trim() || role || status);
+  function clearFilters() {
+    setSearch(''); setDebouncedSearch(''); setRole(''); setStatus(''); setPage(1);
+  }
+
   const totalPages = Math.max(result?.totalPages ?? 0, 1);
   const firstItem = result && result.total > 0 ? (result.page - 1) * result.pageSize + 1 : 0;
   const lastItem = result ? Math.min(result.page * result.pageSize, result.total) : 0;
@@ -116,11 +121,17 @@ export function AdminUsersPage() {
           <h1 className={styles.title}>Usuarios</h1>
           <p className={styles.subtitle}>Busca y administra el acceso a la organización.</p>
         </div>
-        <Button
-          variant="primary"
-          leftIcon={<UserPlus size={18} />}
-          onClick={() => navigate('/admin/users/invite')}
-        >Invitar usuario</Button>
+        <div className={styles.headerActions}>
+          <Button variant="ghost" leftIcon={<History size={18} />} onClick={() => navigate('/admin/audit')}>Auditoría</Button>
+          <Button variant="outline" leftIcon={<MailPlus size={18} />} onClick={() => navigate('/admin/users/invitations')}>Invitaciones pendientes</Button>
+          <Button variant="outline" leftIcon={<FileUp size={18} />} onClick={() => navigate('/admin/users/import')}>Importar CSV</Button>
+          <Button variant="outline" leftIcon={<UserPlus size={18} />} onClick={() => navigate('/admin/users/new')}>Crear usuario</Button>
+          <Button
+            variant="primary"
+            leftIcon={<UserPlus size={18} />}
+            onClick={() => navigate('/admin/users/invite')}
+          >Invitar usuario</Button>
+        </div>
       </header>
 
       <div className={styles.filters}>
@@ -174,9 +185,11 @@ export function AdminUsersPage() {
               empty={(
                 <EmptyState
                   icon={<Users size={21} />}
-                  title={result?.total ? 'No hay resultados' : 'Aún no hay usuarios'}
-                  description={result?.total ? 'Prueba con otro nombre, email, rol o estado.' : 'Invita a las personas que participarán en esta organización.'}
-                  action={!result?.total ? <Button onClick={() => navigate('/admin/users/invite')}>Invitar usuario</Button> : undefined}
+                  title={hasFilters ? 'Sin resultados' : 'Aún no hay usuarios'}
+                  description={hasFilters ? 'Ningún usuario coincide con la búsqueda o los filtros.' : 'Invita a las personas que participarán en esta organización.'}
+                  action={hasFilters
+                    ? <Button variant="outline" onClick={clearFilters}>Limpiar filtros</Button>
+                    : <Button onClick={() => navigate('/admin/users/invite')}>Invitar usuario</Button>}
                 />
               )}
             />

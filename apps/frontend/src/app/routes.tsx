@@ -80,6 +80,18 @@ const AdminUserCreatePage = lazy(() =>
 const AdminUserInvitePage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserInvitePage }))
 );
+const AdminInvitationsPage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminInvitationsPage }))
+);
+const AdminUserImportPage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminUserImportPage }))
+);
+const AdminAuditPage = lazy(() =>
+  import('@/features/admin').then((m) => ({ default: m.AdminAuditPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.ResetPasswordPage }))
+);
 const AdminUserEditPage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
 );
@@ -145,6 +157,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<PageLoader />}>
         <AcceptInvitationPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/reset-password',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <ResetPasswordPage />
       </Suspense>
     ),
   },
@@ -326,6 +346,30 @@ const routes: RouteObject[] = [
             element: (
               <Suspense fallback={<PageLoader />}>
                 <AdminUserInvitePage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'users/invitations',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminInvitationsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'users/import',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminUserImportPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'audit',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <AdminAuditPage />
               </Suspense>
             ),
           },

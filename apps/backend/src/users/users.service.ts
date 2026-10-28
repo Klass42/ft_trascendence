@@ -12,7 +12,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
@@ -89,6 +89,7 @@ export class UsersService {
         { title: 'Tu cuenta ya está lista', body: `Se ha creado tu cuenta en la organización.`, link: '/profile' },
         { organizationId, actorId },
       );
+      await this.prisma.auditLog.create({ data: { actorId: actorId ?? null, action: 'USER_CREATED', organizationId, targetUserId: created.id, metadata: { role: created.role } } });
       return created;
     } catch (err) {
       if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
@@ -107,6 +108,12 @@ export class UsersService {
     }
     try {
       const updated = await this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (dto.role !== undefined && dto.role !== user.role) changes.role = { from: user.role, to: dto.role };
+      if (dto.email !== undefined && dto.email !== user.email) changes.email = { from: user.email, to: dto.email };
+      if (Object.keys(changes).length) {
+        await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: changes.role ? 'USER_ROLE_CHANGED' : 'USER_UPDATED', organizationId, targetUserId: id, metadata: changes as Prisma.InputJsonValue } });
+      }
       if (dto.role !== undefined && dto.role !== user.role) {
         await this.notifications?.emitMany(
           [id],
@@ -128,6 +135,7 @@ export class UsersService {
     if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
     if (id === callerUserId) throw new BadRequestException('Cannot delete yourself');
     await this.prisma.user.delete({ where: { id } });
+    await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'USER_DELETED', organizationId, metadata: { userId: id } } });
     await this.notifications?.emitMany(
       async () => {
         const admins = await this.prisma.user.findMany({
