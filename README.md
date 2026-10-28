@@ -302,20 +302,19 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 
 ## Modules
 
-<!-- TODO(team): confirm the list, the points and write 2–4 lines per module: justification,
-     how it was implemented, who did it. The Monitoring row is done. Need 14 points. -->
+We claim **18 points** of modules; the subject requires **14**, so we keep a 4-point margin.
 
 | Module | Type | Points | Member(s) | Implementation |
 |---|---|---|---|---|
-| Use a framework for both frontend and backend | Major | 2 | <!-- TODO --> | React 19 (Vite) + NestJS 10 <!-- TODO: justify --> |
+| Use a framework for both frontend and backend | Major | 2 | Whole team (shell: Aloiki) | React 19 (Vite) + NestJS 10: typed TypeScript end to end, Nest modules/guards/DI fit RBAC and multi-tenancy; React for a component-based SPA with our own design system |
 | Real-time features with WebSocket | Major | 2 | David | Socket.io gateway with JWT handshake, per-user rooms, live notifications, presence to friends and live analytics; connect/disconnect handled; efficient targeted broadcasting (see below) |
 | Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 over PostgreSQL 16 (typed client, migrations, seed) — see below |
-| Standard user management | Major | 2 | Jorge | register/login/refresh/logout, profile, admin user CRUD, seed — see below |
+| Standard user management | Major | 2 | Jorge | register/login/refresh/logout, profile, admin user CRUD, admin-mediated password recovery (no SMTP), anti-enumeration answers, self export/delete (`GET /users/me/export`, `POST /users/me/delete`) — see below |
 | Advanced permissions / RBAC | Major | 2 | Jorge | `GlobalRole` + `PlatformRole`, guards, tenant-scoped queries — see below |
 | Organization system | Major | 2 | Jorge | orgs, invitations, members, platform back-office — see below |
 | Notification system | Minor | 1 | David | Persisted, real-time notifications for the create/update/delete actions of tasks, content, subjects, enrolments, forum, library and users (see below) |
 | Advanced analytics dashboard | Major | 2 | David | Interactive line/bar charts, live refresh, date range filter, CSV and PDF export (see below) |
-| File upload | Minor | 1 | Aloiki | <!-- TODO --> |
+| File upload | Minor | 1 | Aloiki | `files` module with a storage driver (S3/Garage or local disk), size limits (10 MB, avatars 2 MB), MIME + magic-bytes validation, org-scoped downloads; used by the library (folders, resources), lessons, tasks and avatars |
 | OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | Passport Google strategy, link-by-email, signed `state` — see below |
 | **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
 | **Total** | | **18** | | |

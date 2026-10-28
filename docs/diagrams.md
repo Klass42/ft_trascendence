@@ -89,6 +89,16 @@ erDiagram
   User ||--o{ Session : sessions
   User ||--o{ Friendship : friends
   User ||--o{ Notification : inbox
+  User ||--o{ OAuthAccount : "login Google"
+  Organization ||--o{ OrganizationInvitation : invites
+  Organization ||--o{ AuditLog : audit
+  Organization ||--o{ ResourceFolder : carpetas
+  ResourceFolder ||--o{ ResourceFolder : subcarpetas
+  ResourceFolder ||--o{ LearningResource : contiene
+  ResourceFolder ||--o{ SubjectFolder : "asignada a"
+  Subject ||--o{ SubjectFolder : carpetas
+  LearningResource ||--o{ SubjectResource : "publicado en"
+  File |o--o{ LearningResource : fichero
 
   Course ||--o{ Subject : contains
   Course ||--o{ CourseMembership : roster
@@ -109,13 +119,68 @@ erDiagram
     string slug UK
     string name
     string status
+    string plan "OrganizationPlan"
+    int maxUsers "nullable"
+    int maxCourses "nullable"
+    int maxStorageMb "nullable"
   }
   User {
+    string id PK
+    string organizationId FK "nullable"
+    string email
+    string passwordHash "nullable (solo OAuth)"
+    string role
+    string platformRole
+    datetime emailVerifiedAt "nullable"
+    string preferredLanguage
+  }
+  OAuthAccount {
+    string id PK
+    string userId FK
+    string provider "google"
+    string providerUserId
+  }
+  OrganizationInvitation {
     string id PK
     string organizationId FK
     string email
     string role
-    string platformRole
+    string tokenHash UK
+    string status
+    datetime expiresAt
+  }
+  AuditLog {
+    string id PK
+    string actorId FK "nullable"
+    string organizationId FK "nullable"
+    string action
+    json metadata
+  }
+  ResourceFolder {
+    string id PK
+    string organizationId FK
+    string parentId FK "nullable"
+    string name
+  }
+  SubjectFolder {
+    string folderId FK
+    string subjectId FK
+    bool required
+  }
+  LearningResource {
+    string id PK
+    string organizationId FK
+    string folderId FK "nullable"
+    string fileId FK "nullable"
+    string externalUrl "nullable"
+    string type
+    string status
+  }
+  SubjectResource {
+    string resourceId FK
+    string subjectId FK
+    int order
+    bool required
   }
   Course {
     string id PK
@@ -151,6 +216,8 @@ erDiagram
 ```
 
 Los bytes no viven en Postgres: `File` es `bucket` + `objectKey` (Garage/S3 o disco local).
+
+Biblioteca: `Organization → ResourceFolder (anidable por parentId) → LearningResource`. Una carpeta se asigna a asignaturas con `SubjectFolder`; un recurso suelto se publica en asignaturas con `SubjectResource`. El recurso apunta a un `File` subido o a una `externalUrl`.
 
 ### 1.3 ER — tareas, plantillas y notas
 
@@ -258,6 +325,7 @@ flowchart TB
   subgraph jorge["Jorge — Identity"]
     Auth
     Users
+    Friendships["users/friendships"]
     Organizations
     Platform
     CommonAuth["common/auth"]
@@ -265,6 +333,9 @@ flowchart TB
 
   subgraph aloiki["Aloiki — Content"]
     Courses
+    Enrollments["courses/enrollments"]
+    Sections["courses/sections"]
+    Lessons["courses/lessons"]
     Files
     Resources
   end
@@ -282,19 +353,31 @@ flowchart TB
     Analytics
   end
 
+  subgraph shared["Compartido"]
+    Prisma
+    Telemetry
+    Bus(("EventEmitter2"))
+  end
+
   CommonAuth --> Auth
   Activities --> Blocks
   Activities --> Templates
   Activities --> Attempts
   Attempts --> Blocks
-  Attempts --> Notifications
+  Attempts -. "evento" .-> Bus
+  Notifications -- "emit" --> Bus
+  Bus -. "notification.created" .-> Realtime
+  Users --> Friendships
+  Courses --> Enrollments
+  Courses --> Sections
+  Sections --> Lessons
   Grading --> Activities
   Grading --> Attempts
   Courses --> Files
   Activities --> Files
 ```
 
-Frontend (mismas superficies): `features/activities` (Tareas + biblioteca + reproductor), `gradebook`, `grades`, `courses`, `auth`, `org`, `forums`, `notifications`, `dashboard`. `/assignments` redirige a `/activities`.
+Frontend (mismas superficies): `features/activities` (Tareas + biblioteca + reproductor), `gradebook`, `grades`, `courses`, `auth`, `org`, `forums`, `notifications`, `dashboard`, `admin`, `platform`, `profile`, `resources`, `friends`, `presence`, `legal`, `analytics`. `/assignments` redirige a `/activities`.
 
 ### 2.3 Registro de bloques (seam)
 
@@ -430,6 +513,44 @@ flowchart LR
 RBAC breve: listar/instanciar plantillas = staff de algún curso de la org. Editar/borrar = autor o `ADMIN` de la org. Instanciar exige staff del **curso destino**. Cross-org → 404.
 
 ---
+
+### 3.5 Autenticación: login, refresh, logout y recuperación
+
+```mermaid
+sequenceDiagram
+  actor U as Usuario
+  participant F as Frontend
+  participant A as AuthController
+  participant DB as Postgres
+  U->>F: email + contraseña
+  F->>A: POST /auth/login
+  A->>DB: User + bcrypt, crea Session
+  A-->>F: access JWT (15 min) + refresh JWT (7 d, jti = Session)
+  F->>A: POST /auth/refresh
+  A->>DB: rota la Session (la vieja se invalida)
+  A-->>F: nuevo par de tokens
+  F->>A: POST /auth/logout
+  A->>DB: borra la Session
+```
+
+```mermaid
+sequenceDiagram
+  actor U as Usuario
+  participant A as Auth
+  participant N as Notificaciones
+  actor Ad as Admin de la org
+  U->>A: POST /auth/forgot-password (email)
+  A-->>U: misma respuesta exista o no (anti-enumeración)
+  A->>N: avisa a los admins (sin SMTP)
+  Ad->>A: POST /auth/admin/users/:id/password-reset
+  A-->>Ad: enlace con JWT purpose=password-reset
+  Ad-->>U: le pasa el enlace
+  U->>A: POST /auth/password-reset (token + nueva)
+  A->>A: verifica firma, caducidad y huella del hash
+  A-->>U: contraseña cambiada; el enlace ya no vale
+```
+
+No hay tabla de reset: el token es un JWT firmado que lleva una huella del `passwordHash` actual, así que al cambiar la contraseña deja de ser válido (un solo uso). Las invitaciones sí se guardan (`OrganizationInvitation.tokenHash`) y se aceptan con `POST /auth/invitations/:token/accept`. Google OAuth usa un `state` firmado y el botón solo aparece si hay `GOOGLE_CLIENT_ID`.
 
 ## Cómo verlos
 

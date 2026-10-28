@@ -15,7 +15,8 @@ rewritten, **free-choice** version. There is **no mandatory Pong** — the team 
 real-time, modular. The subject explicitly lists an LMS as a valid example project (§V.3).
 
 > ⚠️ `MVP_DESIGN.md` is the product plan but predates v21.1 in places. Ignore its stale bits:
-> it cites an **18-point** target (real target is **14**), old module names ("Framework F+B"),
+> it treats **18 points** as the target (the subject requires **14**; we currently *claim* 18,
+> see §3 and README §Modules), old module names ("Framework F+B"),
 > and **Next.js** for the frontend (we use Vite+React — see §4). Trust the subject PDF and this
 > file over MVP_DESIGN for anything about modules/points/stack.
 
@@ -52,7 +53,7 @@ get tested before `master`.
 
 ## 3. Module strategy — target 14 pts (Major=2, Minor=1)
 
-Planned core (~16 pts, comfortable margin before any AI):
+Claimed modules (**18 pts**, team goal **14**; same table as README §Modules):
 
 | Module | Type | Pts | Where |
 |---|---|---|---|
@@ -65,10 +66,12 @@ Planned core (~16 pts, comfortable margin before any AI):
 | User Mgmt: Organization system | Major | 2 | Organizations (see §5) |
 | User Mgmt: Advanced permissions (RBAC CRUD) | Major | 2 | admin/teacher/student |
 | User Mgmt: OAuth 2.0 | Minor | 1 | Google |
+| Data: Advanced analytics dashboard | Major | 2 | Charts, live refresh, CSV/PDF export |
 | DevOps: Monitoring (Prometheus+Grafana) | Major | 2 | Already ~built (see §6) |
+| **Total** | | **18** | |
 
 Bonus candidates (only after 14 is solid): AI Tutor (RAG Major / LLM Major), i18n (Minor),
-GDPR (Minor), 2FA (Minor), Advanced analytics dashboard (Major).
+GDPR (Minor), 2FA (Minor).
 
 > Only **fully functional** modules count. A half-built module = 0 pts. Don't claim what
 > doesn't work. Some modules require a *game* (Game statistics, AI opponent, tournament,
