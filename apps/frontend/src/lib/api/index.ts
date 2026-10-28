@@ -20,7 +20,7 @@ export {
   DevTokenStorage,
   type TokenStorage,
 } from './token-storage';
-export { socketAuth } from './socket-auth';
+export { socketAuth, retryAfterServerDisconnect } from './socket-auth';
 
 // Hooks
 export {

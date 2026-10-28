@@ -113,7 +113,7 @@ export function UserForm({ mode, initial, isSelf, onSubmit }: UserFormProps) {
     if (apiError.status === 409) {
       setFieldErrors((prev) => ({
         ...prev,
-        email: 'Este email ya está registrado.',
+        email: 'Este correo electrónico ya está registrado.',
       }));
       return;
     }

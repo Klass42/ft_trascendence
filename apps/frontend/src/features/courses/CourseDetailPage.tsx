@@ -153,7 +153,7 @@ export function CourseDetailPage() {
             <button
               onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}
               style={{
-                background: 'rgba(255,255,255,.18)',
+                background: 'rgba(0,0,0,.22)',
                 border: 'none',
                 color: '#fff',
                 fontSize: 12.5,
@@ -210,7 +210,7 @@ export function CourseDetailPage() {
           <div style={{ marginTop: 8 }}>
             <span style={{
               fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-              background: 'rgba(255,255,255,.18)', padding: '3px 10px', borderRadius: 6,
+              background: 'rgba(0,0,0,.22)', padding: '3px 10px', borderRadius: 6,
             }}>
               {course.status === 'DRAFT' ? 'Borrador' : 'Archivada'}
             </span>

@@ -302,13 +302,13 @@ export function ThreadPage() {
 function deleteMessage(pending: PendingDelete | null): string {
   if (!pending) return '';
   if (pending.kind === 'thread') {
-    return 'Se borrará el hilo con todos sus mensajes. Esta acción no se puede deshacer.';
+    return 'Se eliminará el hilo con todos sus mensajes. Esta acción no se puede deshacer.';
   }
   if (pending.replies > 0) {
     const n = pending.replies;
-    return `Se borrará el mensaje y ${n === 1 ? 'su respuesta' : `sus ${n} respuestas`}. Esta acción no se puede deshacer.`;
+    return `Se eliminará el mensaje y ${n === 1 ? 'su respuesta' : `sus ${n} respuestas`}. Esta acción no se puede deshacer.`;
   }
-  return 'Se borrará el mensaje. Esta acción no se puede deshacer.';
+  return 'Se eliminará el mensaje. Esta acción no se puede deshacer.';
 }
 
 function BackLink() {

@@ -328,7 +328,7 @@ export function CoursesPage() {
           <ConfirmDialog
             open={deleteTarget !== null}
             title="Eliminar cohorte"
-            message={deleteTarget ? `Se borrará «${deleteTarget.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.` : ''}
+            message={deleteTarget ? `Se eliminará «${deleteTarget.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.` : ''}
             confirmLabel="Eliminar cohorte"
             variant="danger"
             loading={deleting}

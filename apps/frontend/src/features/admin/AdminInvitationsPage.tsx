@@ -53,7 +53,7 @@ export function AdminInvitationsPage() {
   }
 
   const columns = [
-    { key: 'email', header: 'Email', render: (row: PendingInvitation) => row.email },
+    { key: 'email', header: 'Correo electrónico', render: (row: PendingInvitation) => row.email },
     { key: 'role', header: 'Rol', render: (row: PendingInvitation) => <Badge variant="accent">{ROLE_LABEL[row.role]}</Badge> },
     { key: 'expires', header: 'Caducidad', render: (row: PendingInvitation) => row.expired
       ? <Badge variant="error" dot>Caducada · {fmt(row.expiresAt)}</Badge>

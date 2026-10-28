@@ -155,7 +155,7 @@ export function PlatformOrganizationsPage() {
         title="Eliminar organización"
         message={
           pendingDelete
-            ? `¿Eliminar «${pendingDelete.name}»? Se borrarán sus usuarios, cohortes y archivos. Esta acción no se puede deshacer.`
+            ? `¿Eliminar «${pendingDelete.name}»? Se eliminarán sus usuarios, cohortes y archivos. Esta acción no se puede deshacer.`
             : ''
         }
         confirmLabel="Eliminar"

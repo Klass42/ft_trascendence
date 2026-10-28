@@ -48,7 +48,7 @@ const COPY: Record<LegalDocument, LegalCopy> = {
       ],
       [
         'Finalidad y conservación',
-        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en las asignaturas y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando el administrador de una organización elimina una cuenta, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma la eliminación de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
+        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en las asignaturas y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando eliminas tu cuenta desde el perfil, o el administrador de tu organización la elimina, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma la eliminación de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
       ],
       [
         'Acceso y destinatarios',
@@ -58,11 +58,11 @@ const COPY: Record<LegalDocument, LegalCopy> = {
         'Tus derechos y contacto',
         <>
           Desde tu perfil puedes corregir tu nombre, cambiar o quitar tu foto, cambiar tu
-          contraseña y ajustar tus preferencias de notificaciones por email e idioma. Hoy Klass no
-          ofrece la eliminación de tu propia cuenta ni la descarga automática de tus datos desde el
-          perfil: para solicitar acceso a una copia de tus datos, su corrección cuando no puedas
-          hacerla tú o la eliminación de tu cuenta, contacta con {LEGAL_INFO.organizationContact},
-          que puede eliminar cuentas de su organización. Para cualquier otra consulta de
+          contraseña y ajustar tus preferencias de notificaciones por correo electrónico e idioma.
+          También puedes descargar una copia de tus datos en formato JSON con «Exportar mis datos»
+          y eliminar tu cuenta con «Eliminar mi cuenta»: se te pedirá tu contraseña y escribir
+          ELIMINAR, y la eliminación es definitiva. Si no puedes corregir algún dato por tu cuenta,
+          contacta con {LEGAL_INFO.organizationContact}. Para cualquier otra consulta de
           privacidad, o si no obtienes respuesta, escribe al equipo de Klass en {contactLink}; esa página es pública, así que no
           incluyas en ella datos personales ni contraseñas.
         </>,
@@ -86,7 +86,7 @@ const COPY: Record<LegalDocument, LegalCopy> = {
         <>
           Las cuentas las gestiona {LEGAL_INFO.organizationContact}, que puede crearlas, cambiar su
           rol y eliminarlas de forma definitiva. Desde tu perfil puedes editar tus datos básicos,
-          pero no eliminar tu propia cuenta: solicítalo a esa persona.
+          exportar tus datos y eliminar tu propia cuenta de forma definitiva.
         </>,
       ],
       [

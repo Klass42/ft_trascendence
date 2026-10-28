@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { io } from 'socket.io-client';
-import { apiClient, socketAuth, useAuth } from '@/lib/api';
+import { apiClient, retryAfterServerDisconnect, socketAuth, useAuth } from '@/lib/api';
 import type { PresenceFriendDTO, PresenceUpdate } from './types';
 
 interface PresenceContextValue {
@@ -87,11 +87,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
 
     const socket = io({
-      auth: socketAuth(user.userId),
+      // Callback form: each (re)connect reads the current access token.
+      auth: (cb) => cb(socketAuth(user.userId)),
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
+
+    retryAfterServerDisconnect(socket);
 
     const handleConnect = () => {
       setConnected(true);

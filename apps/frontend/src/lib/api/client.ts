@@ -264,6 +264,11 @@ class ApiClient {
     return response.text() as unknown as T;
   }
 
+  /** Refreshes the session tokens on demand (e.g. for the realtime socket); false if it failed. */
+  refreshSession(): Promise<boolean> {
+    return this.tryRefreshToken();
+  }
+
   private async tryRefreshToken(): Promise<boolean> {
     // Prevent multiple simultaneous refresh attempts
     if (this.refreshPromise) {

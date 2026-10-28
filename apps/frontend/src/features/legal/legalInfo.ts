@@ -13,5 +13,5 @@ export const LEGAL_INFO = {
   /** Who handles organization data (courses, grades, accounts). */
   organizationContact: 'el administrador de tu organización',
   /** Shown as "Última actualización: …". Update it when the copy changes. */
-  lastUpdated: '27 de octubre de 2026',
+  lastUpdated: '28 de octubre de 2026',
 } as const;

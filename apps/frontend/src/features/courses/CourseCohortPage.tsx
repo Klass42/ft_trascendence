@@ -576,7 +576,7 @@ export function CourseCohortPage() {
       <ConfirmDialog
         open={courseDeleteOpen}
         title="Eliminar cohorte"
-        message={`Se borrará «${course.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.`}
+        message={`Se eliminará «${course.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.`}
         confirmLabel="Eliminar cohorte"
         variant="danger"
         loading={busy}
@@ -587,7 +587,7 @@ export function CourseCohortPage() {
       <ConfirmDialog
         open={subjectDeleteTarget !== null}
         title="Eliminar asignatura"
-        message={subjectDeleteTarget ? `Se borrará «${subjectDeleteTarget.title}» y su contenido. Si ya tiene entregas o intentos, tendrás que archivarla.` : ''}
+        message={subjectDeleteTarget ? `Se eliminará «${subjectDeleteTarget.title}» y su contenido. Si ya tiene entregas o intentos, tendrás que archivarla.` : ''}
         confirmLabel="Eliminar asignatura"
         variant="danger"
         loading={busy}

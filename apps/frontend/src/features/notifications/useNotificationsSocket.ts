@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
-import { socketAuth, type NotificationDTO } from '@/lib/api';
+import { retryAfterServerDisconnect, socketAuth, type NotificationDTO } from '@/lib/api';
 
 interface UseNotificationsSocketOptions {
   /** Acting user id (from `useAuth`). Null keeps the socket disconnected. */
@@ -43,12 +43,15 @@ export function useNotificationsSocket({
     // No URL → same origin. The gateway verifies JWTs and permits userId only
     // outside production for seeded-user development and E2E tests.
     const socket = io({
-      auth: socketAuth(userId),
+      // Callback form: each (re)connect reads the current access token.
+      auth: (cb) => cb(socketAuth(userId)),
       // Graceful reconnection (these are the socket.io defaults, made explicit).
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
+
+    retryAfterServerDisconnect(socket);
 
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);

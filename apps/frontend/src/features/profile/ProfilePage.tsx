@@ -365,7 +365,7 @@ export function ProfilePage() {
         <div className={styles.row}>
           <div>
             <div className={styles.rowTitle}>Eliminar mi cuenta</div>
-            <div className={styles.rowHint}>Borra tu cuenta y tus datos de forma permanente</div>
+            <div className={styles.rowHint}>Elimina tu cuenta y tus datos de forma permanente</div>
           </div>
           <Button variant="danger" onClick={() => setDeleteOpen(true)}>
             Eliminar cuenta
@@ -394,7 +394,7 @@ export function ProfilePage() {
         }
       >
         <p>
-          Se borrarán tu cuenta, sesiones y datos asociados (matrículas, entregas, mensajes del
+          Se eliminarán tu cuenta, sesiones y datos asociados (matrículas, entregas, mensajes del
           foro…). <strong>Esta acción es irreversible.</strong>
         </p>
         <Input

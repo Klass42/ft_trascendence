@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { LEGAL_INFO } from '../src/features/legal/legalInfo';
 
 function captureConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -31,7 +32,7 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
     await expect(page).toHaveURL(/\/privacy$/);
     await expect(page.getByRole('heading', { name: 'Política de privacidad' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Datos que tratamos' })).toBeVisible();
-    await expect(page.getByText('Última actualización: 27 de octubre de 2026')).toBeVisible();
+    await expect(page.getByText(`Última actualización: ${LEGAL_INFO.lastUpdated}`)).toBeVisible();
     await expect(page.getByRole('link', { name: 'https://github.com/Klass42/ft_trascendence/issues' }).first()).toHaveAttribute(
       'href',
       'https://github.com/Klass42/ft_trascendence/issues',

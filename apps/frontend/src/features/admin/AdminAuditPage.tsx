@@ -28,8 +28,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ORGANIZATION_PROVISIONED: 'Organización creada',
   ORGANIZATION_UPDATED: 'Organización actualizada',
   ORGANIZATION_SUSPENDED: 'Organización suspendida',
-  ORGANIZATION_DELETION_REQUESTED: 'Solicitud de borrado',
-  ORGANIZATION_DELETION_REQUEST_CANCELLED: 'Solicitud de borrado cancelada',
+  ORGANIZATION_DELETION_REQUESTED: 'Solicitud de eliminación',
+  ORGANIZATION_DELETION_REQUEST_CANCELLED: 'Solicitud de eliminación cancelada',
   ORGANIZATION_ADMIN_RECOVERY_INVITED: 'Recuperación de admin',
 };
 

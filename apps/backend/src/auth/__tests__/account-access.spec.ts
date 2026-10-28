@@ -33,7 +33,7 @@ describe('Forgot password (#110)', () => {
     const { service, prisma, notifications } = setup({ user });
     await expect(service.requestPasswordReset('demo', 'Student@demo')).resolves.toEqual({ requested: true });
     expect(prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'PASSWORD_RESET_REQUESTED', targetUserId: 'u2' }) });
-    expect(notifications.emitMany).toHaveBeenCalledWith(expect.any(Function), expect.anything(), expect.objectContaining({ link: '/users/u2' }), { organizationId: 'org1', actorId: 'u2' });
+    expect(notifications.emitMany).toHaveBeenCalledWith(expect.any(Function), expect.anything(), expect.objectContaining({ link: '/admin/users/u2' }), { organizationId: 'org1', actorId: 'u2' });
   });
 });
 

@@ -2,6 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileUp } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api';
+import { plural } from '@/lib/format';
 import { Badge, Button, Card, Table, Textarea } from '@/components/ui';
 import { CopyLink, inviteUrl } from './CopyLink';
 import styles from './AdminTools.module.css';
@@ -41,7 +42,7 @@ export function AdminUserImportPage() {
 
   const columns = [
     { key: 'line', header: 'Línea', render: (row: RowResult) => row.line },
-    { key: 'email', header: 'Email', render: (row: RowResult) => row.email || '—' },
+    { key: 'email', header: 'Correo electrónico', render: (row: RowResult) => row.email || '—' },
     { key: 'result', header: 'Resultado', render: (row: RowResult) => row.ok
       ? <Badge variant="success" dot>{row.replacedPending ? 'Invitación renovada' : 'Invitación creada'}</Badge>
       : <Badge variant="error" dot>{row.error}</Badge> },
@@ -58,11 +59,11 @@ export function AdminUserImportPage() {
       {report ? (
         <>
           <div className={styles.summary} role="status">
-            <Badge variant="neutral">{report.total} filas</Badge>
-            <Badge variant="success">{report.created} invitaciones</Badge>
-            <Badge variant={report.failed ? 'error' : 'neutral'}>{report.failed} con errores</Badge>
+            <Badge variant="neutral">{plural(report.total, 'fila', 'filas')}</Badge>
+            <Badge variant="success">{plural(report.created, 'invitación', 'invitaciones')}</Badge>
+            <Badge variant={report.failed ? 'error' : 'neutral'}>{report.failed === 1 ? '1 con error' : `${report.failed} con errores`}</Badge>
           </div>
-          {report.results.some((row) => row.replacedPending) && <div className={styles.notice}>Algunos emails ya tenían una invitación pendiente: su enlace anterior ha dejado de funcionar.</div>}
+          {report.results.some((row) => row.replacedPending) && <div className={styles.notice}>Algunos correos electrónicos ya tenían una invitación pendiente: su enlace anterior ha dejado de funcionar.</div>}
           <p className={styles.muted}>No se envían correos: comparte cada enlace con su destinatario. También puedes reenviarlos desde «Invitaciones pendientes».</p>
           <Table columns={columns} data={report.results} rowKey={(row) => String(row.line)} />
           <div className={styles.actions}>
