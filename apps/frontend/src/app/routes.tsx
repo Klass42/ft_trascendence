@@ -23,6 +23,9 @@ const AcceptInvitationPage = lazy(() =>
 const VerifyEmailPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.VerifyEmailPage }))
 );
+const ForgotPasswordPage = lazy(() =>
+  import('@/features/auth').then((m) => ({ default: m.ForgotPasswordPage }))
+);
 const OAuthCallbackPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.OAuthCallbackPage }))
 );
@@ -157,6 +160,14 @@ const routes: RouteObject[] = [
     element: (
       <Suspense fallback={<PageLoader />}>
         <AcceptInvitationPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <ForgotPasswordPage />
       </Suspense>
     ),
   },

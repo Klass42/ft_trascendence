@@ -29,6 +29,7 @@ import { ResolveOrganizationDto } from './dto/resolve-organization.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { PlatformLoginDto } from './dto/platform-login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
 import { Roles, RolesGuard } from '@/common/auth';
 import { AuthRateLimit } from './auth-rate-limit';
@@ -80,6 +81,17 @@ export class AuthController {
   @Post('password-reset')
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto) { return this.authService.resetPassword(dto.token, dto.password); }
+
+  @Public()
+  @AuthRateLimit('forgotPassword')
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) { return this.authService.requestPasswordReset(dto.organizationSlug, dto.email); }
+
+  /** #110: public, tells the login/register pages which sign-in providers are configured. */
+  @Public()
+  @Get('providers')
+  providers() { return { google: Boolean(this.config.get<string>('GOOGLE_CLIENT_ID')?.trim()) }; }
 
   @Post('admin/users/:id/password-reset')
   @UseGuards(RolesGuard)

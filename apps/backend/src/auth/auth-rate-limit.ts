@@ -21,6 +21,7 @@ const policies = {
   refresh: { name: 'auth-refresh', env: 'AUTH_RATE_LIMIT_REFRESH', limit: 30 },
   platformLogin: { name: 'auth-platform-login', env: 'AUTH_RATE_LIMIT_PLATFORM_LOGIN', limit: 10 },
   verifyEmail: { name: 'auth-verify-email', env: 'AUTH_RATE_LIMIT_VERIFY_EMAIL', limit: 10 },
+  forgotPassword: { name: 'auth-forgot-password', env: 'AUTH_RATE_LIMIT_FORGOT_PASSWORD', limit: 5 },
   acceptInvitation: { name: 'auth-accept-invitation', env: 'AUTH_RATE_LIMIT_ACCEPT_INVITATION', limit: 10 },
 } as const;
 
@@ -63,7 +64,7 @@ class AuthThrottlerGuard extends ThrottlerGuard {
  * AUTH_RATE_LIMIT_LOGIN_IP (30, generous because a campus or classroom can
  * share one address) / AUTH_RATE_LIMIT_LOGIN_EMAIL (10, per account),
  * AUTH_RATE_LIMIT_REGISTER (5), AUTH_RATE_LIMIT_REFRESH (30),
- * AUTH_RATE_LIMIT_PLATFORM_LOGIN (10), AUTH_RATE_LIMIT_VERIFY_EMAIL (10), and
+ * AUTH_RATE_LIMIT_PLATFORM_LOGIN (10), AUTH_RATE_LIMIT_VERIFY_EMAIL (10), AUTH_RATE_LIMIT_FORGOT_PASSWORD (5), and
  * AUTH_RATE_LIMIT_ACCEPT_INVITATION (10). Values are requests per window.
  */
 export function AuthRateLimit(route: AuthRateLimitRoute) {

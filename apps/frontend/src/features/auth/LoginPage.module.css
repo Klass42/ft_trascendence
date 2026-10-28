@@ -99,11 +99,6 @@
  * Google Icon
  * ============================================================================= */
 
-.googleIcon {
-  width: 18px;
-  height: 18px;
-  margin-right: var(--space-2);
-}
 
 /* =============================================================================
  * Footer
@@ -136,4 +131,11 @@
   color: var(--color-accent-primary);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* #110: forgot-password link under the password field */
+.forgot {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  text-align: right;
+  font-size: var(--text-sm);
 }

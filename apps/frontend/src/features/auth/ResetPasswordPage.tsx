@@ -30,11 +30,11 @@ export function ResetPasswordPage() {
     finally { setIsSubmitting(false); }
   }
 
-  if (!token) return <main className={styles.page}><Card className={styles.card} padding="lg"><div className={styles.invalidIcon}><ShieldCheck size={26} /></div><h1>Enlace no válido</h1><p>Pide a un administrador de tu organización un enlace nuevo.</p><Button as={Link} to="/login" fullWidth>Ir a iniciar sesión</Button></Card></main>;
+  if (!token) return <main className={styles.page}><Card className={styles.card} padding="lg"><div className={styles.invalidIcon}><ShieldCheck size={26} /></div><h1>Enlace no válido</h1><p>Pide un enlace nuevo desde <Link to="/forgot-password">¿Has olvidado tu contraseña?</Link> o a un administrador de tu organización.</p><Button as={Link} to="/login" fullWidth>Ir a iniciar sesión</Button></Card></main>;
   if (isDone) return <main className={styles.page}><Card className={styles.card} padding="lg"><div className={styles.completeIcon}><Check size={28} /></div><h1>Contraseña actualizada</h1><p>Hemos cerrado tus sesiones abiertas. Inicia sesión con la nueva contraseña.</p><Button as={Link} to="/login" fullWidth>Iniciar sesión</Button></Card></main>;
 
   return <main className={styles.page}><div className={styles.container}>
-    <Card className={styles.card} padding="lg"><span className={styles.eyebrow}>Seguridad</span><h1>Restablece tu contraseña</h1><p className={styles.intro}>Un administrador de tu organización ha generado este enlace. Caduca en 24 horas y solo sirve una vez.</p>
+    <Card className={styles.card} padding="lg"><span className={styles.eyebrow}>Seguridad</span><h1>Restablece tu contraseña</h1><p className={styles.intro}>Este enlace lo ha generado un administrador de tu organización. Caduca en 24 horas y solo sirve una vez.</p>
       <form onSubmit={submit} noValidate className={styles.form}>{error && <div className={styles.error} role="alert">{error}</div>}
         <Input label="Nueva contraseña" type="password" value={password} maxLength={128} onChange={(event) => { setPassword(event.target.value); setError(null); }} leftIcon={<Lock size={18} />} hint="Mínimo 8 caracteres, mayúscula, minúscula y número." autoComplete="new-password" autoFocus required />
         <Input label="Repite la contraseña" type="password" value={confirm} maxLength={128} onChange={(event) => { setConfirm(event.target.value); setError(null); }} leftIcon={<Lock size={18} />} autoComplete="new-password" required />

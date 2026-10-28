@@ -131,13 +131,18 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const organization = await this.activeOrganization(dto.organizationSlug!);
+    // #110: un registro con un código inexistente o suspendido no es un problema de «credenciales».
+    const organization = await this.prisma.organization.findUnique({ where: { slug: dto.organizationSlug! } });
+    if (!organization || organization.status !== 'ACTIVE') {
+      throw new BadRequestException('No hay ninguna organización activa con ese código. Revisa el código que te ha dado tu centro.');
+    }
 
     const existing = await this.prisma.user.findFirst({
       where: { organizationId: organization.id, email: dto.email },
     });
     if (existing) {
-      throw new ConflictException('Email already registered in this organization');
+      // #110: mensaje genérico (no confirma de forma explícita qué cuentas existen).
+      throw new ConflictException('No se ha podido crear la cuenta con estos datos. Si ya tienes una cuenta, inicia sesión o recupera tu contraseña.');
     }
 
     await assertUserLimit(this.prisma as any, organization.id);
@@ -403,9 +408,12 @@ export class AuthService {
   }
 
   async resolveOrganization(slug: string) {
+    // #110: only public branding of ACTIVE organizations; suspended and unknown codes look the same
+    // (404, not 401, so the client never tries a token refresh).
     const organization = await this.prisma.organization.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true, status: true } });
-    if (!organization) throw new UnauthorizedException('Organization not found');
-    return organization;
+    if (!organization || organization.status !== 'ACTIVE') throw new NotFoundException('No hay ninguna organización activa con ese código.');
+    const { status: _status, ...branding } = organization;
+    return branding;
   }
 
   async invitation(token: string) {
@@ -484,5 +492,37 @@ export class AuthService {
     await this.prisma.session.deleteMany({ where: { userId: user.id } });
     await this.prisma.auditLog.create({ data: { actorId: user.id, action: 'PASSWORD_RESET_COMPLETED', organizationId: user.organizationId, targetUserId: user.id } });
     return { reset: true };
+  }
+
+  /**
+   * #110: self-service "forgot password". There is no SMTP yet, so the link cannot be mailed:
+   * the request always answers the same generic 200 (no account enumeration), and when the
+   * account exists the organization admins get a notification to issue the one-use link
+   * from Usuarios (same flow as #108). Outside production the link is also logged.
+   */
+  async requestPasswordReset(organizationSlug: string, email: string): Promise<{ requested: true }> {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: { organization: { slug: organizationSlug, status: 'ACTIVE' }, email: { equals: normalized, mode: 'insensitive' } },
+      select: { id: true, organizationId: true, passwordHash: true, name: true, email: true },
+    });
+    if (user?.organizationId) {
+      await this.prisma.auditLog.create({ data: { actorId: user.id, action: 'PASSWORD_RESET_REQUESTED', organizationId: user.organizationId, targetUserId: user.id, metadata: { email: user.email } } });
+      const organizationId = user.organizationId;
+      await this.notifications?.emitMany(
+        async () => (await this.prisma.user.findMany({ where: { organizationId, role: 'ADMIN' }, select: { id: true } })).map((admin) => admin.id),
+        NotificationType.USER_CHANGED,
+        { title: 'Solicitud de restablecimiento de contraseña', body: `${user.name} (${user.email}) ha pedido restablecer su contraseña. Genera un enlace desde Usuarios y envíaselo.`, link: `/users/${user.id}` },
+        { organizationId, actorId: user.id },
+      );
+      if (process.env.NODE_ENV !== 'production') {
+        const token = this.jwt.sign(
+          { sub: user.id, purpose: 'password-reset', fp: this.passwordFingerprint(user.passwordHash) },
+          { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'), expiresIn: '1h' },
+        );
+        console.log(`[Auth] Password reset link: /reset-password#token=${token}`);
+      }
+    }
+    return { requested: true };
   }
 }
