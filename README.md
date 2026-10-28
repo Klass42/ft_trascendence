@@ -1,7 +1,4 @@
-*This project has been created as part of the 42 curriculum by <login-jorge>, <login-david>, <login-aloiki>, vtrofyme.*
-
-<!-- TODO(team): replace the three placeholders above with the real 42 logins (same order as the
-     team table below). The subject requires this exact sentence, in italics, as the very first line. -->
+*This project has been created as part of the 42 curriculum by jgomez-d, dcid-san, ikondrat, vtrofyme.*
 
 # Klass
 
@@ -46,9 +43,9 @@ monitored deployment (Prometheus + Grafana).
 
 | Member | 42 login | GitHub | Role(s) | Responsibilities |
 |---|---|---|---|---|
-| Jorge | `<login>` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, <!-- PO/PM? --> developer | authentication, roles and permissions, organizations, database schema |
-| David | `<login>` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
-| Aloiki | `<login>` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
+| Jorge | `jgomez-d` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, <!-- PO/PM? --> developer | authentication, roles and permissions, organizations, database schema |
+| David | `dcid-san` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
+| Aloiki | `ikondrat` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
 | Viacheslav | `vtrofyme` | [@ViacheslavTrofymenko](https://github.com/ViacheslavTrofymenko) | DevOps | Docker images and Compose stack, HTTPS, CI/CD, monitoring, deployment, infrastructure docs |
 | Ale Pinto | `<login>` | [@Aletheios42](https://github.com/Aletheios42) | DevOps (left the project) | initial repository, first Compose stack and CI |
 
