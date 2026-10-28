@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import * as request from 'supertest';
 import { PrismaService } from '@/prisma/prisma.service';
 import { PrismaModule } from '@/prisma/prisma.module';
@@ -139,6 +140,7 @@ async function createApp(options: {
 
   let builder = Test.createTestingModule({
     imports: [
+        EventEmitterModule.forRoot(),
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
       PrismaModule,
       CommonModule,
@@ -175,7 +177,7 @@ describe('Google OAuth HTTP', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      await app?.close();
     });
 
     it('GET /auth/google without a slug is 400 and does not redirect', async () => {
@@ -291,7 +293,7 @@ describe('Google OAuth HTTP', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      await app?.close();
     });
 
     it('uses http://localhost:5173 when FRONTEND_URL is unset', async () => {
@@ -312,7 +314,7 @@ describe('Google OAuth HTTP', () => {
     });
 
     afterAll(async () => {
-      await app.close();
+      await app?.close();
     });
 
     beforeEach(() => {
