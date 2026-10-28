@@ -68,7 +68,10 @@ export class CreateResourceDto {
   fileId?: string;
 
   /** External HTTPS/HTTP resource. Source exclusivity is service-validated. */
-  @IsUrl({ require_tld: false })
+  @IsUrl(
+    { require_tld: false, require_protocol: true, protocols: ['http', 'https'] },
+    { message: 'La URL del enlace debe empezar por http:// o https:// y ser una dirección web válida.' },
+  )
   @IsOptional()
   externalUrl?: string;
 

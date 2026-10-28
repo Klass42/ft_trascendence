@@ -121,11 +121,12 @@ export function AppLayout() {
 
       {/* ===== Sidebar ===== */}
       <aside
+        aria-label="Menú principal"
         className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''} ${
           isMobileMenuOpen ? styles.mobileOpen : ''
         }`}
       >
-        <nav className={styles.nav}>
+        <nav className={styles.nav} aria-label="Navegación principal">
           {NAV_ITEMS.filter((item) => {
             const role = user?.role;
             // Admin-only tools (e.g. Usuarios) — hide from non-admins.

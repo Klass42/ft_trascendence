@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
-  Archive, CheckSquare, ChevronRight, Folder, FolderInput, FolderTree as FolderTreeIcon, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
+  Archive, CheckSquare, FileSearch, FolderX, ChevronRight, Folder, FolderInput, FolderTree as FolderTreeIcon, FolderOpen, FolderPlus, MoreVertical, Pencil, Plus, Search, Send, Trash2,
 } from 'lucide-react';
-import { Button, ConfirmDialog, Dropdown, Input, Modal, Textarea, useToast } from '@/components/ui';
+import { Button, ConfirmDialog, Dropdown, EmptyState, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
 import { FileUpload, type FileValue } from '@/components/ui/FileUpload';
 import {
   useAuth,
@@ -17,12 +17,13 @@ import {
   type ResourceFolderDTO,
   type LearningResourceStatus,
   type LearningResourceType,
+  type UpdateLearningResourceInput,
 } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
 import { FolderTree } from './FolderTree';
 import { ResourceCard } from './ResourceCard';
 import styles from './ResourcesPage.module.css';
-import { RESOURCE_STATUSES, RESOURCE_TYPES, splitList } from './resource-helpers';
+import { RESOURCE_STATUSES, RESOURCE_TYPES, countLabel, doneLabel, splitList, validateExternalUrl, type Targets } from './resource-helpers';
 
 const EMPTY_FORM = {
   title: '', description: '', type: 'DOCUMENT' as LearningResourceType,
@@ -39,14 +40,6 @@ interface PendingConfirm {
   run: () => Promise<void>;
 }
 
-/** What a Publicar / Mover a… modal acts on: one item or the batch selection. */
-interface Targets { resourceIds: string[]; folderIds: string[] }
-
-const countLabel = ({ resourceIds, folderIds }: Targets) => [
-  resourceIds.length && `${resourceIds.length} recurso${resourceIds.length === 1 ? '' : 's'}`,
-  folderIds.length && `${folderIds.length} carpeta${folderIds.length === 1 ? '' : 's'}`,
-].filter(Boolean).join(' y ');
-
 /**
  * Staff-only organization catalogue (#26, Drive-style layout #22: fixed
  * folder-tree sidebar on the left, breadcrumbs + grid on the right): real folders with breadcrumbs, a ⋮
@@ -60,6 +53,7 @@ export function ResourcesPage() {
   const [type, setType] = useState<LearningResourceType | ''>('');
   const [status, setStatus] = useState<LearningResourceStatus | ''>('');
   const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<LearningResourceDTO | null>(null);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedResources, setSelectedResources] = useState<Set<string>>(new Set());
@@ -120,7 +114,7 @@ export function ResourcesPage() {
         for (const id of ids) {
           try { await mutations.update(id, { status: 'ARCHIVED' }); ok += 1; } catch { /* reported below */ }
         }
-        toast({ variant: ok === ids.length ? 'success' : 'error', message: `Archivados ${ok} de ${ids.length} recursos.` });
+        toast({ variant: ok === ids.length ? 'success' : 'error', message: ok === ids.length ? `${doneLabel('Archivad', { resourceIds: ids, folderIds: [] })}.` : `Archivados ${ok} de ${ids.length} recursos.` });
       },
     });
   };
@@ -139,7 +133,7 @@ export function ResourcesPage() {
           if (single && targets.resourceIds.length) await mutations.remove(targets.resourceIds[0]);
           else if (single) await mutations.removeFolder(targets.folderIds[0]);
           else await mutations.batchDelete(targets);
-          toast({ variant: 'success', message: `Eliminados ${countLabel(targets)}.` });
+          toast({ variant: 'success', message: `${doneLabel('Eliminad', targets)}.` });
           if (targets.folderIds.includes(folderId ?? '')) setFolderId(null);
         } catch (err) {
           toast({ variant: 'error', message: errorMessage(err, 'No se pudo eliminar.') });
@@ -173,11 +167,39 @@ export function ResourcesPage() {
     }
     toast({
       variant: ok === total ? 'success' : 'error',
-      message: ok === total ? `Publicados ${countLabel(targets)} en el curso.` : `Publicados ${ok} de ${total} elementos.`,
+      message: ok === total ? `${doneLabel('Publicad', targets)} en el curso.` : `Publicados ${ok} de ${total} elementos.`,
     });
     setPublishTargets(null);
     clearSelection();
     await reloadAll();
+  };
+
+  // #109: publishing a Borrador to a course used to "succeed" while students
+  // never saw it. Ask first; on confirm publish the resource(s) and link them.
+  const requestPublish = (targets: Targets, courseId: string, required: boolean) => {
+    const drafts = targets.resourceIds.filter((id) => resources?.find((r) => r.id === id)?.status === 'DRAFT');
+    if (drafts.length === 0) return publish(targets, courseId, required);
+    setConfirm({
+      title: drafts.length === 1 && targets.resourceIds.length === 1 ? 'Recurso en borrador' : 'Recursos en borrador',
+      message: drafts.length === 1
+        ? '¿Publicar el recurso y añadirlo al curso? Está en Borrador y, si no se publica, el alumnado no lo verá.'
+        : `¿Publicar los recursos y añadirlos al curso? ${drafts.length} están en Borrador y, si no se publican, el alumnado no los verá.`,
+      confirmLabel: 'Publicar y añadir',
+      variant: 'primary',
+      run: async () => {
+        const failed = new Set<string>();
+        for (const id of drafts) {
+          try { await mutations.update(id, { status: 'PUBLISHED' }); } catch { failed.add(id); }
+        }
+        if (failed.size) {
+          toast({ variant: 'error', message: `No se pudieron publicar ${failed.size} recurso${failed.size === 1 ? '' : 's'}; no se han añadido al curso.` });
+        }
+        const rest = { ...targets, resourceIds: targets.resourceIds.filter((id) => !failed.has(id)) };
+        if (rest.resourceIds.length + rest.folderIds.length) await publish(rest, courseId, required);
+        else setPublishTargets(null);
+      },
+    });
+    return Promise.resolve();
   };
 
   const move = async (targets: Targets, destination: string | null) => {
@@ -189,7 +211,7 @@ export function ResourcesPage() {
     for (const id of targets.folderIds) {
       try { await mutations.updateFolder(id, { parentId: destination }); ok += 1; } catch { /* counted */ }
     }
-    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `Movidos ${countLabel(targets)}.` : `Movidos ${ok} de ${total} elementos.` });
+    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `${doneLabel('Movid', targets)}.` : `Movidos ${ok} de ${total} elementos.` });
     setMoveTargets(null);
     clearSelection();
     await reloadAll();
@@ -202,6 +224,7 @@ export function ResourcesPage() {
       <Dropdown
         trigger={<><MoreVertical size={18} aria-hidden="true" /><span style={visuallyHidden}>Acciones de {resource.title}</span></>}
         items={[
+          { label: 'Editar', icon: <Pencil size={16} />, onClick: () => setEditing(resource), disabled: !manage },
           { label: 'Publicar en curso', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
           { label: 'Archivar', icon: <Archive size={16} />, onClick: () => askArchive(one), disabled: !manage || resource.status === 'ARCHIVED' },
           { label: 'Mover a…', icon: <FolderInput size={16} />, onClick: () => setMoveTargets(one), disabled: !manage },
@@ -249,32 +272,30 @@ export function ResourcesPage() {
           <p style={{ margin: '6px 0 0', color: 'var(--color-text-secondary)' }}>Recursos reutilizables de la organización: libros, documentos, enlaces y multimedia.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button variant={selectMode ? 'primary' : 'secondary'} onClick={() => { setSelectMode(!selectMode); clearSelection(); }}>
-            <CheckSquare size={16} /> {selectMode ? 'Terminar selección' : 'Seleccionar'}
+          <Button variant={selectMode ? 'primary' : 'secondary'} leftIcon={<CheckSquare size={16} />} onClick={() => { setSelectMode(!selectMode); clearSelection(); }}>
+            {selectMode ? 'Terminar selección' : 'Seleccionar'}
           </Button>
-          <Button variant="secondary" onClick={() => setFolderModal({ mode: 'create' })}><FolderPlus size={16} /> Nueva carpeta</Button>
-          <Button onClick={() => setFormOpen(true)}><Plus size={16} /> Nuevo recurso</Button>
+          <Button variant="secondary" leftIcon={<FolderPlus size={16} />} onClick={() => setFolderModal({ mode: 'create' })}>Nueva carpeta</Button>
+          <Button leftIcon={<Plus size={16} />} onClick={() => setFormOpen(true)}>Nuevo recurso</Button>
         </div>
       </div>
 
       <div className={styles.layout}>
       <div>
-        <div className={styles.sidebarToggle}><Button size="sm" variant="secondary" onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen} aria-controls="library-folder-tree">
-          <FolderTreeIcon size={14} /> {treeOpen ? 'Ocultar carpetas' : 'Carpetas'}
+        <div className={styles.sidebarToggle}><Button size="sm" variant="secondary" leftIcon={<FolderTreeIcon size={14} />} onClick={() => setTreeOpen(!treeOpen)} aria-expanded={treeOpen} aria-controls="library-folder-tree">
+          {treeOpen ? 'Ocultar carpetas' : 'Carpetas'}
         </Button></div>
-        <aside id="library-folder-tree" className={`${styles.sidebar} ${treeOpen ? '' : styles.sidebarCollapsed}`}>
+        <aside id="library-folder-tree" aria-label="Carpetas de la biblioteca" className={`${styles.sidebar} ${treeOpen ? '' : styles.sidebarCollapsed}`}>
           <FolderTree folders={folderList} activeId={filtering ? null : folderId} onOpen={(id) => { openFolder(id); if (filtering) { setSearch(''); setType(''); setStatus(''); } }} />
         </aside>
       </div>
       <div className={styles.main}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <label style={searchStyle}><Search size={15} /><input aria-label="Buscar biblioteca" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Título, autor o etiqueta" style={inputStyle} /></label>
-        <select aria-label="Tipo de recurso" value={type} onChange={(e) => setType(e.target.value as LearningResourceType | '')} style={selectStyle}>
-          <option value="">Todos los tipos</option>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-        <select aria-label="Estado de recurso" value={status} onChange={(e) => setStatus(e.target.value as LearningResourceStatus | '')} style={selectStyle}>
-          <option value="">Todos los estados</option>{RESOURCE_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
+        <div className={styles.filterSearch}><Input type="search" aria-label="Buscar biblioteca" leftIcon={<Search size={15} />} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Título, autor o etiqueta" /></div>
+        <div className={styles.filterSelect}><Select aria-label="Tipo de recurso" value={type} onChange={(e) => setType(e.target.value as LearningResourceType | '')}
+          options={[{ value: '', label: 'Todos los tipos' }, ...RESOURCE_TYPES]} /></div>
+        <div className={styles.filterSelect}><Select aria-label="Estado de recurso" value={status} onChange={(e) => setStatus(e.target.value as LearningResourceStatus | '')}
+          options={[{ value: '', label: 'Todos los estados' }, ...RESOURCE_STATUSES]} /></div>
       </div>
 
       <nav aria-label="Ruta de carpetas" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', fontSize: 14, marginBottom: 16 }}>
@@ -297,18 +318,32 @@ export function ResourcesPage() {
         <div role="toolbar" aria-label="Acciones sobre la selección" style={batchBarStyle}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>{selectionCount ? `${countLabel(selection)} seleccionados` : 'Nada seleccionado'}</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button size="sm" variant="secondary" disabled={!selectionCount} onClick={() => setPublishTargets(selection)}><Send size={14} /> Publicar</Button>
-            <Button size="sm" variant="secondary" disabled={!selection.resourceIds.length} onClick={() => askArchive(selection)}><Archive size={14} /> Archivar</Button>
-            <Button size="sm" variant="secondary" disabled={!selectionCount} onClick={() => setMoveTargets(selection)}><FolderInput size={14} /> Mover a…</Button>
-            <Button size="sm" variant="danger" disabled={!selectionCount} onClick={() => askDelete(selection)}><Trash2 size={14} /> Eliminar</Button>
+            <Button size="sm" variant="secondary" leftIcon={<Send size={14} />} disabled={!selectionCount} onClick={() => setPublishTargets(selection)}>Publicar</Button>
+            <Button size="sm" variant="secondary" leftIcon={<Archive size={14} />} disabled={!selection.resourceIds.length} onClick={() => askArchive(selection)}>Archivar</Button>
+            <Button size="sm" variant="secondary" leftIcon={<FolderInput size={14} />} disabled={!selectionCount} onClick={() => setMoveTargets(selection)}>Mover a…</Button>
+            <Button size="sm" variant="danger" leftIcon={<Trash2 size={14} />} disabled={!selectionCount} onClick={() => askDelete(selection)}>Eliminar</Button>
           </div>
         </div>
       )}
 
       {isLoading && <p style={messageStyle}>Cargando biblioteca…</p>}
-      {error && <p style={messageStyle}>No se pudo cargar la biblioteca.</p>}
+      {error && <EmptyState title="No se pudo cargar la biblioteca" description="Inténtalo de nuevo en unos segundos." action={<Button variant="secondary" onClick={() => void reloadAll()}>Reintentar</Button>} />}
       {!isLoading && !error && visibleResources.length === 0 && visibleFolders.length === 0 && (
-        <p style={messageStyle}>{filtering ? 'No hay recursos con estos filtros.' : 'Esta carpeta está vacía.'}</p>
+        filtering ? (
+          <EmptyState
+            icon={<FileSearch size={28} />}
+            title="Sin resultados"
+            description="Ningún recurso coincide con la búsqueda o los filtros."
+            action={<Button variant="secondary" onClick={() => { setSearch(''); setType(''); setStatus(''); }}>Limpiar filtros</Button>}
+          />
+        ) : (
+          <EmptyState
+            icon={<FolderX size={28} />}
+            title={folderId ? 'Esta carpeta está vacía' : 'La biblioteca está vacía'}
+            description={folderId ? 'Añade un recurso o crea una subcarpeta aquí.' : 'Crea el primer recurso o una carpeta para organizarlos.'}
+            action={<Button leftIcon={<Plus size={16} />} onClick={() => setFormOpen(true)}>Nuevo recurso</Button>}
+          />
+        )
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
         {visibleFolders.map((folder) => {
@@ -357,13 +392,20 @@ export function ResourcesPage() {
       </div>
 
       <ResourceForm
-        open={formOpen}
+        open={formOpen || !!editing}
+        resource={editing}
         organizationId={user?.organizationId ?? undefined}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); setEditing(null); }}
         onCreated={async (payload) => {
-          await mutations.create({ ...payload, ...(folderId && { folderId }) });
-          toast({ variant: 'success', message: 'Recurso guardado en la biblioteca.' });
-          setFormOpen(false);
+          if (editing) {
+            await mutations.update(editing.id, toUpdatePayload(payload, editing));
+            toast({ variant: 'success', message: 'Recurso actualizado.' });
+            setEditing(null);
+          } else {
+            await mutations.create({ ...payload, ...(folderId && { folderId }) });
+            toast({ variant: 'success', message: 'Recurso guardado en la biblioteca.' });
+            setFormOpen(false);
+          }
           await reloadAll();
         }}
         loading={mutations.isLoading}
@@ -375,7 +417,7 @@ export function ResourcesPage() {
         courses={courses ?? []}
         open={!!publishTargets}
         onClose={() => setPublishTargets(null)}
-        onPublish={async (courseId, required) => { if (publishTargets) await publish(publishTargets, courseId, required); }}
+        onPublish={async (courseId, required) => { if (publishTargets) await requestPublish(publishTargets, courseId, required); }}
         loading={mutations.isLoading}
       />
       <MoveModal
@@ -416,8 +458,30 @@ export function ResourcesPage() {
   );
 }
 
-function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
-  open: boolean; organizationId?: string; onClose: () => void;
+/** Edit payload: optional text fields cleared in the form are sent as null. */
+function toUpdatePayload(payload: CreateLearningResourceInput, existing: LearningResourceDTO): UpdateLearningResourceInput {
+  return {
+    title: payload.title, type: payload.type, status: payload.status,
+    description: payload.description ?? null, authors: payload.authors ?? [], tags: payload.tags ?? [],
+    publisher: payload.publisher ?? null, isbn: payload.isbn ?? null,
+    language: payload.language ?? null, license: payload.license ?? null,
+    ...(payload.fileId ? { fileId: payload.fileId, externalUrl: null }
+      : payload.externalUrl ? { externalUrl: payload.externalUrl, fileId: null }
+      : { fileId: existing.fileId ?? null }),
+  };
+}
+
+function formFromResource(r: LearningResourceDTO): typeof EMPTY_FORM {
+  return {
+    title: r.title, description: r.description ?? '', type: r.type,
+    authors: r.authors.join(', '), publisher: r.publisher ?? '', isbn: r.isbn ?? '',
+    language: r.language ?? '', license: r.license ?? '', tags: r.tags.join(', '),
+    externalUrl: r.externalUrl ?? '', status: r.status,
+  };
+}
+
+function ResourceForm({ open, resource, organizationId, onClose, onCreated, loading }: {
+  open: boolean; resource?: LearningResourceDTO | null; organizationId?: string; onClose: () => void;
   onCreated: (payload: CreateLearningResourceInput) => Promise<void>; loading: boolean;
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -425,21 +489,39 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
   const [files, setFiles] = useState<FileValue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | undefined>();
+  const [urlError, setUrlError] = useState<string | undefined>();
+  // Re-seed when switching between «Nuevo» and editing a given resource.
+  const formKey = open ? (resource?.id ?? 'new') : null;
+  const [lastKey, setLastKey] = useState<string | null>(null);
+  if (formKey !== lastKey) {
+    setLastKey(formKey);
+    if (formKey) {
+      setForm(resource ? formFromResource(resource) : EMPTY_FORM);
+      setSource(resource?.file && !resource.externalUrl ? 'file' : 'url');
+      setFiles([]); setError(null); setTitleError(undefined); setUrlError(undefined);
+    }
+  }
+  const editing = !!resource;
+  const keepsFile = editing && !!resource?.file;
   const uploading = files.some((file) => file.status === 'pending' || file.status === 'uploading');
 
-  const close = () => { setForm(EMPTY_FORM); setFiles([]); setError(null); onClose(); };
+  const close = () => { setForm(EMPTY_FORM); setFiles([]); setError(null); setUrlError(undefined); onClose(); };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setTitleError(undefined);
+    setUrlError(undefined);
     const isBook = form.type === 'BOOK';
     const effectiveSource = form.type === 'LINK' ? 'url' : source;
-    const fileId = files.find((file) => file.status === 'done')?.id;
+    const fileId = files.find((file) => file.status === 'done')?.id ?? (keepsFile && effectiveSource === 'file' ? resource?.fileId ?? undefined : undefined);
     if (!form.title.trim()) return setError('El título es obligatorio.');
     if (form.title.trim().length > 200) return setTitleError('El título no puede superar los 200 caracteres.');
     if (uploading) return setError('Espera a que termine la subida del archivo.');
     if (effectiveSource === 'file' && !fileId) return setError('Sube un archivo para continuar.');
-    if (effectiveSource === 'url' && !form.externalUrl.trim()) return setError('Introduce una URL externa válida.');
+    if (effectiveSource === 'url') {
+      const urlProblem = validateExternalUrl(form.externalUrl);
+      if (urlProblem) return setUrlError(urlProblem);
+    }
     try {
       await onCreated({
         title: form.title.trim(), type: form.type, description: form.description.trim() || undefined,
@@ -453,20 +535,22 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
       if (err instanceof ApiError && err.isValidationError) {
         const mapped = mapApiValidationErrors(err.errors ?? []);
         setTitleError(mapped.fields.title);
-        setError(mapped.form ?? null);
+        const urlMsg = (err.errors ?? []).find((m) => /url|enlace/i.test(m));
+        if (urlMsg) setUrlError('La URL debe empezar por http:// o https:// y ser una dirección web válida.');
+        setError(urlMsg && !mapped.fields.title && Object.keys(mapped.fields).length === 0 ? null : (mapped.form ?? null));
       } else {
-        setError('No se pudo crear el recurso. Revisa los datos e inténtalo de nuevo.');
+        setError(`No se pudo ${editing ? 'guardar' : 'crear'} el recurso. ${err instanceof Error && err.message ? err.message : 'Revisa los datos e inténtalo de nuevo.'}`);
       }
     }
   };
 
   return (
-    <Modal open={open} onClose={close} title="Nuevo recurso" footer={<><Button variant="ghost" onClick={close}>Cancelar</Button><Button form="resource-form" type="submit" loading={loading} disabled={uploading}>Guardar recurso</Button></>}>
-      <form id="resource-form" onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
+    <Modal open={open} onClose={close} title={editing ? 'Editar recurso' : 'Nuevo recurso'} footer={<><Button variant="ghost" onClick={close}>Cancelar</Button><Button form="resource-form" type="submit" loading={loading} disabled={uploading}>{editing ? 'Guardar cambios' : 'Guardar recurso'}</Button></>}>
+      <form id="resource-form" noValidate onSubmit={(event) => void submit(event)} style={{ display: 'grid', gap: 12 }}>
         <Input label="Título" required maxLength={200} value={form.title} error={titleError} onChange={(e) => { setForm({ ...form, title: e.target.value }); setTitleError(undefined); }} />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={labelStyle}>Tipo<select value={form.type} onChange={(e) => { const nextType = e.target.value as LearningResourceType; setForm({ ...form, type: nextType, ...(nextType !== 'BOOK' && { isbn: '', publisher: '' }) }); if (nextType === 'LINK') { setSource('url'); setFiles([]); } }} style={selectStyle}>{RESOURCE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          <label style={labelStyle}>Estado<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as LearningResourceStatus })} style={selectStyle}>{RESOURCE_STATUSES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <div style={{ flex: '1 1 160px' }}><Select label="Tipo" value={form.type} options={RESOURCE_TYPES} onChange={(e) => { const nextType = e.target.value as LearningResourceType; setForm({ ...form, type: nextType, ...(nextType !== 'BOOK' && { isbn: '', publisher: '' }) }); if (nextType === 'LINK') { setSource('url'); setFiles([]); setUrlError(undefined); } }} /></div>
+          <div style={{ flex: '1 1 160px' }}><Select label="Estado" value={form.status} options={RESOURCE_STATUSES} onChange={(e) => setForm({ ...form, status: e.target.value as LearningResourceStatus })} /></div>
         </div>
         <Textarea label="Descripción" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
         <Input label="Autores (separados por comas)" value={form.authors} onChange={(e) => setForm({ ...form, authors: e.target.value })} />
@@ -483,7 +567,10 @@ function ResourceForm({ open, organizationId, onClose, onCreated, loading }: {
             <label><input type="radio" checked={source === 'url'} onChange={() => setSource('url')} /> Enlace externo</label>
             <label><input type="radio" checked={source === 'file'} onChange={() => setSource('file')} /> Archivo</label>
           </div>}
-          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" value={form.externalUrl} onChange={(e) => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://…" required /> : organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
+          {form.type === 'LINK' || source === 'url' ? <Input label="URL" type="url" inputMode="url" value={form.externalUrl} error={urlError} onChange={(e) => { setForm({ ...form, externalUrl: e.target.value }); setUrlError(undefined); }} placeholder="https://…" required /> : <>
+            {keepsFile && files.length === 0 && <p style={{ ...messageStyle, margin: '0 0 6px' }}>Archivo actual: {resource?.file?.originalName}. Sube otro para reemplazarlo.</p>}
+            {organizationId && <FileUpload organizationId={organizationId} value={files} onChange={setFiles} maxFiles={1} hint="Sube un PDF, libro u otro material; conservará su nombre al descargar." />}
+          </>}
         </div>
         {error && <p style={{ color: 'var(--color-error)', margin: 0, fontSize: 13 }}>{error}</p>}
       </form>
@@ -502,10 +589,10 @@ function PublishModal({ title, hasFolders, excludeSubjectIds, courses, open, onC
   const submit = async () => { if (courseId) { await onPublish(courseId, required); setCourseId(''); } };
   return <Modal open={open} onClose={onClose} title={`Publicar: ${title}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading} disabled={!courseId}>Publicar</Button></>}>
     {eligible.length ? <div style={{ display: 'grid', gap: 12 }}>
-      <label style={labelStyle}>Curso<select value={courseId} onChange={(e) => setCourseId(e.target.value)} style={selectStyle}><option value="">Selecciona un curso</option>{eligible.map((course) => <option key={course.id} value={course.id}>{subjectSelectorLabel(course)}</option>)}</select></label>
+      <Select label="Curso" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: '', label: 'Selecciona un curso' }, ...eligible.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))]} />
       <label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label>
       {hasFolders && <p style={{ ...messageStyle, margin: 0 }}>Las carpetas quedan vinculadas: lo que añadas después dentro (también en subcarpetas) aparecerá en el curso automáticamente.</p>}
-    </div> : <p style={messageStyle}>No tienes otros cursos publicados donde vincular este recurso.</p>}
+    </div> : <EmptyState title="No hay cursos disponibles" description="No tienes otros cursos donde vincular este recurso." />}
   </Modal>;
 }
 
@@ -535,10 +622,8 @@ function MoveModal({ open, targets, folders, onClose, onMove, loading }: {
   const options = folders.filter((f) => !blocked.has(f.id)).map((f) => ({ id: f.id, label: pathOf(f) })).sort((a, b) => a.label.localeCompare(b.label));
   const submit = async () => { await onMove(destination || null); setDestination(''); };
   return <Modal open={open} onClose={onClose} title={`Mover ${targets ? countLabel(targets) : ''}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading}>Mover</Button></>}>
-    <label style={labelStyle}>Destino<select value={destination} onChange={(e) => setDestination(e.target.value)} style={selectStyle}>
-      <option value="">Biblioteca (raíz)</option>
-      {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-    </select></label>
+    <Select label="Destino" value={destination} onChange={(e) => setDestination(e.target.value)}
+      options={[{ value: '', label: 'Biblioteca (raíz)' }, ...options.map((o) => ({ value: o.id, label: o.label }))]} />
   </Modal>;
 }
 
@@ -556,10 +641,6 @@ function FolderNameModal({ state, onClose, onSave, loading }: {
   </Modal>;
 }
 
-const searchStyle = { display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--color-border-primary)', borderRadius: 8, padding: '0 9px', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)' } as const;
-const inputStyle = { border: 'none', outline: 'none', padding: '9px 0', background: 'transparent', font: 'inherit', fontSize: 13, width: 190, color: 'var(--color-text-primary)' } as const;
-const selectStyle = { border: '1px solid var(--color-border-primary)', borderRadius: 8, padding: '8px', background: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)', font: 'inherit', fontSize: 13 } as const;
-const labelStyle = { display: 'grid', gap: 5, fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' } as const;
 const messageStyle = { color: 'var(--color-text-secondary)', fontSize: 14 } as const;
 const crumbStyle = { border: 'none', background: 'none', padding: '2px 4px', color: 'var(--color-accent-primary)', cursor: 'pointer', font: 'inherit', fontWeight: 600 } as const;
 const batchBarStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 14px', marginBottom: 16, border: '1px solid var(--color-border-primary)', borderRadius: 10, background: 'var(--color-bg-tertiary)' } as const;

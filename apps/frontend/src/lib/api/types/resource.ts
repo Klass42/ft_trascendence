@@ -68,7 +68,7 @@ export interface CreateLearningResourceInput {
   folderId?: string;
 }
 
-export type UpdateLearningResourceInput = Partial<Omit<CreateLearningResourceInput, 'folderId'>> & {
+export type UpdateLearningResourceInput = Partial<Omit<CreateLearningResourceInput, 'folderId' | 'fileId' | 'externalUrl' | 'description' | 'publisher' | 'isbn' | 'language' | 'license'>> & {
   fileId?: string | null;
   externalUrl?: string | null;
   description?: string | null;
