@@ -1,8 +1,8 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class UpdateProfileDto {
-  @IsString()
-  @MinLength(1)
+  @IsString({ message: 'El nombre no es válido.' })
+  @Matches(/\S/, { message: 'El nombre no puede estar vacío.' })
   @MaxLength(100, { message: 'El nombre no puede superar los 100 caracteres.' })
   @IsOptional()
   name?: string;
@@ -21,8 +21,8 @@ export class UpdateProfileDto {
   @IsOptional()
   emailNotificationsEnabled?: boolean;
 
-  /** UI language preference — stored now, applied when i18n lands (Phase C) */
-  @IsIn(['es', 'en'])
+  /** UI language preference (es/en), persisted per user. */
+  @IsIn(['es', 'en'], { message: 'El idioma debe ser es o en.' })
   @IsOptional()
   preferredLanguage?: string;
 }

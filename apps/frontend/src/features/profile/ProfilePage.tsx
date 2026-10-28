@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient, useAuth, useUpdateProfile, useChangePassword } from '@/lib/api';
 import {
   Avatar,
-  Badge,
   Button,
   Card,
   Input,
+  Modal,
   Select,
   Spinner,
   Toggle,
@@ -14,11 +15,13 @@ import {
 import styles from './ProfilePage.module.css';
 
 const PASSWORD_RULE = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+const NAME_MAX_LENGTH = 100;
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 export function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { updateProfile, isSaving: isSavingProfile } = useUpdateProfile();
   const { changePassword, isSaving: isSavingPassword } = useChangePassword();
@@ -83,12 +86,18 @@ export function ProfilePage() {
       setNameError('El nombre no puede estar vacío');
       return;
     }
+    if (trimmed.length > NAME_MAX_LENGTH) {
+      setNameError(`El nombre no puede superar los ${NAME_MAX_LENGTH} caracteres`);
+      return;
+    }
     setNameError(undefined);
     try {
       await updateProfile({ name: trimmed });
       toast({ variant: 'success', message: 'Nombre actualizado' });
-    } catch {
-      toast({ variant: 'error', message: 'No se pudo actualizar el nombre' });
+    } catch (err) {
+      const message = (err as Error).message || 'No se pudo actualizar el nombre. Inténtalo de nuevo.';
+      setNameError(message);
+      toast({ variant: 'error', title: 'No se pudo actualizar el nombre', message });
     }
   };
 
@@ -138,6 +147,59 @@ export function ProfilePage() {
       toast({ variant: 'success', message: 'Idioma guardado' });
     } catch {
       toast({ variant: 'error', message: 'No se pudo guardar el idioma' });
+    }
+  };
+
+  const [isExporting, setIsExporting] = useState(false);
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const data = await apiClient.get<unknown>('/users/me/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mis-datos-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ variant: 'success', message: 'Datos exportados' });
+    } catch (err) {
+      toast({
+        variant: 'error',
+        title: 'No se pudieron exportar tus datos',
+        message: (err as Error).message || 'Inténtalo de nuevo.',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const closeDelete = () => {
+    setDeleteOpen(false);
+    setDeleteConfirmation('');
+    setDeletePassword('');
+    setDeleteError(undefined);
+  };
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    setDeleteError(undefined);
+    try {
+      await apiClient.post('/users/me/delete', {
+        confirmation: deleteConfirmation,
+        ...(deletePassword ? { password: deletePassword } : {}),
+      });
+      logout();
+      toast({ variant: 'success', message: 'Tu cuenta se ha eliminado definitivamente.' });
+      navigate('/login');
+    } catch (err) {
+      setDeleteError((err as Error).message || 'No se pudo eliminar la cuenta.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -199,14 +261,19 @@ export function ProfilePage() {
           <Input
             label="Nombre"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError(undefined);
+            }}
             error={nameError}
+            maxLength={NAME_MAX_LENGTH}
+            required
           />
           <div>
             <Button
               onClick={handleSaveName}
               loading={isSavingProfile}
-              disabled={name.trim() === user.name}
+              disabled={name.trim() === '' || name.trim() === user.name}
             >
               Guardar cambios
             </Button>
@@ -248,13 +315,6 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <div className={styles.row}>
-          <div>
-            <div className={styles.rowTitle}>Autenticación en dos pasos</div>
-            <div className={styles.rowHint}>Protege tu cuenta con TOTP</div>
-          </div>
-          <Badge variant="info">Próximamente</Badge>
-        </div>
       </Card>
 
       <Card title="Preferencias" className={styles.section}>
@@ -274,7 +334,7 @@ export function ProfilePage() {
           <div>
             <div className={styles.rowTitle}>Idioma</div>
             <div className={styles.rowHint}>
-              El idioma de la interfaz llegará en una próxima versión
+              Se guarda en tu cuenta como idioma preferido
             </div>
           </div>
           <Select
@@ -291,6 +351,67 @@ export function ProfilePage() {
           />
         </div>
       </Card>
+
+      <Card title="Tus datos" className={styles.section}>
+        <div className={styles.row}>
+          <div>
+            <div className={styles.rowTitle}>Exportar mis datos</div>
+            <div className={styles.rowHint}>Descarga en JSON todo lo que guardamos sobre ti</div>
+          </div>
+          <Button variant="outline" onClick={handleExport} loading={isExporting}>
+            Exportar (JSON)
+          </Button>
+        </div>
+        <div className={styles.row}>
+          <div>
+            <div className={styles.rowTitle}>Eliminar mi cuenta</div>
+            <div className={styles.rowHint}>Borra tu cuenta y tus datos de forma permanente</div>
+          </div>
+          <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+            Eliminar cuenta
+          </Button>
+        </div>
+      </Card>
+
+      <Modal
+        open={deleteOpen}
+        onClose={closeDelete}
+        title="Eliminar tu cuenta definitivamente"
+        footer={
+          <>
+            <Button variant="outline" onClick={closeDelete} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteAccount}
+              loading={isDeleting}
+              disabled={deleteConfirmation !== 'ELIMINAR'}
+            >
+              Sí, eliminar definitivamente
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Se borrarán tu cuenta, sesiones y datos asociados (matrículas, entregas, mensajes del
+          foro…). <strong>Esta acción es irreversible.</strong>
+        </p>
+        <Input
+          label="Contraseña"
+          type="password"
+          autoComplete="current-password"
+          value={deletePassword}
+          onChange={(e) => setDeletePassword(e.target.value)}
+          hint="Déjala vacía solo si entras con Google"
+        />
+        <Input
+          label="Escribe ELIMINAR para confirmar"
+          value={deleteConfirmation}
+          onChange={(e) => setDeleteConfirmation(e.target.value)}
+          error={deleteError}
+        />
+      </Modal>
     </div>
   );
 }

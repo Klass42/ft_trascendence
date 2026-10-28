@@ -16,6 +16,7 @@ import { NotificationType, Prisma } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
+import type { DeleteAccountDto } from './dto/delete-account.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
 
 function isPrismaUniqueViolation(err: unknown): err is PrismaClientKnownRequestError {
@@ -151,7 +152,63 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    return this.prisma.user.update({ where: { id: userId }, data: dto, select: selectOwnProfile });
+    const data = dto.name !== undefined ? { ...dto, name: dto.name.trim() } : dto;
+    return this.prisma.user.update({ where: { id: userId }, data, select: selectOwnProfile });
+  }
+
+  /** Everything we hold about the caller, as promised by the privacy policy (#111). */
+  async exportOwnData(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, email: true, name: true, bio: true, avatarUrl: true, role: true,
+        organizationId: true, emailVerifiedAt: true, emailNotificationsEnabled: true,
+        preferredLanguage: true, createdAt: true, updatedAt: true,
+        organization: { select: { id: true, name: true } },
+        oauthAccounts: { select: { provider: true, createdAt: true } },
+        courseMemberships: true,
+        subjectStaff: true,
+        submissions: true,
+        attempts: true,
+        forumThreads: true,
+        forumPosts: true,
+        notifications: true,
+        lessonCompletions: true,
+        friendsInitiated: true,
+        friendsReceived: true,
+        uploadedFiles: true,
+      },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return { exportedAt: new Date().toISOString(), user };
+  }
+
+  async deleteOwnAccount(userId: string, dto: DeleteAccountDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, organizationId: true, role: true, passwordHash: true },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (user.passwordHash) {
+      const valid = dto.password ? await argon2.verify(user.passwordHash, dto.password) : false;
+      if (!valid) throw new BadRequestException('La contraseña no es correcta.');
+    }
+    if (user.role === 'ADMIN' && user.organizationId) {
+      const admins = await this.prisma.user.count({
+        where: { organizationId: user.organizationId, role: 'ADMIN' },
+      });
+      if (admins <= 1) {
+        throw new BadRequestException(
+          'Eres el único administrador de la organización. Nombra a otro administrador antes de eliminar tu cuenta.',
+        );
+      }
+    }
+    await this.prisma.user.delete({ where: { id: userId } });
+    if (user.organizationId) {
+      await this.prisma.auditLog.create({
+        data: { actorId: null, action: 'USER_SELF_DELETED', organizationId: user.organizationId, metadata: { userId } },
+      });
+    }
   }
 
   async searchUsers(query: string, callerId: string, organizationId: string) {

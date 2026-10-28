@@ -282,14 +282,14 @@ export class AuthService {
   ): Promise<{ changed: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('User no longer exists');
+      throw new UnauthorizedException('Tu sesión ya no es válida. Inicia sesión de nuevo.');
     }
     if (!user.passwordHash) {
-      throw new BadRequestException('Account has no password (OAuth only)');
+      throw new BadRequestException('Tu cuenta usa inicio de sesión con Google y no tiene contraseña.');
     }
     const valid = await argon2.verify(user.passwordHash, dto.currentPassword);
     if (!valid) {
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException('La contraseña actual no es correcta.');
     }
     const passwordHash = await argon2.hash(dto.newPassword);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
