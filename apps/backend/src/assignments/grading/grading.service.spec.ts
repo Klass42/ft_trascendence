@@ -350,6 +350,7 @@ describe('GradingService', () => {
       expect(summary.pending[0]).toMatchObject({
         attemptId: 'att-pending',
         activityTitle: 'Examen mixto',
+        subjectId: COURSE_ID,
         courseTitle: 'Web 101',
         status: 'SUBMITTED',
       });

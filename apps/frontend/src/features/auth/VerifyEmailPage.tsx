@@ -52,7 +52,7 @@ export function VerifyEmailPage() {
               <>
                 <CheckCircle size={48} color="var(--color-success)" />
                 <h3 style={{ margin: 'var(--space-4) 0 var(--space-2)', color: 'var(--color-text-primary)' }}>
-                  Email verificado
+                  Correo electrónico verificado
                 </h3>
                 <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
                   Tu cuenta ha sido verificada correctamente.

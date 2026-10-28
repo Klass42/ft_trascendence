@@ -512,7 +512,7 @@ export class AuthService {
       await this.notifications?.emitMany(
         async () => (await this.prisma.user.findMany({ where: { organizationId, role: 'ADMIN' }, select: { id: true } })).map((admin) => admin.id),
         NotificationType.USER_CHANGED,
-        { title: 'Solicitud de restablecimiento de contraseña', body: `${user.name} (${user.email}) ha pedido restablecer su contraseña. Genera un enlace desde Usuarios y envíaselo.`, link: `/users/${user.id}` },
+        { title: 'Solicitud de restablecimiento de contraseña', body: `${user.name} (${user.email}) ha pedido restablecer su contraseña. Genera un enlace desde Usuarios y envíaselo.`, link: `/admin/users/${user.id}` },
         { organizationId, actorId: user.id },
       );
       if (process.env.NODE_ENV !== 'production') {

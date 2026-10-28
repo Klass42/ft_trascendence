@@ -74,7 +74,8 @@ function useActivityCourseSelection(
   activityId: string | null,
 ) {
   const [courseId, setCourseId] = useState<string | null>(null);
-  // The linked activity answered 404: it was deleted (or never existed).
+  // The linked activity answered 404/403: it was deleted, archived, never existed
+  // or lives in a subject the user cannot read.
   const [activityMissing, setActivityMissing] = useState(false);
 
   useEffect(() => {
@@ -99,7 +100,7 @@ function useActivityCourseSelection(
       })
       .catch((err) => {
         if (!active) return;
-        if (err instanceof ApiError && err.status === 404) setActivityMissing(true);
+        if (err instanceof ApiError && (err.status === 404 || err.status === 403)) setActivityMissing(true);
         setCourseId(fallback);
       });
 
@@ -640,7 +641,7 @@ function ActivityDetail({
       <ConfirmDialog
         open={offerArchive}
         title="No se puede eliminar"
-        message={`«${activity.title}» ya tiene intentos de alumnos, así que no puede borrarse. Puedes archivarla: dejará de estar disponible, pero se conservarán las entregas y las notas.`}
+        message={`«${activity.title}» ya tiene intentos de alumnos, así que no puede eliminarse. Puedes archivarla: dejará de estar disponible, pero se conservarán las entregas y las notas.`}
         confirmLabel="Archivar"
         loading={isLoading}
         onConfirm={handleArchive}

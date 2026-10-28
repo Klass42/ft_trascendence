@@ -368,7 +368,7 @@ export class GradingService {
       student: a.user,
       activityId: a.activity.id,
       activityTitle: a.activity.title,
-      courseId: a.activity.subject.id,
+      subjectId: a.activity.subject.id,
       courseTitle: a.activity.subject.title,
     }));
 

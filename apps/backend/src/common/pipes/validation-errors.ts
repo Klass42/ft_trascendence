@@ -85,9 +85,9 @@ function translate(constraint: string, label: string, original: string): string 
     case 'isString':
       return `${label} ${must(label)} ser texto.`;
     case 'minLength':
-      return `${label} ${must(label)} tener al menos ${n} caracteres.`;
+      return `${label} ${must(label)} tener al menos ${n} ${n === '1' ? 'carácter' : 'caracteres'}.`;
     case 'maxLength':
-      return `${label} no puede${isPlural(label) ? 'n' : ''} superar los ${n} caracteres.`;
+      return `${label} no puede${isPlural(label) ? 'n' : ''} superar ${n === '1' ? '1 carácter' : `los ${n} caracteres`}.`;
     case 'length':
       return `${label} no tiene una longitud permitida.`;
     case 'isEmail':

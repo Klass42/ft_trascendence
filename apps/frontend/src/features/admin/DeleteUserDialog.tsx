@@ -66,7 +66,7 @@ export function DeleteUserDialog({ target, onCancel, onDeleted }: Props) {
         target ? (
           <>
             Vas a eliminar la cuenta de <strong>{target.name}</strong>
-            {target.email ? ` (${target.email})` : ''}. Se borrarán su cuenta, sesiones y datos
+            {target.email ? ` (${target.email})` : ''}. Se eliminarán su cuenta, sesiones y datos
             asociados (matrículas, entregas, mensajes del foro…). <strong>Esta acción es
             irreversible.</strong>
           </>

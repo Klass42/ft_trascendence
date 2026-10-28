@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient, useUsers } from '@/lib/api';
 import { Avatar, Spinner, EmptyState } from '@/components/ui';
-import { formatDate } from '@/lib/format';
+import { formatDate, plural } from '@/lib/format';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './AdminDashboard.module.css';
 
@@ -53,7 +53,7 @@ export function AdminDashboard() {
         <div className={styles.kpiCard}>
           <div className={styles.kpiLabel}>Usuarios</div>
           <div className={styles.kpiValue}>{stats?.users ?? userCount}</div>
-          {stats && <div className={styles.kpiHint}>{stats.roles.STUDENT} alumnos · {stats.roles.TEACHER} profesores · {stats.roles.ADMIN} admins</div>}
+          {stats && <div className={styles.kpiHint}>{plural(stats.roles.STUDENT, 'alumno', 'alumnos')} · {plural(stats.roles.TEACHER, 'profesor', 'profesores')} · {plural(stats.roles.ADMIN, 'administrador', 'administradores')}</div>}
         </div>
         {stats && (
           <>

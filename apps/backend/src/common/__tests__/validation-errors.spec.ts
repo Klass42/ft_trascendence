@@ -1,7 +1,16 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { MaxLength, MinLength } from 'class-validator';
 import { SearchUsersDto } from '../../users/dto/search-users.dto';
 import { RegisterDto } from '../../auth/dto/register.dto';
 import { spanishValidationException } from '../pipes/validation-errors';
+
+class SingleCharDto {
+  @MinLength(1)
+  title!: string;
+
+  @MaxLength(1)
+  name!: string;
+}
 
 const pipe = new ValidationPipe({
   whitelist: true,
@@ -39,5 +48,13 @@ describe('spanishValidationException', () => {
     expect(messages.join(' ')).toContain('El código de organización solo puede contener');
     expect(messages.join(' ')).toContain('La contraseña debe incluir al menos una mayúscula');
     expect(messages.every((message) => !/must|should/.test(message))).toBe(true);
+  });
+
+  it('singularises "carácter" when the limit is 1', async () => {
+    const messages = await messagesFor({ title: '', name: 'ab' }, SingleCharDto);
+    expect(messages).toEqual([
+      'El título debe tener al menos 1 carácter.',
+      'El nombre no puede superar 1 carácter.',
+    ]);
   });
 });

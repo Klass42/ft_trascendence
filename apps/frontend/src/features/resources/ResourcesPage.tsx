@@ -126,7 +126,7 @@ export function ResourcesPage() {
       title: single ? (targets.folderIds.length ? 'Eliminar carpeta' : 'Eliminar recurso') : 'Eliminar selección',
       message: `Se ${single ? 'eliminará' : 'eliminarán'} ${countLabel(targets)} de la biblioteca.`
         + (targets.folderIds.length ? ' El contenido de las carpetas eliminadas pasa a la raíz.' : '')
-        + ' Los archivos almacenados no se borrarán.',
+        + ' Los archivos almacenados no se eliminarán.',
       confirmLabel: 'Eliminar',
       variant: 'danger',
       run: async () => {
