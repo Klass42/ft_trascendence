@@ -47,7 +47,6 @@ monitored deployment (Prometheus + Grafana).
 | David | `dcid-san` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
 | Aloiki | `ikondrat` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
 | Viacheslav | `vtrofyme` | [@ViacheslavTrofymenko](https://github.com/ViacheslavTrofymenko) | DevOps | Docker images and Compose stack, HTTPS, CI/CD, monitoring, deployment, infrastructure docs |
-| Ale Pinto | `<login>` | [@Aletheios42](https://github.com/Aletheios42) | DevOps (left the project) | initial repository, first Compose stack and CI |
 
 ## Project management
 

@@ -4,7 +4,7 @@
 > [`../infra/README.md`](../infra/README.md). Work on branch **`vtrofyme`** (based on `master`);
 > merge to `staging` before `master`.
 >
-> GitHub `@ViacheslavTrofymenko`, 42 login `vtrofyme`. Took over the DevOps role from Ale Pinto.
+> GitHub `@ViacheslavTrofymenko`, 42 login `vtrofyme`. Owns the DevOps role.
 
 **Theme:** everything that is not application code: containers, HTTPS, storage backend, CI/CD,
 observability, secrets, deployment, backups.
