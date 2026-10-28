@@ -209,14 +209,9 @@ export class CoursesService {
 
   async deleteSubject(subjectId: string, user: AuthUser) {
     const subject = await this.requireSubject(subjectId, user.organizationId);
-    const [membership, attempt, submission] = await Promise.all([
-      this.prisma.courseMembership.findFirst({
-        where: {
-          courseId: subject.courseId,
-          course: { organizationId: user.organizationId },
-        },
-        select: { id: true },
-      }),
+    // #105: cohort enrollments belong to the cohort, not the subject. An empty
+    // subject (no attempts/submissions) can be deleted even if the cohort has students.
+    const [attempt, submission] = await Promise.all([
       this.prisma.attempt.findFirst({
         where: {
           activity: {
@@ -237,9 +232,9 @@ export class CoursesService {
       }),
     ]);
 
-    if (membership || attempt || submission) {
+    if (attempt || submission) {
       throw new ConflictException(
-        'Cannot delete a subject with enrollments or attempts; archive it instead',
+        'No se puede borrar una asignatura con intentos o entregas; archívala en su lugar.',
       );
     }
     const recipients = this.notifications
@@ -275,10 +270,15 @@ export class CoursesService {
 
           const target = await tx.user.findFirst({
             where: { id: dto.userId, organizationId: user.organizationId },
-            select: { id: true },
+            select: { id: true, role: true },
           });
           if (!target) {
             throw new NotFoundException('User not found in this organization');
+          }
+          if (target.role !== 'STUDENT' && target.role !== 'TEACHER') {
+            throw new ForbiddenException(
+              'Solo se puede matricular a usuarios con rol de alumno o profesor en la organización.',
+            );
           }
 
           const existing = await tx.courseMembership.findFirst({
@@ -289,7 +289,7 @@ export class CoursesService {
             },
           });
           if (existing) {
-            throw new ConflictException('Already a member of this course');
+            throw new ConflictException('El usuario ya está matriculado en esta cohorte.');
           }
 
           await this.assertSingleActiveMembership(
@@ -379,16 +379,21 @@ export class CoursesService {
     const subject = await this.requireSubject(subjectId, user.organizationId);
     const target = await this.prisma.user.findFirst({
       where: { id: dto.userId, organizationId: user.organizationId },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (!target) {
       throw new NotFoundException('User not found in this organization');
+    }
+    if (target.role !== 'TEACHER' && target.role !== 'ADMIN') {
+      throw new ForbiddenException(
+        'Solo se puede asignar al equipo docente a usuarios con rol de profesor o administrador en la organización.',
+      );
     }
     const existing = await this.prisma.subjectStaff.findUnique({
       where: { subjectId_userId: { subjectId, userId: dto.userId } },
     });
     if (existing) {
-      throw new ConflictException('User is already staff of this subject');
+      throw new ConflictException('El usuario ya forma parte del equipo de esta asignatura.');
     }
     const assignment = await this.prisma.subjectStaff.create({
       data: { subjectId: subject.id, userId: dto.userId, role: dto.role },
@@ -504,7 +509,9 @@ export class CoursesService {
       },
     });
     if (other) {
-      throw new ConflictException('The user already belongs to an active course');
+      throw new ConflictException(
+        'El usuario ya está matriculado en otra cohorte activa. Desmatricúlalo de esa cohorte o archívala antes.',
+      );
     }
   }
 
@@ -530,7 +537,9 @@ export class CoursesService {
       },
     });
     if (conflict) {
-      throw new ConflictException('A member already belongs to another active course');
+      throw new ConflictException(
+        'No se puede activar: algún alumno ya está matriculado en otra cohorte activa.',
+      );
     }
   }
 

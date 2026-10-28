@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Plus } from 'lucide-react';
-import { apiClient, useAuth, useCourses, useCreateCourse } from '@/lib/api';
+import { ApiError, apiClient, useAuth, useCourses, useCreateCourse } from '@/lib/api';
 import type { CohortStatus, CourseDTO, UpdateCourseInput } from '@/lib/api';
 import {
   Badge,
@@ -93,6 +93,7 @@ export function CoursesPage() {
   const [endsOn, setEndsOn] = useState('2027-06-30');
   const [status, setStatus] = useState<CohortStatus>('ACTIVE');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState<'ALL' | CohortStatus>('ALL');
 
   useEffect(() => {
     if (courses) setCourseList(courses);
@@ -106,6 +107,14 @@ export function CoursesPage() {
     () => courseList.filter((course) => course.status !== 'ACTIVE'),
     [courseList],
   );
+
+  // #105: staff/admin view separates open cohorts from archived ones, with a status filter.
+  const filtered = useMemo(
+    () => (filter === 'ALL' ? courseList : courseList.filter((course) => course.status === filter)),
+    [courseList, filter],
+  );
+  const openCohorts = useMemo(() => filtered.filter((course) => course.status !== 'ARCHIVED'), [filtered]);
+  const archivedCohorts = useMemo(() => filtered.filter((course) => course.status === 'ARCHIVED'), [filtered]);
 
   function resetCreateForm() {
     setName('');
@@ -147,23 +156,24 @@ export function CoursesPage() {
       setCourseList((items) => items.map((course) => course.id === courseId ? updated : course));
       setEditTarget(null);
       toast({ message: 'Cohorte actualizada.', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo actualizar la cohorte.', variant: 'error' });
+    } catch (err) {
+      toast({ message: err instanceof ApiError && err.status === 409 ? err.message : 'No se pudo actualizar la cohorte.', variant: 'error' });
       throw new Error('No se pudo actualizar la cohorte.');
     }
   }
 
   async function toggleArchive(course: CourseDTO) {
-    const nextStatus: CohortStatus = course.status === 'ARCHIVED' ? 'PLANNED' : 'ARCHIVED';
+    // #105: unarchiving returns the cohort to "En curso" (ACTIVE).
+    const nextStatus: CohortStatus = course.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED';
     try {
       const updated = await apiClient.patch<CourseDTO>(`/courses/${course.id}`, { status: nextStatus });
       setCourseList((items) => items.map((item) => item.id === course.id ? updated : item));
       toast({
-        message: nextStatus === 'ARCHIVED' ? 'Cohorte archivada.' : 'Cohorte desarchivada como planificada.',
+        message: nextStatus === 'ARCHIVED' ? 'Cohorte archivada.' : 'Cohorte desarchivada: vuelve a estar en curso.',
         variant: 'success',
       });
-    } catch {
-      toast({ message: 'No se pudo cambiar el estado de la cohorte.', variant: 'error' });
+    } catch (err) {
+      toast({ message: err instanceof ApiError && err.status === 409 ? err.message : 'No se pudo cambiar el estado de la cohorte.', variant: 'error' });
     }
   }
 
@@ -243,7 +253,37 @@ export function CoursesPage() {
           </section>
         </>
       ) : (
-        <CourseGrid courses={courseList} {...gridProps} />
+        <>
+          <div className={styles.filters}>
+            <Select
+              label="Estado"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as 'ALL' | CohortStatus)}
+              options={[
+                { value: 'ALL', label: 'Todas' },
+                { value: 'ACTIVE', label: 'En curso' },
+                { value: 'PLANNED', label: 'Planificadas' },
+                { value: 'ARCHIVED', label: 'Archivadas' },
+              ]}
+            />
+          </div>
+          {filter !== 'ARCHIVED' && (
+            <section className={styles.courseSection}>
+              <h2>Activas y planificadas</h2>
+              {openCohorts.length === 0 ? (
+                <p className={styles.sectionEmpty}>No hay cohortes con este filtro.</p>
+              ) : <CourseGrid courses={openCohorts} {...gridProps} />}
+            </section>
+          )}
+          {(filter === 'ALL' || filter === 'ARCHIVED') && (
+            <section className={styles.courseSection}>
+              <h2>Archivadas</h2>
+              {archivedCohorts.length === 0 ? (
+                <p className={styles.sectionEmpty}>No hay cohortes archivadas.</p>
+              ) : <CourseGrid courses={archivedCohorts} {...gridProps} />}
+            </section>
+          )}
+        </>
       )}
 
       {isAdmin && (

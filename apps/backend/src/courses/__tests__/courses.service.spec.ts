@@ -111,7 +111,7 @@ describe('CoursesService membership concurrency', () => {
         })),
       },
       user: {
-        findFirst: jest.fn(async () => ({ id: STUDENT.userId })),
+        findFirst: jest.fn(async () => ({ id: STUDENT.userId, role: 'STUDENT' })),
       },
       courseMembership: {
         findFirst: jest.fn(async ({ where }: any) => {

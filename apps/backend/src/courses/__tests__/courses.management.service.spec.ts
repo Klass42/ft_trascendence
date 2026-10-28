@@ -80,7 +80,7 @@ describe('CoursesService cohort and subject management', () => {
     expect(prisma.subject.delete).not.toHaveBeenCalled();
   });
 
-  it('blocks subject deletion when its cohort has enrollments', async () => {
+  it('deletes an empty subject even if its cohort has enrollments (#105)', async () => {
     const { service, prisma } = makeService();
     (prisma.subject.findFirst as jest.Mock).mockResolvedValue({
       id: 'subject-1', organizationId: ORG_ID, courseId: 'course-1', course: { organizationId: ORG_ID },
@@ -89,12 +89,8 @@ describe('CoursesService cohort and subject management', () => {
     (prisma.attempt.findFirst as jest.Mock).mockResolvedValue(null);
     (prisma.submission.findFirst as jest.Mock).mockResolvedValue(null);
 
-    await expect(service.deleteSubject('subject-1', ADMIN)).rejects.toThrow(ConflictException);
-    expect(prisma.courseMembership.findFirst).toHaveBeenCalledWith({
-      where: { courseId: 'course-1', course: { organizationId: ORG_ID } },
-      select: { id: true },
-    });
-    expect(prisma.subject.delete).not.toHaveBeenCalled();
+    await expect(service.deleteSubject('subject-1', ADMIN)).resolves.toBeUndefined();
+    expect(prisma.subject.delete).toHaveBeenCalledWith({ where: { id: 'subject-1' } });
   });
 
   it('blocks subject deletion when it has a submission', async () => {
