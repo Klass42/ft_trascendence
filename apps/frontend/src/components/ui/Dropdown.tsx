@@ -9,7 +9,7 @@
  * Usage:
  *   <Dropdown trigger={<MoreVertical size={18} />} items={[
  *     { label: 'Editar', icon: <Pencil/>, onClick: edit },
- *     { label: 'Borrar', icon: <Trash/>, danger: true, onClick: del },
+ *     { label: 'Eliminar', icon: <Trash/>, danger: true, onClick: del },
  *   ]} />
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';

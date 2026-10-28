@@ -48,7 +48,7 @@ const COPY: Record<LegalDocument, LegalCopy> = {
       ],
       [
         'Finalidad y conservación',
-        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en las asignaturas y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando el administrador de una organización elimina una cuenta, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma el borrado de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
+        'Usamos estos datos para autenticarte, mostrarte el contenido y las calificaciones que te corresponden, permitir la colaboración en las asignaturas y mantener la seguridad del servicio. Conservamos la información mientras mantengas una cuenta o mientras la organización deba conservar el historial académico conforme a su política. Cuando el administrador de una organización elimina una cuenta, la eliminación es definitiva y no se puede deshacer. Los administradores también pueden solicitar al equipo de la plataforma la eliminación de toda su organización; esa solicitud la revisa el equipo antes de ejecutarse.',
       ],
       [
         'Acceso y destinatarios',
@@ -59,7 +59,7 @@ const COPY: Record<LegalDocument, LegalCopy> = {
         <>
           Desde tu perfil puedes corregir tu nombre, cambiar o quitar tu foto, cambiar tu
           contraseña y ajustar tus preferencias de notificaciones por email e idioma. Hoy Klass no
-          ofrece el borrado de tu propia cuenta ni la descarga automática de tus datos desde el
+          ofrece la eliminación de tu propia cuenta ni la descarga automática de tus datos desde el
           perfil: para solicitar acceso a una copia de tus datos, su corrección cuando no puedas
           hacerla tú o la eliminación de tu cuenta, contacta con {LEGAL_INFO.organizationContact},
           que puede eliminar cuentas de su organización. Para cualquier otra consulta de

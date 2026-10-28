@@ -135,7 +135,7 @@ export function QuestionList({ activity, onChanged }: Props) {
                   <Button variant="ghost" size="sm" aria-label={`Bajar pregunta ${i + 1}`} disabled={i === questions.length - 1 || isLoading} onClick={() => move(i, 1)}>↓</Button>
                   <Button variant="outline" size="sm" onClick={() => setEditing(q)}>Editar</Button>
                   <Button variant="outline" size="sm" aria-label={`Duplicar pregunta ${i + 1}`} disabled={isLoading} onClick={() => void duplicate(q)}>Duplicar</Button>
-                  <Button variant="danger" size="sm" onClick={() => setConfirmDelete(q)}>Borrar</Button>
+                  <Button variant="danger" size="sm" onClick={() => setConfirmDelete(q)}>Eliminar</Button>
                 </div>
               </div>
             </li>
@@ -172,9 +172,9 @@ export function QuestionList({ activity, onChanged }: Props) {
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Borrar pregunta"
-        message="¿Seguro que quieres borrar esta pregunta? Esta acción no se puede deshacer."
-        confirmLabel="Borrar"
+        title="Eliminar pregunta"
+        message="¿Seguro que quieres eliminar esta pregunta? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
         variant="danger"
         loading={isLoading}
         onConfirm={handleDelete}

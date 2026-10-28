@@ -568,7 +568,7 @@ function ActivityDetail({
             Guardar plantilla
           </Button>
           <Button variant="outline" size="sm" aria-label="Editar tarea" onClick={() => setEditing(true)}>Editar</Button>
-          <Button variant="danger" size="sm" aria-label="Borrar tarea" onClick={() => setConfirmDelete(true)}>Borrar</Button>
+          <Button variant="danger" size="sm" aria-label="Eliminar tarea" onClick={() => setConfirmDelete(true)}>Eliminar</Button>
         </div>
       </div>
 
@@ -628,9 +628,9 @@ function ActivityDetail({
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Borrar tarea"
-        message={`¿Seguro que quieres borrar «${activity.title}»? Esta acción no se puede deshacer.`}
-        confirmLabel="Borrar"
+        title="Eliminar tarea"
+        message={`¿Seguro que quieres eliminar «${activity.title}»? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
         variant="danger"
         loading={isLoading}
         onConfirm={handleDelete}
@@ -639,7 +639,7 @@ function ActivityDetail({
 
       <ConfirmDialog
         open={offerArchive}
-        title="No se puede borrar"
+        title="No se puede eliminar"
         message={`«${activity.title}» ya tiene intentos de alumnos, así que no puede borrarse. Puedes archivarla: dejará de estar disponible, pero se conservarán las entregas y las notas.`}
         confirmLabel="Archivar"
         loading={isLoading}

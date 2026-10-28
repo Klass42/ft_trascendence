@@ -143,7 +143,7 @@ function TemplatesTab({
     } catch (err) {
       toast({
         variant: 'error',
-        message: err instanceof Error ? err.message : 'No se pudo borrar la plantilla.',
+        message: err instanceof Error ? err.message : 'No se pudo eliminar la plantilla.',
       });
     }
   }
@@ -197,7 +197,7 @@ function TemplatesTab({
                   variant="ghost"
                   onClick={() => setPendingDelete(row)}
                 >
-                  Borrar
+                  Eliminar
                 </Button>
               </div>
             ),
@@ -214,9 +214,9 @@ function TemplatesTab({
       />
       <ConfirmDialog
         open={!!pendingDelete}
-        title="Borrar plantilla"
-        message={`¿Borrar «${pendingDelete?.title}»? Las tareas ya creadas no se tocan.`}
-        confirmLabel="Borrar"
+        title="Eliminar plantilla"
+        message={`¿Eliminar «${pendingDelete?.title}»? Las tareas ya creadas no se tocan.`}
+        confirmLabel="Eliminar"
         variant="danger"
         onConfirm={() => void confirmDelete()}
         onCancel={() => setPendingDelete(null)}

@@ -348,7 +348,7 @@ function AssignmentDetail({
               Editar
             </Button>
             <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              Borrar
+              Eliminar
             </Button>
           </div>
         )}
@@ -437,9 +437,9 @@ function AssignmentDetail({
       {/* Delete confirmation (staff) */}
       <ConfirmDialog
         open={confirmDelete}
-        title="Borrar tarea"
-        message={`¿Seguro que quieres borrar «${assignment.title}»? Se eliminarán también sus entregas. Esta acción no se puede deshacer.`}
-        confirmLabel="Borrar"
+        title="Eliminar tarea"
+        message={`¿Seguro que quieres eliminar «${assignment.title}»? Se eliminarán también sus entregas. Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
         variant="danger"
         loading={deleting}
         onConfirm={handleDelete}

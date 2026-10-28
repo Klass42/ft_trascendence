@@ -40,7 +40,7 @@ Definidos en `components/ui/tokens.css`:
 - **Formularios**: usa los controles del kit (traen label/error). Valida en cliente Y servidor. Acciones
   al pie (primario a la derecha, `ghost`/Cancelar a su izquierda). En Modal, van en `footer`.
 - **Tablas**: `Table` con `empty`. Acciones por fila → `Dropdown`. Estado → `Badge`.
-- **Feedback**: tras crear/editar/borrar → `toast({ variant: 'success', message: … })`. Acción
+- **Feedback**: tras crear/editar/eliminar → `toast({ variant: 'success', message: … })`. Acción
   destructiva → `ConfirmDialog` antes.
 - **Responsive**: nada con scroll horizontal en el body; tablas y bloques anchos con su propio scroll.
 - **Accesibilidad**: labels asociados, foco visible, navegable por teclado, `aria-*` donde aplique.
@@ -126,8 +126,9 @@ profesores «Calificaciones»; todos ven «Cursos» (página «Mis cursos»).
   tiene prioridad. El límite de peticiones responde «Demasiados intentos. Espera un momento y
   vuelve a intentarlo.».
 
-### Pendiente de unificar
+### Eliminar (no «Borrar»)
 
-- «Borrar» (cohortes, asignaturas, tareas, hilos) frente a «Eliminar» (lecciones, secciones,
-  recursos, usuarios). Se mantiene tal cual porque los tests e2e lo usan; elegir uno en un
-  cambio aparte.
+- Toda acción destructiva dice **Eliminar** (botones, diálogos, toasts y mensajes del backend):
+  «Eliminar tarea», «Tarea eliminada», «No se pudo eliminar». El sustantivo es **eliminación**
+  («Solicitar eliminación» de la organización). «Borrador» (estado de una tarea sin publicar)
+  no cambia. Decisión del equipo, 28-oct-2026: se eligió la forma más usada en la interfaz.
