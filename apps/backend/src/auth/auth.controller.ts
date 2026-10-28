@@ -28,6 +28,10 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ResolveOrganizationDto } from './dto/resolve-organization.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { PlatformLoginDto } from './dto/platform-login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ParseIdPipe } from '@/common/pipes/parse-id.pipe';
+import { Roles, RolesGuard } from '@/common/auth';
 import { AuthRateLimit } from './auth-rate-limit';
 
 // Owner: Jorge (@SrJorgeG) — Identity & Access (see docs/planning/Jorge.md)
@@ -71,6 +75,30 @@ export class AuthController {
   @AuthRateLimit('acceptInvitation')
   @Post('invitations/:token/accept')
   async acceptInvitation(@Param('token', ParseAuthTokenPipe) token: string, @Body() dto: AcceptInvitationDto) { return this.authService.acceptInvitationWithTokens(token, dto); }
+
+  @Public()
+  @AuthRateLimit('acceptInvitation')
+  @Post('password-reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) { return this.authService.resetPassword(dto.token, dto.password); }
+
+  @Public()
+  @AuthRateLimit('forgotPassword')
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) { return this.authService.requestPasswordReset(dto.organizationSlug, dto.email); }
+
+  /** #110: public, tells the login/register pages which sign-in providers are configured. */
+  @Public()
+  @Get('providers')
+  providers() { return { google: Boolean(this.config.get<string>('GOOGLE_CLIENT_ID')?.trim()) }; }
+
+  @Post('admin/users/:id/password-reset')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async adminPasswordReset(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.authService.issueAdminPasswordReset(id, { userId: user.userId, organizationId: user.organizationId });
+  }
 
   @Public()
   @AuthRateLimit('refresh')

@@ -3,9 +3,14 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  GoneException,
   Injectable,
+  NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
+import { NotificationsService } from '@/notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -24,6 +29,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   private mapUser(user: {
@@ -125,13 +131,18 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const organization = await this.activeOrganization(dto.organizationSlug!);
+    // #110: un registro con un código inexistente o suspendido no es un problema de «credenciales».
+    const organization = await this.prisma.organization.findUnique({ where: { slug: dto.organizationSlug! } });
+    if (!organization || organization.status !== 'ACTIVE') {
+      throw new BadRequestException('No hay ninguna organización activa con ese código. Revisa el código que te ha dado tu centro.');
+    }
 
     const existing = await this.prisma.user.findFirst({
       where: { organizationId: organization.id, email: dto.email },
     });
     if (existing) {
-      throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
+      // #110: mensaje genérico (no confirma de forma explícita qué cuentas existen).
+      throw new ConflictException('No se ha podido crear la cuenta con estos datos. Si ya tienes una cuenta, inicia sesión o recupera tu contraseña.');
     }
 
     await assertUserLimit(this.prisma as any, organization.id);
@@ -276,10 +287,10 @@ export class AuthService {
   ): Promise<{ changed: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('La cuenta ya no existe.');
+      throw new UnauthorizedException('Tu sesión ya no es válida. Inicia sesión de nuevo.');
     }
     if (!user.passwordHash) {
-      throw new BadRequestException('Esta cuenta no tiene contraseña (acceso solo con Google).');
+      throw new BadRequestException('Tu cuenta usa inicio de sesión con Google y no tiene contraseña.');
     }
     const valid = await argon2.verify(user.passwordHash, dto.currentPassword);
     if (!valid) {
@@ -397,14 +408,19 @@ export class AuthService {
   }
 
   async resolveOrganization(slug: string) {
+    // #110: only public branding of ACTIVE organizations; suspended and unknown codes look the same
+    // (404, not 401, so the client never tries a token refresh).
     const organization = await this.prisma.organization.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true, status: true } });
-    if (!organization) throw new UnauthorizedException('Organización no encontrada.');
-    return organization;
+    if (!organization || organization.status !== 'ACTIVE') throw new NotFoundException('No hay ninguna organización activa con ese código.');
+    const { status: _status, ...branding } = organization;
+    return branding;
   }
 
   async invitation(token: string) {
     const invitation = await this.prisma.organizationInvitation.findUnique({ where: { tokenHash: this.hashToken(token) }, include: { organization: true } });
-    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= new Date() || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('La invitación no es válida o ha caducado.');
+    // 404/410 (not 401): an invalid link must not trigger the client's token-refresh flow.
+    if (!invitation) throw new NotFoundException('Esta invitación no existe.');
+    if (invitation.status !== 'PENDING' || invitation.expiresAt <= new Date() || invitation.organization.status !== 'ACTIVE') throw new GoneException('Esta invitación ya se ha usado, se ha revocado o ha caducado.');
     return { email: invitation.email, role: invitation.role, organization: { name: invitation.organization.name, slug: invitation.organization.slug, logoUrl: invitation.organization.logoUrl, primaryColor: invitation.organization.primaryColor } };
   }
 
@@ -432,5 +448,81 @@ export class AuthService {
   async acceptInvitationWithTokens(token: string, dto: AcceptInvitationDto) {
     const user = await this.acceptInvitation(token, dto);
     return { user: this.mapUser(user), ...(await this.issueTokens(user.id)) };
+  }
+
+  /** Fingerprint of the current password: a reset link dies once the password changes. */
+  private passwordFingerprint(passwordHash: string | null): string {
+    return crypto.createHash('sha256').update(passwordHash ?? 'no-password').digest('hex').slice(0, 32);
+  }
+
+  /** Admin issues a one-use password reset link for another member of their organization. */
+  async issueAdminPasswordReset(targetUserId: string, actor: { userId: string; organizationId: string }) {
+    if (targetUserId === actor.userId) throw new BadRequestException('Para cambiar tu propia contraseña usa tu perfil.');
+    const user = await this.prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, organizationId: true, passwordHash: true, email: true, name: true } });
+    if (!user || user.organizationId !== actor.organizationId) throw new NotFoundException('Usuario no encontrado.');
+    const ttlHours = 24;
+    const resetToken = this.jwt.sign(
+      { sub: user.id, purpose: 'password-reset', fp: this.passwordFingerprint(user.passwordHash) },
+      { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'), expiresIn: `${ttlHours}h` },
+    );
+    const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
+    await this.prisma.auditLog.create({ data: { actorId: actor.userId, action: 'PASSWORD_RESET_ISSUED', organizationId: actor.organizationId, targetUserId: user.id, metadata: { email: user.email } } });
+    await this.notifications?.emitMany(
+      [user.id],
+      NotificationType.USER_CHANGED,
+      { title: 'Restablecimiento de contraseña', body: 'Un administrador ha generado un enlace para restablecer tu contraseña. Si no lo esperabas, contacta con tu organización.', link: '/profile' },
+      { organizationId: actor.organizationId, actorId: actor.userId },
+    );
+    return { resetToken, expiresAt, email: user.email, name: user.name };
+  }
+
+  async resetPassword(token: string, password: string): Promise<{ reset: true }> {
+    const invalid = () => new BadRequestException('El enlace para restablecer la contraseña no es válido o ha caducado.');
+    let decoded: { sub?: unknown; purpose?: unknown; fp?: unknown };
+    try {
+      decoded = this.jwt.verify(token, { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET') });
+    } catch {
+      throw invalid();
+    }
+    if (typeof decoded !== 'object' || decoded === null || typeof decoded.sub !== 'string' || decoded.purpose !== 'password-reset') throw invalid();
+    const user = await this.prisma.user.findUnique({ where: { id: decoded.sub }, select: { id: true, organizationId: true, passwordHash: true } });
+    if (!user || decoded.fp !== this.passwordFingerprint(user.passwordHash)) throw invalid();
+    const passwordHash = await argon2.hash(password);
+    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await this.prisma.session.deleteMany({ where: { userId: user.id } });
+    await this.prisma.auditLog.create({ data: { actorId: user.id, action: 'PASSWORD_RESET_COMPLETED', organizationId: user.organizationId, targetUserId: user.id } });
+    return { reset: true };
+  }
+
+  /**
+   * #110: self-service "forgot password". There is no SMTP yet, so the link cannot be mailed:
+   * the request always answers the same generic 200 (no account enumeration), and when the
+   * account exists the organization admins get a notification to issue the one-use link
+   * from Usuarios (same flow as #108). Outside production the link is also logged.
+   */
+  async requestPasswordReset(organizationSlug: string, email: string): Promise<{ requested: true }> {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: { organization: { slug: organizationSlug, status: 'ACTIVE' }, email: { equals: normalized, mode: 'insensitive' } },
+      select: { id: true, organizationId: true, passwordHash: true, name: true, email: true },
+    });
+    if (user?.organizationId) {
+      await this.prisma.auditLog.create({ data: { actorId: user.id, action: 'PASSWORD_RESET_REQUESTED', organizationId: user.organizationId, targetUserId: user.id, metadata: { email: user.email } } });
+      const organizationId = user.organizationId;
+      await this.notifications?.emitMany(
+        async () => (await this.prisma.user.findMany({ where: { organizationId, role: 'ADMIN' }, select: { id: true } })).map((admin) => admin.id),
+        NotificationType.USER_CHANGED,
+        { title: 'Solicitud de restablecimiento de contraseña', body: `${user.name} (${user.email}) ha pedido restablecer su contraseña. Genera un enlace desde Usuarios y envíaselo.`, link: `/users/${user.id}` },
+        { organizationId, actorId: user.id },
+      );
+      if (process.env.NODE_ENV !== 'production') {
+        const token = this.jwt.sign(
+          { sub: user.id, purpose: 'password-reset', fp: this.passwordFingerprint(user.passwordHash) },
+          { secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'), expiresIn: '1h' },
+        );
+        console.log(`[Auth] Password reset link: /reset-password#token=${token}`);
+      }
+    }
+    return { requested: true };
   }
 }

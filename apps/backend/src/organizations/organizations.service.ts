@@ -27,6 +27,38 @@ export interface Member {
   updatedAt: Date;
 }
 
+const MAX_IMPORT_ROWS = 500;
+// Same rule as the DTOs (IsEmail with require_tld: false): local@domain, no TLD required.
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;.]+(\.[^\s@,;.]+)*$/;
+
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+/** Minimal RFC 4180 parser: quotes, escaped quotes, CRLF/LF, BOM. */
+export function parseCsv(text: string): string[][] {
+  const input = text.replace(/^\uFEFF/, '');
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (quoted) {
+      if (ch === '"' && input[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',' || ch === ';') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && input[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+
 type MemberStatus = 'active' | 'inactive' | 'pending';
 
 @Injectable()
@@ -36,9 +68,13 @@ export class OrganizationsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async invite(organizationId: string, invitedById: string, dto: CreateInvitationDto) {
-    const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
+  async invite(organizationId: string, invitedById: string, dto: CreateInvitationDto, auditAction = 'MEMBER_INVITED') {
+    const email = dto.email.trim().toLowerCase();
+    dto = { ...dto, email };
+    const existing = await this.prisma.user.findFirst({ where: { organizationId, email: { equals: email, mode: 'insensitive' } } });
     if (existing) throw new BadRequestException('Ya existe una persona con ese correo electrónico en esta organización.');
+    const previous = await this.prisma.organizationInvitation.findUnique({ where: { organizationId_email: { organizationId, email } } });
+    const replacedPending = !!previous && previous.status === 'PENDING' && previous.expiresAt > new Date();
     const raw = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 86400000);
@@ -47,8 +83,98 @@ export class OrganizationsService {
       create: { organizationId, email: dto.email, role: dto.role, tokenHash, expiresAt, invitedById },
       update: { role: dto.role, tokenHash, expiresAt, status: 'PENDING', acceptedAt: null, invitedById },
     });
-    await this.prisma.auditLog.create({ data: { actorId: invitedById, action: 'MEMBER_INVITED', organizationId, metadata: { invitationId: invitation.id, role: dto.role } } });
-    return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt, invitationToken: raw };
+    await this.prisma.auditLog.create({ data: { actorId: invitedById, action: auditAction, organizationId, metadata: { invitationId: invitation.id, email, role: dto.role, replacedPending } } });
+    return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt, invitationToken: raw, replacedPending };
+  }
+
+  /** Pending invitations (including expired-but-unaccepted ones, flagged). */
+  async listInvitations(organizationId: string) {
+    const rows = await this.prisma.organizationInvitation.findMany({
+      where: { organizationId, status: 'PENDING' },
+      select: { id: true, email: true, role: true, expiresAt: true, createdAt: true, updatedAt: true, invitedBy: { select: { id: true, name: true } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const now = new Date();
+    return rows.map((row) => ({ ...row, expired: row.expiresAt <= now }));
+  }
+
+  /** Issues a fresh link for a pending invitation; the previous link stops working. */
+  async resendInvitation(organizationId: string, invitationId: string, actorId: string) {
+    const invitation = await this.prisma.organizationInvitation.findFirst({ where: { id: invitationId, organizationId, status: 'PENDING' } });
+    if (!invitation) throw new NotFoundException('No existe una invitación pendiente con ese id.');
+    const result = await this.invite(organizationId, actorId, { email: invitation.email, role: invitation.role }, 'INVITATION_RESENT');
+    return { ...result, replacedPending: true };
+  }
+
+  /**
+   * Bulk invitations from CSV (header: email,name,role). Each valid row gets an
+   * invitation link; invalid rows are reported with their line number. `name` is
+   * informative only: the invitee chooses their name when accepting.
+   */
+  async importInvitations(organizationId: string, actorId: string, csv: string) {
+    const rows = parseCsv(csv);
+    if (rows.length === 0) throw new BadRequestException('El CSV está vacío.');
+    const header = rows[0].map((cell) => cell.trim().toLowerCase());
+    const emailIdx = header.indexOf('email');
+    const nameIdx = header.indexOf('name');
+    const roleIdx = header.indexOf('role');
+    if (emailIdx < 0 || roleIdx < 0) throw new BadRequestException('La cabecera debe incluir las columnas email y role (name es opcional).');
+    const dataRows = rows.slice(1);
+    if (dataRows.length > MAX_IMPORT_ROWS) throw new BadRequestException(`El CSV no puede tener más de ${MAX_IMPORT_ROWS} filas.`);
+    const seen = new Set<string>();
+    const results: Array<{ line: number; email: string; name?: string; ok: boolean; error?: string; role?: string; invitationToken?: string; replacedPending?: boolean }> = [];
+    for (let i = 0; i < dataRows.length; i++) {
+      const line = i + 2;
+      const cells = dataRows[i];
+      if (cells.every((cell) => !cell.trim())) continue;
+      const email = (cells[emailIdx] ?? '').trim().toLowerCase();
+      const name = nameIdx >= 0 ? (cells[nameIdx] ?? '').trim() : undefined;
+      const role = (cells[roleIdx] ?? '').trim().toUpperCase();
+      const fail = (error: string) => results.push({ line, email, name, ok: false, error });
+      if (!email || email.length > 254 || !EMAIL_RE.test(email)) { fail('Email no válido.'); continue; }
+      if (!['STUDENT', 'TEACHER', 'ADMIN'].includes(role)) { fail('Rol no válido (usa STUDENT, TEACHER o ADMIN).'); continue; }
+      if (name && name.length > 100) { fail('El nombre no puede superar los 100 caracteres.'); continue; }
+      if (seen.has(email)) { fail('Email duplicado en el CSV.'); continue; }
+      seen.add(email);
+      try {
+        const created = await this.invite(organizationId, actorId, { email, role: role as 'STUDENT' | 'TEACHER' | 'ADMIN' }, 'MEMBER_INVITED_CSV');
+        results.push({ line, email, name, ok: true, role, invitationToken: created.invitationToken, replacedPending: created.replacedPending });
+      } catch (error) {
+        fail(error instanceof BadRequestException ? error.message : 'No se pudo crear la invitación.');
+      }
+    }
+    const created = results.filter((r) => r.ok).length;
+    await this.prisma.auditLog.create({ data: { actorId, action: 'INVITATIONS_IMPORTED', organizationId, metadata: { rows: results.length, created, failed: results.length - created } } });
+    return { total: results.length, created, failed: results.length - created, results };
+  }
+
+  async listAuditLogs(organizationId: string, page = 1, pageSize = 50) {
+    const take = Math.min(Math.max(pageSize, 1), 100);
+    const skip = (Math.max(page, 1) - 1) * take;
+    const [data, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'desc' },
+        skip, take,
+        select: { id: true, action: true, targetUserId: true, metadata: true, createdAt: true, actor: { select: { id: true, name: true, email: true } } },
+      }),
+      this.prisma.auditLog.count({ where: { organizationId } }),
+    ]);
+    return { data, total, page: Math.max(page, 1), pageSize: take, totalPages: Math.ceil(total / take) };
+  }
+
+  async stats(organizationId: string) {
+    const now = new Date();
+    const [byRole, pendingInvitations, courses, activeCourses, subjects] = await Promise.all([
+      this.prisma.user.groupBy({ by: ['role'], where: { organizationId }, _count: { _all: true } }),
+      this.prisma.organizationInvitation.count({ where: { organizationId, status: 'PENDING', expiresAt: { gt: now } } }),
+      this.prisma.course.count({ where: { organizationId } }),
+      this.prisma.course.count({ where: { organizationId, status: 'ACTIVE' } }),
+      this.prisma.subject.count({ where: { organizationId } }),
+    ]);
+    const roles = { ADMIN: 0, TEACHER: 0, STUDENT: 0 } as Record<string, number>;
+    for (const row of byRole) roles[row.role] = row._count._all;
+    return { users: roles.ADMIN + roles.TEACHER + roles.STUDENT, roles, pendingInvitations, courses, activeCourses, subjects };
   }
 
   async revokeInvitation(organizationId: string, invitationId: string, actorId: string) {
@@ -114,10 +240,12 @@ export class OrganizationsService {
     const filters: Prisma.UserWhereInput[] = [];
     const search = query?.q?.trim();
     if (search) {
+      // Prisma passes `contains` straight into LIKE: escape %, _ and \ so they match literally.
+      const literal = escapeLike(search);
       filters.push({
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
+          { name: { contains: literal, mode: 'insensitive' } },
+          { email: { contains: literal, mode: 'insensitive' } },
         ],
       });
     }
@@ -197,6 +325,7 @@ export class OrganizationsService {
     if (!target) throw new NotFoundException('Usuario no encontrado.');
     if (target.organizationId !== id) throw new ForbiddenException('El usuario pertenece a otra organización.');
     await this.prisma.user.delete({ where: { id: userId } });
+    await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_REMOVED', organizationId: id, metadata: { userId, name: target.name } } });
     await this.notifications.emitMany(
       async () => {
         const admins = await this.prisma.user.findMany({

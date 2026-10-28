@@ -11,6 +11,7 @@ import { APP_GUARD, Reflector } from '@nestjs/core';
 import * as request from 'supertest';
 import * as argon2 from 'argon2';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaService } from '@/prisma/prisma.service';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { CommonModule } from '@/common/common.module';
@@ -105,6 +106,7 @@ describe('Auth E2E', () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [
+        EventEmitterModule.forRoot(),
         ConfigModule.forRoot({ isGlobal: true }),
         PrismaModule,
         CommonModule,
@@ -128,7 +130,7 @@ describe('Auth E2E', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   beforeEach(() => {

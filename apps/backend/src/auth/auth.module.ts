@@ -4,9 +4,10 @@ import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthThrottlerModule } from './auth-rate-limit';
+import { NotificationsModule } from '@/notifications/notifications.module';
 
 @Module({
-  imports: [AuthThrottlerModule],
+  imports: [AuthThrottlerModule, NotificationsModule],
   controllers: [AuthController],
   providers: [AuthService],
   exports: [AuthService],

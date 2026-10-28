@@ -27,6 +27,10 @@ async function rememberStoredTokens(page: Page) {
 
 test.describe('Google sign-in client', () => {
   test.describe.configure({ timeout: 30_000 });
+  // #110: the button only renders when the backend reports Google as configured.
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/providers', (route) => route.fulfill({ json: { google: true } }));
+  });
   test('an empty organization code does not start Google sign-in', async ({ page }) => {
     const googleHits: string[] = [];
     const authHits: string[] = [];

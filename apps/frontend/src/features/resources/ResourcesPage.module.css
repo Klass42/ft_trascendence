@@ -78,3 +78,7 @@ span.treeChevron { cursor: default; }
   .sidebarCollapsed { display: none; }
   .sidebarToggle { display: block; margin-bottom: 8px; }
 }
+
+/* Filters use kit Input/Select (#109). */
+.filterSearch { flex: 1 1 240px; max-width: 320px; }
+.filterSelect { flex: 0 1 190px; }

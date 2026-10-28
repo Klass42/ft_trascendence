@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, KeyRound } from 'lucide-react';
+import { CopyLink, resetUrl } from './CopyLink';
 import { apiClient, useAuth } from '@/lib/api';
 import { ApiError } from '@/lib/api/types';
 import { Button, Spinner } from '@/components/ui';
@@ -17,6 +18,19 @@ export function AdminUserEditPage() {
   const { data, isLoading, error } = useUser(id);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reset, setReset] = useState<{ token: string; expiresAt: string } | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+
+  async function issueReset() {
+    setIsResetting(true); setResetError(null);
+    try {
+      const result = await apiClient.post<{ resetToken: string; expiresAt: string }>(`/auth/admin/users/${id}/password-reset`, {});
+      setReset({ token: result.resetToken, expiresAt: result.expiresAt });
+    } catch (err) {
+      setResetError(err instanceof ApiError ? err.message : 'No se pudo generar el enlace.');
+    } finally { setIsResetting(false); }
+  }
 
   if (isLoading) {
     return (
@@ -74,6 +88,21 @@ export function AdminUserEditPage() {
           gestionar tu avatar y datos personales.
         </div>
       ) : (
+        <>
+        <div className={styles.infoBox}>
+          <p className={styles.dangerTitle}>Contraseña</p>
+          <p className={styles.dangerHint}>
+            Genera un enlace de un solo uso (24 h) para que {data.name} elija una contraseña nueva. Al usarlo se cierran sus sesiones. No se envía correo: compártelo tú; la persona recibe un aviso en la app.
+          </p>
+          {resetError && <p role="alert">{resetError}</p>}
+          {reset ? (
+            <CopyLink label="Enlace para restablecer la contraseña" url={resetUrl(reset.token)} />
+          ) : (
+            <Button variant="outline" leftIcon={<KeyRound size={16} />} loading={isResetting} onClick={issueReset}>
+              Generar enlace de restablecimiento
+            </Button>
+          )}
+        </div>
         <div className={styles.dangerZone}>
           <p className={styles.dangerTitle}>Zona de peligro</p>
           <p className={styles.dangerHint}>
@@ -85,6 +114,7 @@ export function AdminUserEditPage() {
             </Button>
           </div>
         </div>
+        </>
       )}
 
       <DeleteUserDialog

@@ -14,6 +14,7 @@ export class AppService {
     };
   }
 
+  /** #110: public endpoint — only liveness, never process internals (uptime, memory). */
   async getHealth() {
     let database = 'up';
     try {
@@ -24,9 +25,6 @@ export class AppService {
     return {
       status: database === 'up' ? 'ok' : 'degraded',
       database,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
     };
   }
 }

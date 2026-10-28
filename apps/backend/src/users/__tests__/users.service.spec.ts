@@ -1,3 +1,4 @@
+import * as argon2 from 'argon2';
 import { ConflictException, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -20,8 +21,9 @@ const mockUser = {
 };
 
 const mkPrisma = () => ({
+  auditLog: { create: jest.fn() },
   organization: { findUnique: jest.fn(async () => null) }, 
-  user: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), delete: jest.fn() },
+  user: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), delete: jest.fn() },
   friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), delete: jest.fn() },
   courseMembership: { findMany: jest.fn(async () => []) },
 }) as unknown as PrismaService;
@@ -505,6 +507,37 @@ describe('UsersService', () => {
 
       await expect(service.lookupByEmail('admin@demo', ORG_ID, 'TEACHER'))
         .rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('own data (#111)', () => {
+    it('exports the caller data with a timestamp', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: mockUser.id, email: mockUser.email });
+      const r = await service.exportOwnData(mockUser.id);
+      expect(r.user.id).toBe(mockUser.id);
+      expect(typeof r.exportedAt).toBe('string');
+    });
+
+    it('rejects self-deletion with a wrong password', async () => {
+      const hash = await argon2.hash('Right1234');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u1', organizationId: ORG_ID, role: 'STUDENT', passwordHash: hash });
+      await expect(service.deleteOwnAccount('u1', { confirmation: 'ELIMINAR', password: 'nope' }))
+        .rejects.toThrow('La contraseña no es correcta.');
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('blocks the last admin from deleting themselves', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u1', organizationId: ORG_ID, role: 'ADMIN', passwordHash: null });
+      (prisma.user.count as jest.Mock).mockResolvedValue(1);
+      await expect(service.deleteOwnAccount('u1', { confirmation: 'ELIMINAR' })).rejects.toThrow(BadRequestException);
+    });
+
+    it('hard-deletes the account and audits it', async () => {
+      const hash = await argon2.hash('Right1234');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u1', organizationId: ORG_ID, role: 'STUDENT', passwordHash: hash });
+      await service.deleteOwnAccount('u1', { confirmation: 'ELIMINAR', password: 'Right1234' });
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
+      expect(prisma.auditLog.create).toHaveBeenCalled();
     });
   });
 });

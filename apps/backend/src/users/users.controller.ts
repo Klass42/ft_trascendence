@@ -19,6 +19,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 import { CurrentUser, AuthUser, Roles, RolesGuard } from '@/common/auth';
 import { MAX_AVATAR_UPLOAD_BYTES } from '@/files/file-validation';
@@ -35,6 +36,19 @@ export class UsersController {
   @Patch('me')
   async updateProfile(@Body() dto: UpdateProfileDto, @CurrentUser() user: AuthUser) {
     return this.usersService.updateProfile(user.userId, dto);
+  }
+
+  /** GDPR-style export of the caller's own data (#111). */
+  @Get('me/export')
+  async exportMyData(@CurrentUser() user: AuthUser) {
+    return this.usersService.exportOwnData(user.userId);
+  }
+
+  /** Irreversible self-deletion (#111). */
+  @Post('me/delete')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMyAccount(@Body() dto: DeleteAccountDto, @CurrentUser() user: AuthUser) {
+    await this.usersService.deleteOwnAccount(user.userId, dto);
   }
 
   @Patch('me/avatar')

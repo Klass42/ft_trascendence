@@ -70,7 +70,10 @@ export class UpdateResourceDto {
   fileId?: string | null;
 
   @ValidateIf((_, value) => value !== undefined && value !== null)
-  @IsUrl({ require_tld: false })
+  @IsUrl(
+    { require_tld: false, require_protocol: true, protocols: ['http', 'https'] },
+    { message: 'La URL del enlace debe empezar por http:// o https:// y ser una dirección web válida.' },
+  )
   externalUrl?: string | null;
 
   @IsEnum(LearningResourceStatus)

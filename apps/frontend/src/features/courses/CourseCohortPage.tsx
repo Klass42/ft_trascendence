@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Archive, ArchiveRestore, BookOpen, MoreVertical, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import { Archive, ArchiveRestore, BookOpen, MoreVertical, Pencil, Plus, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import { ApiError, apiClient, useAuth } from '@/lib/api';
+import { useUsersByIds } from '@/lib/api/hooks/useUsersByIds';
 import type { CohortStatus, CourseDTO, PublicationStatus, SubjectDTO, SubjectStaffRole, UpdateCourseInput, UpdateSubjectInput } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
 import {
@@ -34,8 +35,23 @@ function subjectStatusVariant(status: PublicationStatus): 'success' | 'neutral' 
 }
 
 function isValidEmail(value: string) {
-  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  // #105: same rule as the backend — the domain does not need a TLD (seed: student@demo).
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+$/.test(value);
 }
+
+/** Server message for business errors (403/409), so the user sees the real reason. */
+function apiReason(err: unknown, fallback: string) {
+  if (err instanceof ApiError && (err.status === 403 || err.status === 409) && err.message) {
+    return err.message;
+  }
+  return fallback;
+}
+
+interface CohortMemberRow { userId: string }
+interface SubjectStaffRow { subjectId: string; userId: string; role: SubjectStaffRole }
+type RemovalTarget =
+  | { kind: 'member'; userId: string; label: string }
+  | { kind: 'staff'; userId: string; subjectId: string; label: string; subjectTitle: string };
 
 interface SubjectActionsProps {
   subject: SubjectDTO;
@@ -94,6 +110,29 @@ export function CourseCohortPage() {
   const [staffEmailError, setStaffEmailError] = useState('');
   const [staffSubjectId, setStaffSubjectId] = useState('');
   const [staffRole, setStaffRole] = useState<SubjectStaffRole>('TEACHER');
+  const [members, setMembers] = useState<CohortMemberRow[]>([]);
+  const [staff, setStaff] = useState<SubjectStaffRow[]>([]);
+  const [removalTarget, setRemovalTarget] = useState<RemovalTarget | null>(null);
+  const rosterIds = Array.from(new Set([...members.map((m) => m.userId), ...staff.map((s) => s.userId)]));
+  const { data: rosterUsers } = useUsersByIds(rosterIds);
+  const userLabel = (userId: string) => {
+    const found = rosterUsers?.find((u) => u.id === userId);
+    return found ? `${found.name} (${found.email})` : userId;
+  };
+
+  const reloadRoster = useCallback(async (subjectList: SubjectDTO[]) => {
+    if (!courseId || !isAdmin) return;
+    try {
+      const [nextMembers, staffLists] = await Promise.all([
+        apiClient.get<CohortMemberRow[]>(`/courses/${courseId}/members`),
+        Promise.all(subjectList.map((subject) => apiClient.get<SubjectStaffRow[]>(`/subjects/${subject.id}/staff`))),
+      ]);
+      setMembers(nextMembers);
+      setStaff(staffLists.flat());
+    } catch {
+      toast({ message: 'No se pudo cargar la lista de matriculados y equipo.', variant: 'error' });
+    }
+  }, [courseId, isAdmin, toast]);
 
   const reload = useCallback(() => {
     if (!courseId) return;
@@ -106,10 +145,11 @@ export function CourseCohortPage() {
       setSubjects(nextSubjects);
       setStaffSubjectId((current) => current || nextSubjects[0]?.id || '');
       setError(null);
+      void reloadRoster(nextSubjects);
     }).catch(() => {
       setError('No se pudo cargar la cohorte y sus asignaturas.');
     }).finally(() => setLoading(false));
-  }, [courseId]);
+  }, [courseId, reloadRoster]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -149,24 +189,25 @@ export function CourseCohortPage() {
       setCourse(updated);
       setCourseEditOpen(false);
       toast({ message: 'Cohorte actualizada.', variant: 'success' });
-    } catch {
-      toast({ message: 'No se pudo actualizar la cohorte.', variant: 'error' });
+    } catch (err) {
+      toast({ message: apiReason(err, 'No se pudo actualizar la cohorte.'), variant: 'error' });
       throw new Error('No se pudo actualizar la cohorte.');
     }
   }
 
   async function toggleCohortArchive() {
     if (!course) return;
-    const status: CohortStatus = course.status === 'ARCHIVED' ? 'PLANNED' : 'ARCHIVED';
+    // #105: unarchiving returns the cohort to "En curso" (ACTIVE).
+    const status: CohortStatus = course.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED';
     try {
       const updated = await apiClient.patch<CourseDTO>(`/courses/${course.id}`, { status });
       setCourse(updated);
       toast({
-        message: status === 'ARCHIVED' ? 'Cohorte archivada.' : 'Cohorte desarchivada como planificada.',
+        message: status === 'ARCHIVED' ? 'Cohorte archivada.' : 'Cohorte desarchivada: vuelve a estar en curso.',
         variant: 'success',
       });
-    } catch {
-      toast({ message: 'No se pudo cambiar el estado de la cohorte.', variant: 'error' });
+    } catch (err) {
+      toast({ message: apiReason(err, 'No se pudo cambiar el estado de la cohorte.'), variant: 'error' });
     }
   }
 
@@ -177,8 +218,8 @@ export function CourseCohortPage() {
       await apiClient.delete(`/courses/${course.id}`);
       toast({ message: 'Cohorte eliminada.', variant: 'success' });
       navigate('/courses');
-    } catch {
-      toast({ message: 'No se pudo eliminar. Si hay matrículas o intentos, archívala para conservar el historial.', variant: 'error' });
+    } catch (err) {
+      toast({ message: apiReason(err, 'No se pudo eliminar. Si hay matrículas o intentos, archívala para conservar el historial.'), variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -229,8 +270,8 @@ export function CourseCohortPage() {
       setSubjects((items) => items.filter((subject) => subject.id !== subjectDeleteTarget.id));
       toast({ message: 'Asignatura eliminada.', variant: 'success' });
       setSubjectDeleteTarget(null);
-    } catch {
-      toast({ message: 'No se pudo eliminar. Si tiene matrículas, entregas o intentos, archívala.', variant: 'error' });
+    } catch (err) {
+      toast({ message: apiReason(err, 'No se pudo eliminar. Si tiene entregas o intentos, archívala.'), variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -256,13 +297,16 @@ export function CourseCohortPage() {
       setMemberOpen(false);
       setMemberEmail('');
       setMemberEmailError('');
-      toast({ message: 'Alumno matriculado.', variant: 'success' });
+      toast({ message: 'Usuario matriculado.', variant: 'success' });
+      void reloadRoster(subjects);
     } catch (err) {
       if (err instanceof ApiError && err.isNotFound) {
         setMemberEmailError('No se encontró una cuenta con ese correo.');
       } else if (err instanceof ApiError && err.isValidationError) {
         const mapped = mapApiValidationErrors(err.errors ?? []);
         setMemberEmailError(mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.');
+      } else if (err instanceof ApiError && (err.status === 403 || err.status === 409)) {
+        setMemberEmailError(apiReason(err, 'No se pudo matricular.'));
       } else {
         toast({ message: 'No se pudo matricular al alumno.', variant: 'error' });
       }
@@ -287,15 +331,38 @@ export function CourseCohortPage() {
       setStaffEmail('');
       setStaffEmailError('');
       toast({ message: 'Profesor asignado.', variant: 'success' });
+      void reloadRoster(subjects);
     } catch (err) {
       if (err instanceof ApiError && err.isNotFound) {
         setStaffEmailError('No se encontró una cuenta con ese correo.');
       } else if (err instanceof ApiError && err.isValidationError) {
         const mapped = mapApiValidationErrors(err.errors ?? []);
         setStaffEmailError(mapped.fields.email ?? 'Revisa el correo e inténtalo de nuevo.');
+      } else if (err instanceof ApiError && (err.status === 403 || err.status === 409)) {
+        setStaffEmailError(apiReason(err, 'No se pudo asignar.'));
       } else {
         toast({ message: 'No se pudo asignar al profesor.', variant: 'error' });
       }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRemoval() {
+    if (!removalTarget || !courseId) return;
+    setBusy(true);
+    try {
+      if (removalTarget.kind === 'member') {
+        await apiClient.delete(`/courses/${courseId}/members/${removalTarget.userId}`);
+        toast({ message: 'Usuario desmatriculado.', variant: 'success' });
+      } else {
+        await apiClient.delete(`/subjects/${removalTarget.subjectId}/staff/${removalTarget.userId}`);
+        toast({ message: 'Profesor quitado de la asignatura.', variant: 'success' });
+      }
+      setRemovalTarget(null);
+      await reloadRoster(subjects);
+    } catch (err) {
+      toast({ message: apiReason(err, 'No se pudo completar la baja.'), variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -377,6 +444,56 @@ export function CourseCohortPage() {
         )}
       </section>
 
+      {isAdmin && (
+        <section className={styles.subjectSection}>
+          <h2>Matriculados ({members.length})</h2>
+          {members.length === 0 ? (
+            <p className={styles.sectionEmpty}>Todavía no hay nadie matriculado en esta cohorte.</p>
+          ) : (
+            <ul className={styles.subjectList} aria-label="Matriculados">
+              {members.map((member) => (
+                <li className={styles.subjectRow} key={member.userId}>
+                  <span className={styles.subjectTitle}>{userLabel(member.userId)}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<UserMinus size={16} />}
+                    onClick={() => setRemovalTarget({ kind: 'member', userId: member.userId, label: userLabel(member.userId) })}
+                  >Desmatricular</Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className={styles.subjectSection}>
+          <h2>Equipo docente ({staff.length})</h2>
+          {staff.length === 0 ? (
+            <p className={styles.sectionEmpty}>Todavía no hay profesores asignados.</p>
+          ) : (
+            <ul className={styles.subjectList} aria-label="Equipo docente">
+              {staff.map((row) => {
+                const subjectTitle = subjects.find((subject) => subject.id === row.subjectId)?.title ?? '';
+                return (
+                  <li className={styles.subjectRow} key={`${row.subjectId}:${row.userId}`}>
+                    <span className={styles.subjectTitle}>{userLabel(row.userId)}</span>
+                    <Badge variant="info">{row.role === 'TEACHER' ? 'Profesor' : 'Asistente'} · {subjectTitle}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={<UserMinus size={16} />}
+                      onClick={() => setRemovalTarget({ kind: 'staff', userId: row.userId, subjectId: row.subjectId, label: userLabel(row.userId), subjectTitle })}
+                    >Quitar</Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
       <Modal
         open={subjectOpen}
         onClose={() => { setSubjectOpen(false); setSubjectTitleError(''); }}
@@ -424,8 +541,8 @@ export function CourseCohortPage() {
         </div>
       </Modal>
 
-      <Modal open={memberOpen} onClose={() => { setMemberOpen(false); setMemberEmailError(''); }} title="Matricular alumno" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
-        <Input label="Correo electrónico del alumno" type="email" maxLength={254} value={memberEmail} error={memberEmailError} onChange={(event) => { setMemberEmail(event.target.value); setMemberEmailError(''); }} required />
+      <Modal open={memberOpen} onClose={() => { setMemberOpen(false); setMemberEmailError(''); }} title="Matricular en la cohorte" footer={<Button loading={busy} onClick={enrollStudent}>Matricular</Button>}>
+        <Input label="Correo electrónico (alumno o profesor)" type="email" maxLength={254} value={memberEmail} error={memberEmailError} onChange={(event) => { setMemberEmail(event.target.value); setMemberEmailError(''); }} required />
       </Modal>
 
       <Modal open={staffOpen} onClose={() => { setStaffOpen(false); setStaffEmailError(''); }} title="Asignar profesor" footer={<Button loading={busy} onClick={assignTeacher}>Asignar profesor</Button>}>
@@ -470,12 +587,27 @@ export function CourseCohortPage() {
       <ConfirmDialog
         open={subjectDeleteTarget !== null}
         title="Eliminar asignatura"
-        message={subjectDeleteTarget ? `Se borrará «${subjectDeleteTarget.title}» y su contenido. Si la cohorte tiene matrículas o hay entregas o intentos, tendrás que archivarla.` : ''}
+        message={subjectDeleteTarget ? `Se borrará «${subjectDeleteTarget.title}» y su contenido. Si ya tiene entregas o intentos, tendrás que archivarla.` : ''}
         confirmLabel="Eliminar asignatura"
         variant="danger"
         loading={busy}
         onCancel={() => setSubjectDeleteTarget(null)}
         onConfirm={deleteSubject}
+      />
+
+      <ConfirmDialog
+        open={removalTarget !== null}
+        title={removalTarget?.kind === 'staff' ? 'Quitar del equipo' : 'Desmatricular'}
+        message={removalTarget
+          ? removalTarget.kind === 'staff'
+            ? `${removalTarget.label} dejará de formar parte del equipo de «${removalTarget.subjectTitle}».`
+            : `${removalTarget.label} dejará de estar matriculado en «${course.name}».`
+          : ''}
+        confirmLabel={removalTarget?.kind === 'staff' ? 'Quitar' : 'Desmatricular'}
+        variant="danger"
+        loading={busy}
+        onCancel={() => setRemovalTarget(null)}
+        onConfirm={confirmRemoval}
       />
     </div>
   );

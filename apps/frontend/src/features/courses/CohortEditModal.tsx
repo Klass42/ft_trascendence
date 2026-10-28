@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { CourseDTO, UpdateCourseInput } from '@/lib/api';
-import { Button, DatePicker, Input, Modal } from '@/components/ui';
+import type { CohortStatus, CourseDTO, UpdateCourseInput } from '@/lib/api';
+import { Button, DatePicker, Input, Modal, Select } from '@/components/ui';
 import styles from './CohortEditModal.module.css';
 
 interface CohortEditModalProps {
@@ -15,6 +15,7 @@ export function CohortEditModal({ course, open, onClose, onSave }: CohortEditMod
   const [academicYear, setAcademicYear] = useState('');
   const [startsOn, setStartsOn] = useState('');
   const [endsOn, setEndsOn] = useState('');
+  const [status, setStatus] = useState<CohortStatus>('PLANNED');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -24,6 +25,7 @@ export function CohortEditModal({ course, open, onClose, onSave }: CohortEditMod
     setAcademicYear(course.academicYear);
     setStartsOn(course.startsOn.slice(0, 10));
     setEndsOn(course.endsOn.slice(0, 10));
+    setStatus(course.status);
     setErrors({});
   }, [course, open]);
 
@@ -49,6 +51,7 @@ export function CohortEditModal({ course, open, onClose, onSave }: CohortEditMod
         academicYear: academicYear.trim(),
         startsOn,
         endsOn,
+        ...(status !== course.status && { status }),
       });
     } catch {
       // The caller reports the API error and keeps the modal open for correction.
@@ -104,6 +107,16 @@ export function CohortEditModal({ course, open, onClose, onSave }: CohortEditMod
             required
           />
         </div>
+        <Select
+          label="Estado"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as CohortStatus)}
+          options={[
+            { value: 'PLANNED', label: 'Planificada' },
+            { value: 'ACTIVE', label: 'En curso' },
+            { value: 'ARCHIVED', label: 'Archivada' },
+          ]}
+        />
       </div>
     </Modal>
   );

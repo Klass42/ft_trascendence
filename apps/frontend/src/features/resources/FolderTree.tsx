@@ -7,6 +7,11 @@ import styles from './ResourcesPage.module.css';
  * Drive-style folder tree for the library sidebar (#22). Clicking a node
  * navigates; the chevron only expands/collapses. Ancestors of the active
  * folder are always expanded so the current location stays visible.
+ *
+ * Accessibility (#109): rendered as nested lists of buttons inside the
+ * page's labelled «Carpetas» landmark rather than an ARIA `tree` — the tree
+ * pattern requires roving focus/arrow keys we do not implement, and a bare
+ * `role="tree"` without valid `treeitem`s fails axe.
  */
 export function FolderTree({ folders, activeId, onOpen }: {
   folders: ResourceFolderDTO[];
@@ -42,16 +47,16 @@ export function FolderTree({ folders, activeId, onOpen }: {
     const list = children.get(parentId);
     if (!list?.length) return null;
     return (
-      <ul role={depth === 0 ? undefined : 'group'} className={styles.treeList}>
+      <ul className={styles.treeList}>
         {list.map((f) => {
           const hasKids = !!children.get(f.id)?.length;
           const open = expanded.has(f.id) || ancestors.has(f.id);
           const active = f.id === activeId;
           return (
-            <li key={f.id} role="treeitem" aria-expanded={hasKids ? open : undefined} aria-selected={active}>
+            <li key={f.id}>
               <div className={`${styles.treeRow} ${active ? styles.treeRowActive : ''}`} style={{ paddingLeft: 6 + depth * 14 }}>
                 {hasKids ? (
-                  <button type="button" className={styles.treeChevron} onClick={() => toggle(f.id)} aria-label={`${open ? 'Contraer' : 'Expandir'} ${f.name}`}>
+                  <button type="button" className={styles.treeChevron} onClick={() => toggle(f.id)} aria-expanded={open} aria-label={`${open ? 'Contraer' : 'Expandir'} ${f.name}`}>
                     {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
                 ) : <span className={styles.treeChevron} aria-hidden="true" />}
@@ -69,17 +74,19 @@ export function FolderTree({ folders, activeId, onOpen }: {
   };
 
   return (
-    <nav aria-label="Carpetas de la biblioteca">
-      <div role="tree" aria-label="Árbol de carpetas">
-        <div className={`${styles.treeRow} ${activeId === null ? styles.treeRowActive : ''}`} style={{ paddingLeft: 6 }}>
-          <span className={styles.treeChevron} aria-hidden="true" />
-          <button type="button" className={styles.treeLabel} onClick={() => onOpen(null)} aria-current={activeId === null ? 'page' : undefined}>
-            <Library size={16} aria-hidden="true" /><span>Biblioteca</span>
-          </button>
-        </div>
-        {renderLevel(null, 1)}
-        {folders.length === 0 && <p className={styles.treeEmpty}>Aún no hay carpetas.</p>}
-      </div>
-    </nav>
+    <div>
+      <ul className={styles.treeList} aria-label="Árbol de carpetas">
+        <li>
+          <div className={`${styles.treeRow} ${activeId === null ? styles.treeRowActive : ''}`} style={{ paddingLeft: 6 }}>
+            <span className={styles.treeChevron} aria-hidden="true" />
+            <button type="button" className={styles.treeLabel} onClick={() => onOpen(null)} aria-current={activeId === null ? 'page' : undefined}>
+              <Library size={16} aria-hidden="true" /><span>Biblioteca</span>
+            </button>
+          </div>
+          {renderLevel(null, 1)}
+        </li>
+      </ul>
+      {folders.length === 0 && <p className={styles.treeEmpty}>Aún no hay carpetas.</p>}
+    </div>
   );
 }

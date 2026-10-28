@@ -173,3 +173,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.filters {
+  max-width: 240px;
+  margin-bottom: var(--space-4);
+}
