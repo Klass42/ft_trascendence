@@ -6,8 +6,8 @@
  *
  * Usage:
  *   <ConfirmDialog open={o} onCancel={close} onConfirm={del}
- *     title="Borrar tarea" message="Esta acción no se puede deshacer."
- *     confirmLabel="Borrar" variant="danger" />
+ *     title="Eliminar tarea" message="Esta acción no se puede deshacer."
+ *     confirmLabel="Eliminar" variant="danger" />
  */
 import { type ReactNode } from 'react';
 import { Modal } from './Modal';

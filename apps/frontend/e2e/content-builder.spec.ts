@@ -194,16 +194,16 @@ test.describe('Content builder (TEACHER)', () => {
   test('deletes a lesson', async ({ page, request }) => {
     const sectionId = await addSection(request, subject.id, 'Lecciones', 1);
     await addLesson(request, sectionId, 'Se queda', 1);
-    await addLesson(request, sectionId, 'Para borrar', 2);
+    await addLesson(request, sectionId, 'Para eliminar', 2);
     await openEditor(page, subject.id);
 
-    await lessonRow(page, 'Para borrar').getByRole('button', { name: 'Eliminar' }).click();
+    await lessonRow(page, 'Para eliminar').getByRole('button', { name: 'Eliminar' }).click();
     const confirm = page.getByRole('dialog');
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Eliminar' }).click();
 
     await expect(page.getByText('Lección eliminada')).toBeVisible({ timeout: 8000 });
-    await expect(lessonRow(page, 'Para borrar')).toHaveCount(0);
+    await expect(lessonRow(page, 'Para eliminar')).toHaveCount(0);
     await expect(lessonRow(page, 'Se queda')).toBeVisible();
     const [saved] = await sectionsOf(request, subject.id);
     expect(saved.lessons.map((l) => l.title)).toEqual(['Se queda']);
@@ -211,16 +211,16 @@ test.describe('Content builder (TEACHER)', () => {
 
   test('deletes a section', async ({ page, request }) => {
     await addSection(request, subject.id, 'Se queda', 1);
-    await addSection(request, subject.id, 'Para borrar', 2);
+    await addSection(request, subject.id, 'Para eliminar', 2);
     await openEditor(page, subject.id);
 
-    await sectionCard(page, 'Para borrar').getByRole('button', { name: 'Eliminar' }).click();
+    await sectionCard(page, 'Para eliminar').getByRole('button', { name: 'Eliminar' }).click();
     const confirm = page.getByRole('dialog');
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Eliminar' }).click();
 
     await expect(page.getByText('Sección eliminada')).toBeVisible({ timeout: 8000 });
-    await expect(sectionCard(page, 'Para borrar')).toHaveCount(0);
+    await expect(sectionCard(page, 'Para eliminar')).toHaveCount(0);
     await expect(sectionCard(page, 'Se queda')).toBeVisible();
     expect((await sectionsOf(request, subject.id)).map((s) => s.title)).toEqual(['Se queda']);
   });

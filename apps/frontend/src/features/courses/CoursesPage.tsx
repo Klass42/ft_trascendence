@@ -172,11 +172,11 @@ export function CoursesPage() {
     try {
       await apiClient.delete(`/courses/${deleteTarget.id}`);
       setCourseList((items) => items.filter((course) => course.id !== deleteTarget.id));
-      toast({ message: 'Cohorte borrada.', variant: 'success' });
+      toast({ message: 'Cohorte eliminada.', variant: 'success' });
       setDeleteTarget(null);
     } catch {
       toast({
-        message: 'No se pudo borrar. Si tiene matrículas o intentos, archívala para conservar el historial.',
+        message: 'No se pudo eliminar. Si tiene matrículas o intentos, archívala para conservar el historial.',
         variant: 'error',
       });
     } finally {
@@ -287,9 +287,9 @@ export function CoursesPage() {
 
           <ConfirmDialog
             open={deleteTarget !== null}
-            title="Borrar cohorte"
+            title="Eliminar cohorte"
             message={deleteTarget ? `Se borrará «${deleteTarget.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.` : ''}
-            confirmLabel="Borrar cohorte"
+            confirmLabel="Eliminar cohorte"
             variant="danger"
             loading={deleting}
             onCancel={() => setDeleteTarget(null)}

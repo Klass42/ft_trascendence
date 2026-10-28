@@ -174,7 +174,7 @@ export class OrganizationsService {
 
     const pending = await this.prisma.notification.findFirst({
       where: {
-        title: `Solicitud de borrado: ${org.name}`,
+        title: `Solicitud de eliminación: ${org.name}`,
         link: `/platform/organizations/${org.id}`,
         read: false,
         user: { platformRole: 'SUPERADMIN' },
@@ -233,7 +233,7 @@ export class OrganizationsService {
       throw new ServiceUnavailableException('Ninguna persona administradora de la plataforma puede recibir esta solicitud.');
     }
 
-    const title = `Solicitud de borrado: ${org.name}`;
+    const title = `Solicitud de eliminación: ${org.name}`;
     const link = `/platform/organizations/${org.id}`;
     let notified = 0;
 
@@ -246,7 +246,7 @@ export class OrganizationsService {
 
       await this.notifications.emit(superadmin.id, NotificationType.SYSTEM, {
         title,
-        body: `${actor.name} (${actor.email}) pide borrar la organización «${org.name}» (${org.slug}).`,
+        body: `${actor.name} (${actor.email}) pide eliminar la organización «${org.name}» (${org.slug}).`,
         link,
       });
       notified += 1;
@@ -279,7 +279,7 @@ export class OrganizationsService {
     });
     if (!org) throw new NotFoundException('Organización no encontrada.');
 
-    const title = `Solicitud de borrado: ${org.name}`;
+    const title = `Solicitud de eliminación: ${org.name}`;
     const link = `/platform/organizations/${org.id}`;
 
     const pending = await this.prisma.notification.findMany({

@@ -58,8 +58,8 @@ test.describe('B2a — activity authoring', () => {
     await expect(page.getByText('Publicada').first()).toBeVisible({ timeout: 8000 });
 
     // ── Delete (cleanup) ─────────────────────────────────────────────────
-    await page.getByRole('button', { name: 'Borrar tarea' }).click();
-    await page.getByRole('button', { name: 'Borrar', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Eliminar tarea' }).click();
+    await page.getByRole('button', { name: 'Eliminar', exact: true }).last().click();
     await expect(
       page.getByRole('heading', { level: 2, name: title }),
     ).toHaveCount(0, { timeout: 8000 });

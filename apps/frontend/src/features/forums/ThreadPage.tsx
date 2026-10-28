@@ -221,10 +221,10 @@ export function ThreadPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  aria-label="Borrar hilo"
+                  aria-label="Eliminar hilo"
                   onClick={() => setPendingDelete({ kind: 'thread' })}
                 >
-                  Borrar
+                  Eliminar
                 </Button>
               )}
             </div>
@@ -287,9 +287,9 @@ export function ThreadPage() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title={pendingDelete?.kind === 'thread' ? 'Borrar hilo' : 'Borrar mensaje'}
+        title={pendingDelete?.kind === 'thread' ? 'Eliminar hilo' : 'Eliminar mensaje'}
         message={deleteMessage(pendingDelete)}
-        confirmLabel="Borrar"
+        confirmLabel="Eliminar"
         variant="danger"
         loading={deletingPost || deletingThread}
         onConfirm={() => void confirmDelete()}
@@ -423,10 +423,10 @@ function PostNode(props: PostNodeProps) {
                 <button
                   type="button"
                   className={`${styles.linkAction} ${styles.linkActionDanger}`}
-                  aria-label="Borrar mensaje"
+                  aria-label="Eliminar mensaje"
                   onClick={() => onDelete(post)}
                 >
-                  Borrar
+                  Eliminar
                 </button>
               )}
             </div>

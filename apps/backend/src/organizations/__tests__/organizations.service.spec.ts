@@ -270,7 +270,7 @@ describe('OrganizationsService', () => {
   });
 
   describe('requestDeletion', () => {
-    const title = 'Solicitud de borrado: Klass Academy';
+    const title = 'Solicitud de eliminación: Klass Academy';
     const link = `/platform/organizations/${ORG_ID}`;
 
     it('notifies every superadmin and writes an audit log', async () => {
@@ -287,7 +287,7 @@ describe('OrganizationsService', () => {
       expect(notifications.emit).toHaveBeenCalledTimes(2);
       expect(notifications.emit).toHaveBeenCalledWith('sa-1', NotificationType.SYSTEM, {
         title,
-        body: 'Ada Admin (admin@demo) pide borrar la organización «Klass Academy» (klass).',
+        body: 'Ada Admin (admin@demo) pide eliminar la organización «Klass Academy» (klass).',
         link,
       });
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
@@ -359,7 +359,7 @@ describe('OrganizationsService', () => {
       await expect(service.getDeletionRequestStatus(ORG_ID)).resolves.toEqual({ pending: true });
       expect(prisma.notification.findFirst).toHaveBeenCalledWith({
         where: {
-          title: 'Solicitud de borrado: Klass Academy',
+          title: 'Solicitud de eliminación: Klass Academy',
           link: `/platform/organizations/${ORG_ID}`,
           read: false,
           user: { platformRole: 'SUPERADMIN' },
@@ -384,7 +384,7 @@ describe('OrganizationsService', () => {
   });
 
   describe('cancelDeletionRequest', () => {
-    const title = 'Solicitud de borrado: Klass Academy';
+    const title = 'Solicitud de eliminación: Klass Academy';
     const link = `/platform/organizations/${ORG_ID}`;
 
     it('marks unread superadmin requests as read and writes an audit log', async () => {

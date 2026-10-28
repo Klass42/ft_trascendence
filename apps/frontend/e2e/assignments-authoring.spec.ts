@@ -84,9 +84,9 @@ test.describe('Tareas — authoring & window', () => {
     );
     expect(status).toBe(400);
 
-    await page.getByRole('button', { name: 'Borrar tarea' }).click();
+    await page.getByRole('button', { name: 'Eliminar tarea' }).click();
     await page
-      .getByRole('button', { name: 'Borrar', exact: true })
+      .getByRole('button', { name: 'Eliminar', exact: true })
       .last()
       .click();
     await expect(

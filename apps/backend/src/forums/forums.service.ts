@@ -225,7 +225,7 @@ export class ForumsService {
     const { thread, access } = await this.requireThreadMembership(threadId, actingUserId);
     if (!access.isStaff) {
       if (!thread.authorId || thread.authorId !== actingUserId) {
-        throw new ForbiddenException('No tienes permiso para borrar este hilo.');
+        throw new ForbiddenException('No tienes permiso para eliminar este hilo.');
       }
       const othersPosts = await this.prisma.forumPost.count({
         where: { threadId, OR: [{ authorId: null }, { authorId: { not: actingUserId } }] },
@@ -315,14 +315,14 @@ export class ForumsService {
     const { post, access } = await this.requirePostMembership(postId, actingUserId);
     const isAuthor = !!post.authorId && post.authorId === actingUserId;
     if (!isAuthor && !access.isStaff) {
-      throw new ForbiddenException('No tienes permiso para borrar este mensaje.');
+      throw new ForbiddenException('No tienes permiso para eliminar este mensaje.');
     }
     // Replies cascade with the post: an author may not take other people's
     // replies down with their own message; moderators may.
     if (!access.isStaff) {
       const replies = await this.prisma.forumPost.count({ where: { parentId: postId } });
       if (replies > 0) {
-        throw new ConflictException('Este mensaje ya tiene respuestas y no se puede borrar.');
+        throw new ConflictException('Este mensaje ya tiene respuestas y no se puede eliminar.');
       }
     }
     await this.prisma.forumPost.delete({ where: { id: postId } });
