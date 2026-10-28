@@ -30,6 +30,8 @@ import styles from './Card.module.css';
 export interface CardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   /** Card title - can be string or ReactNode for custom layouts */
   title?: ReactNode;
+  /** Heading level of the title (default h3); pick it so the page outline has no gaps */
+  titleAs?: 'h2' | 'h3' | 'h4';
   /** Subtitle displayed below title */
   subtitle?: ReactNode;
   /** Footer content - typically actions */
@@ -78,11 +80,12 @@ function CardHeader({ children }: CardHeaderProps) {
 }
 
 interface CardTitleProps {
+  as?: 'h2' | 'h3' | 'h4';
   children: ReactNode;
 }
 
-function CardTitle({ children }: CardTitleProps) {
-  return <h3 className={styles.title}>{children}</h3>;
+function CardTitle({ as: Heading = 'h3', children }: CardTitleProps) {
+  return <Heading className={styles.title}>{children}</Heading>;
 }
 
 interface CardSubtitleProps {
@@ -122,6 +125,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
   (
     {
       title,
+      titleAs,
       subtitle,
       footer,
       padding = 'md',
@@ -136,7 +140,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <CardRoot ref={ref} hoverable={hoverable} className={className} {...props}>
         {(title || subtitle) && (
           <CardHeader>
-            {title && <CardTitle>{title}</CardTitle>}
+            {title && <CardTitle as={titleAs}>{title}</CardTitle>}
             {subtitle && <CardSubtitle>{subtitle}</CardSubtitle>}
           </CardHeader>
         )}

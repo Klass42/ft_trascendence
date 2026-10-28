@@ -15,14 +15,15 @@ import {
   Spinner,
   useToast,
 } from '@/components/ui';
+import { formatDayMonth } from '@/lib/format';
 import { CohortEditModal } from './CohortEditModal';
 import { CourseActionsMenu } from './CourseActionsMenu';
 import styles from './CoursesPage.module.css';
 
 function statusLabel(status: CohortStatus): string {
   if (status === 'ACTIVE') return 'En curso';
-  if (status === 'ARCHIVED') return 'Archivado';
-  return 'Planificado';
+  if (status === 'ARCHIVED') return 'Archivada';
+  return 'Planificada';
 }
 
 function statusVariant(status: CohortStatus): 'success' | 'neutral' | 'info' {
@@ -32,9 +33,7 @@ function statusVariant(status: CohortStatus): 'success' | 'neutral' | 'info' {
 }
 
 function formatDateRange(course: CourseDTO): string {
-  const format = (value: string) => new Intl.DateTimeFormat('es-ES', {
-    day: 'numeric', month: 'short', timeZone: 'UTC',
-  }).format(new Date(value));
+  const format = (value: string) => formatDayMonth(value, 'UTC');
   return `${format(course.startsOn)} – ${format(course.endsOn)}`;
 }
 
@@ -183,11 +182,11 @@ export function CoursesPage() {
     try {
       await apiClient.delete(`/courses/${deleteTarget.id}`);
       setCourseList((items) => items.filter((course) => course.id !== deleteTarget.id));
-      toast({ message: 'Cohorte borrada.', variant: 'success' });
+      toast({ message: 'Cohorte eliminada.', variant: 'success' });
       setDeleteTarget(null);
     } catch {
       toast({
-        message: 'No se pudo borrar. Si tiene matrículas o intentos, archívala para conservar el historial.',
+        message: 'No se pudo eliminar. Si tiene matrículas o intentos, archívala para conservar el historial.',
         variant: 'error',
       });
     } finally {
@@ -311,9 +310,9 @@ export function CoursesPage() {
                 value={status}
                 onChange={(event) => setStatus(event.target.value as CohortStatus)}
                 options={[
-                  { value: 'PLANNED', label: 'Planificado' },
+                  { value: 'PLANNED', label: 'Planificada' },
                   { value: 'ACTIVE', label: 'En curso' },
-                  { value: 'ARCHIVED', label: 'Archivado' },
+                  { value: 'ARCHIVED', label: 'Archivada' },
                 ]}
               />
             </div>
@@ -328,9 +327,9 @@ export function CoursesPage() {
 
           <ConfirmDialog
             open={deleteTarget !== null}
-            title="Borrar cohorte"
+            title="Eliminar cohorte"
             message={deleteTarget ? `Se borrará «${deleteTarget.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.` : ''}
-            confirmLabel="Borrar cohorte"
+            confirmLabel="Eliminar cohorte"
             variant="danger"
             loading={deleting}
             onCancel={() => setDeleteTarget(null)}

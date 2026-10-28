@@ -120,7 +120,7 @@ test.describe('F6+F7 — AppLayout', () => {
     // A student sees the shared items plus their role-flagged ones. Tareas and
     // Foros are student:true + teacher:true, so students must see them too — a
     // regression guard for the nav filter fix that previously hid them.
-    for (const item of ['Inicio', 'Cursos', 'Tareas', 'Foros', 'Datos']) {
+    for (const item of ['Inicio', 'Cursos', 'Tareas', 'Foros', 'Mis notas']) {
       await expect(page.locator(`text=${item}`).first()).toBeVisible({ timeout: 5000 });
     }
     // Analytics is staff-only — the student must NOT see it.

@@ -99,9 +99,14 @@ export interface AnswerDTO {
   attemptId: string;
   questionId: string;
   response: Record<string, unknown>;
-  correct: boolean | null;
-  awarded: number | null;
-  /** Original file names are included only in the staff attempt list. */
+  /** Omitted from the learner's own view unless the activity shows solutions. */
+  correct?: boolean | null;
+  /** Omitted from the learner's own view unless the activity shows solutions. */
+  awarded?: number | null;
+  /** Teacher's comment on this question; shown to the learner once graded,
+   * independent of `showSolutions`. */
+  feedback?: string | null;
+  /** Upload names: the staff attempt list and the learner's single-attempt view. */
   files?: Array<{ id: string; originalName: string }>;
 }
 
@@ -126,7 +131,22 @@ export interface SaveAnswersInput {
   answers: { questionId: string; response: Record<string, unknown> }[];
 }
 
+export interface PreviewGradeResult {
+  questionId: string;
+  autoGradable: boolean;
+  correct: boolean | null;
+  awarded: number | null;
+  points: number;
+}
+
+export interface PreviewGradeResponse {
+  score: number;
+  maxScore: number;
+  results: PreviewGradeResult[];
+  solutions: Array<{ questionId: string; content: Record<string, unknown> }>;
+}
+
 export interface GradeAttemptInput {
-  answers: { questionId: string; awarded: number }[];
+  answers: { questionId: string; awarded?: number; feedback?: string }[];
   feedback?: string;
 }

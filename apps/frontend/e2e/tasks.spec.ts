@@ -195,7 +195,7 @@ async function archiveActivity(request: APIRequestContext, id: string) {
 }
 
 async function selectCourse(page: Page, courseId: string) {
-  const course = page.getByRole('combobox', { name: 'Curso' });
+  const course = page.getByRole('combobox', { name: 'Asignatura' });
   await expect(course).toBeVisible({ timeout: 8000 });
   await course.selectOption(courseId);
 }
@@ -317,7 +317,7 @@ test.describe('Tareas — unified E2E', () => {
     await openCourseActivities(page, COURSE_ID);
     await page.getByRole('button', { name: new RegExp(title) }).click();
     await page.getByRole('button', { name: /Empezar tarea|Reanudar intento/ }).click();
-    await expect(page.getByText('Pregunta 1 · 1 pts')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Pregunta 1 · 1 pt')).toBeVisible({ timeout: 8000 });
     await page.getByRole('checkbox', { name: '4' }).check();
     await page.getByLabel('Relacionar HTML').selectOption({ label: 'Estructura' });
     await page.getByLabel('Relacionar CSS').selectOption({ label: 'Presentación' });
@@ -325,6 +325,8 @@ test.describe('Tareas — unified E2E', () => {
       'HTML da la estructura y CSS la presentación.',
     );
     await page.getByRole('button', { name: 'Enviar tarea' }).click();
+    await expect(page.getByRole('dialog').getByText(/sin responder|Has respondido todas/)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, enviar' }).click();
     await expect(page.getByText(/pendiente de corrección/i).first()).toBeVisible({
       timeout: 8000,
     });
@@ -350,8 +352,11 @@ test.describe('Tareas — unified E2E', () => {
     const gradeDialog = page.getByRole('dialog', { name: 'Calificar' });
     await expect(gradeDialog).toBeVisible();
     await gradeDialog
-      .getByLabel(/Explica brevemente cómo se relaciona HTML y CSS/)
+      .getByLabel(/Puntos de la pregunta \d/)
       .fill('2');
+    // The student's answer is shown next to its own question.
+    await expect(gradeDialog.getByText(/Explica brevemente cómo se relaciona HTML y CSS/)).toBeVisible();
+    await gradeDialog.getByLabel(/Comentario para el alumno/).last().fill('Buen razonamiento.');
     await gradeDialog.getByLabel(/Feedback/).fill('Clarísimo.');
     await gradeDialog.getByRole('button', { name: 'Guardar nota' }).click();
     await expect(page.getByText('Calificado').first()).toBeVisible({ timeout: 8000 });
@@ -399,6 +404,9 @@ test.describe('Tareas — unified E2E', () => {
     await openCourseActivities(page, COURSE_ID);
     await page.getByRole('button', { name: new RegExp(title) }).click();
     await page.getByRole('button', { name: 'Guardar plantilla' }).click();
+    const templateDialog = page.getByRole('dialog', { name: 'Guardar como plantilla' });
+    await expect(templateDialog.getByLabel('Nombre de la plantilla')).toHaveValue(title);
+    await templateDialog.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(page.getByText('Guardada como plantilla.')).toBeVisible({ timeout: 8000 });
 
     await openCourseActivities(page, otherCourse.id);
@@ -406,7 +414,7 @@ test.describe('Tareas — unified E2E', () => {
     const library = page.getByRole('dialog', { name: 'Biblioteca de tareas' });
     await expect(library).toBeVisible();
     const templateRow = library.getByRole('row').filter({ hasText: title });
-    await templateRow.getByRole('button', { name: 'Usar en este curso' }).click();
+    await templateRow.getByRole('button', { name: 'Usar en esta asignatura' }).click();
     await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible({
       timeout: 8000,
     });
@@ -418,7 +426,7 @@ test.describe('Tareas — unified E2E', () => {
     await libraryAgain.getByRole('tab', { name: 'Anteriores' }).click();
     const previous = libraryAgain.getByRole('row').filter({ hasText: title }).first();
     await previous.getByRole('button', { name: 'Duplicar aquí' }).click();
-    await expect(page.getByText('Tarea duplicada en este curso.')).toBeVisible({
+    await expect(page.getByText('Tarea duplicada en esta asignatura.')).toBeVisible({
       timeout: 8000,
     });
 
@@ -491,6 +499,8 @@ test.describe('Tareas — unified E2E', () => {
     await page.getByRole('button', { name: /Empezar tarea|Reanudar intento/ }).click();
     await page.getByRole('checkbox', { name: 'Madrid' }).check();
     await page.getByRole('button', { name: 'Enviar tarea' }).click();
+    await expect(page.getByRole('dialog').getByText(/sin responder|Has respondido todas/)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, enviar' }).click();
     await expect(page.getByText(/Tarea corregida: 1\/1/)).toBeVisible({ timeout: 8000 });
 
     await openCourseGrades(page, COURSE_ID);

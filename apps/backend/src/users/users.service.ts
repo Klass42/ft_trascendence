@@ -19,6 +19,8 @@ import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { DeleteAccountDto } from './dto/delete-account.dto';
 import type { CreateUserDto } from './dto/create-user.dto';
 
+export type FriendRelation = 'NONE' | 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED';
+
 function isPrismaUniqueViolation(err: unknown): err is PrismaClientKnownRequestError {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002';
 }
@@ -58,8 +60,8 @@ export class UsersService {
 
   async findOne(id: string, organizationId: string, callerRole?: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: selectUser });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
     if (callerRole !== 'ADMIN') {
       const { id: uid, name, avatarUrl, role, bio, onlineAt } = user;
       return { id: uid, name, avatarUrl, role, bio, onlineAt };
@@ -69,7 +71,7 @@ export class UsersService {
 
   async create(dto: CreateUserDto, organizationId: string, actorId?: string) {
     const existing = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
-    if (existing) throw new ConflictException('Email already registered in this organization');
+    if (existing) throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
     await assertUserLimit(this.prisma as any, organizationId);
     try {
       const created = await this.prisma.user.create({
@@ -93,19 +95,19 @@ export class UsersService {
       await this.prisma.auditLog.create({ data: { actorId: actorId ?? null, action: 'USER_CREATED', organizationId, targetUserId: created.id, metadata: { role: created.role } } });
       return created;
     } catch (err) {
-      if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
+      if (isPrismaUniqueViolation(err)) throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
       throw err;
     }
   }
 
   async update(id: string, dto: UpdateUserDto, organizationId: string, callerUserId: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: selectUser });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
-    if (dto.role !== undefined && id === callerUserId) throw new BadRequestException('Cannot change your own role');
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
+    if (dto.role !== undefined && id === callerUserId) throw new BadRequestException('No puedes cambiar tu propio rol.');
     if (dto.email !== undefined && dto.email !== user.email) {
       const clash = await this.prisma.user.findFirst({ where: { organizationId, email: dto.email } });
-      if (clash) throw new ConflictException('Email already registered in this organization');
+      if (clash) throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
     }
     try {
       const updated = await this.prisma.user.update({ where: { id }, data: dto, select: selectUser });
@@ -125,16 +127,16 @@ export class UsersService {
       }
       return updated;
     } catch (err) {
-      if (isPrismaUniqueViolation(err)) throw new ConflictException('Email already registered in this organization');
+      if (isPrismaUniqueViolation(err)) throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
       throw err;
     }
   }
 
   async remove(id: string, organizationId: string, callerUserId: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: { organizationId: true } });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.organizationId !== organizationId) throw new ForbiddenException('User belongs to another organization');
-    if (id === callerUserId) throw new BadRequestException('Cannot delete yourself');
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
+    if (id === callerUserId) throw new BadRequestException('No puedes eliminar tu propia cuenta.');
     await this.prisma.user.delete({ where: { id } });
     await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'USER_DELETED', organizationId, metadata: { userId: id } } });
     await this.notifications?.emitMany(
@@ -214,50 +216,83 @@ export class UsersService {
   async searchUsers(query: string, callerId: string, organizationId: string) {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) {
-      throw new BadRequestException('Search query must contain at least 2 characters');
+      throw new BadRequestException('La búsqueda debe tener al menos 2 caracteres.');
     }
 
-    const friendships = await this.prisma.friendship.findMany({
-      where: {
-        OR: [{ requesterId: callerId }, { addresseeId: callerId }],
-        requester: { is: { organizationId } },
-        addressee: { is: { organizationId } },
-      },
-      select: { requesterId: true, addresseeId: true },
-    });
-    const excludedIds = new Set<string>([callerId]);
-    friendships.forEach(({ requesterId, addresseeId }) => {
-      excludedIds.add(requesterId);
-      excludedIds.add(addresseeId);
-    });
+    const [friendships, callerMemberships] = await Promise.all([
+      this.prisma.friendship.findMany({
+        where: {
+          OR: [{ requesterId: callerId }, { addresseeId: callerId }],
+          requester: { is: { organizationId } },
+          addressee: { is: { organizationId } },
+        },
+        select: { id: true, requesterId: true, addresseeId: true, status: true },
+      }),
+      this.prisma.courseMembership.findMany({
+        where: { userId: callerId, course: { organizationId } },
+        select: { courseId: true },
+      }),
+    ]);
 
-    return this.prisma.user.findMany({
+    // Existing relationships stay in the results so the UI can show their state.
+    // BLOCKED pairs are hidden in both directions (never reveal a block).
+    const relations = new Map<string, { relation: FriendRelation; friendshipId: string }>();
+    const hiddenIds = new Set<string>([callerId]);
+    for (const { id, requesterId, addresseeId, status } of friendships) {
+      const otherId = requesterId === callerId ? addresseeId : requesterId;
+      if (status === 'BLOCKED') hiddenIds.add(otherId);
+      else if (status === 'ACCEPTED') relations.set(otherId, { relation: 'FRIEND', friendshipId: id });
+      else relations.set(otherId, { relation: requesterId === callerId ? 'PENDING_SENT' : 'PENDING_RECEIVED', friendshipId: id });
+    }
+
+    const sharedCourseIds = callerMemberships.map((membership) => membership.courseId);
+    const users = await this.prisma.user.findMany({
       where: {
         organizationId,
-        id: { notIn: [...excludedIds] },
+        id: { notIn: [...hiddenIds] },
         OR: [
           { name: { contains: normalizedQuery, mode: 'insensitive' } },
           { email: { contains: normalizedQuery, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, name: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+        courseMemberships: {
+          where: { courseId: { in: sharedCourseIds }, course: { organizationId } },
+          select: { course: { select: { name: true } } },
+          take: 1,
+        },
+      },
       orderBy: { name: 'asc' },
       take: 20,
+    });
+
+    return users.map(({ courseMemberships, ...user }) => {
+      const known = relations.get(user.id);
+      return {
+        ...user,
+        sharedCourse: courseMemberships[0]?.course.name ?? null,
+        relation: known?.relation ?? ('NONE' as FriendRelation),
+        friendshipId: known?.friendshipId ?? null,
+      };
     });
   }
 
   async sendFriendRequest(callerId: string, targetId: string, callerOrgId: string) {
-    if (callerId === targetId) throw new BadRequestException('Cannot friend yourself');
+    if (callerId === targetId) throw new BadRequestException('No puedes enviarte una solicitud de amistad a ti mismo.');
     const caller = await this.prisma.user.findFirst({
       where: { id: callerId, organizationId: callerOrgId },
       select: { id: true },
     });
-    if (!caller) throw new NotFoundException('User not found');
+    if (!caller) throw new NotFoundException('Usuario no encontrado.');
     const target = await this.prisma.user.findFirst({
       where: { id: targetId, organizationId: callerOrgId },
       select: { id: true },
     });
-    if (!target) throw new NotFoundException('User not found');
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
     const existing = await this.prisma.friendship.findFirst({
       where: {
         OR: [{ requesterId: callerId, addresseeId: targetId }, { requesterId: targetId, addresseeId: callerId }],
@@ -265,14 +300,14 @@ export class UsersService {
         addressee: { is: { organizationId: callerOrgId } },
       },
     });
-    if (existing) throw new ConflictException('Friendship already exists');
+    if (existing) throw new ConflictException('Ya existe una solicitud de amistad con esta persona.');
     const friendship = await this.prisma.friendship.create({ data: { requesterId: callerId, addresseeId: targetId, status: 'PENDING' } });
     // Persist + push over socket via the real contract (David's NotificationsService).
     // No-op if the module isn't wired (optional dep), so friend requests never block.
     await this.notifications?.emitMany(
       [targetId],
       NotificationType.FRIEND_REQUEST,
-      { title: 'Tienes una nueva solicitud de amistad', body: 'Puedes revisar las amistades desde tu perfil.', link: '/profile' },
+      { title: 'Tienes una nueva solicitud de amistad', body: 'Puedes revisar tus solicitudes desde Amigos.', link: '/friends' },
       { organizationId: callerOrgId, actorId: callerId },
     );
     return friendship;
@@ -297,7 +332,7 @@ export class UsersService {
   }
 
   async uploadAvatar(user: AuthUser, file: Express.Multer.File) {
-    if (!this.files) throw new BadRequestException('File upload is not available');
+    if (!this.files) throw new BadRequestException('La subida de archivos no está disponible.');
     const fileRecord = await this.files.createUpload(
       file,
       user.organizationId,
@@ -309,7 +344,7 @@ export class UsersService {
       where: { id: user.userId, organizationId: user.organizationId },
       data: { avatarUrl: url },
     });
-    if (updated.count === 0) throw new NotFoundException('User not found');
+    if (updated.count === 0) throw new NotFoundException('Usuario no encontrado.');
     return this.prisma.user.findFirst({
       where: { id: user.userId, organizationId: user.organizationId },
       select: selectPublicProfile,
@@ -321,7 +356,7 @@ export class UsersService {
       where: { id: user.userId, organizationId: user.organizationId },
       data: { avatarUrl: null },
     });
-    if (updated.count === 0) throw new NotFoundException('User not found');
+    if (updated.count === 0) throw new NotFoundException('Usuario no encontrado.');
     return this.prisma.user.findFirst({
       where: { id: user.userId, organizationId: user.organizationId },
       select: selectPublicProfile,
@@ -346,9 +381,9 @@ export class UsersService {
       where: { organizationId, email },
       select: { id: true, name: true, email: true, avatarUrl: true, role: true },
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
     if (callerRole === 'TEACHER' && user.role === 'ADMIN') {
-      throw new ForbiddenException('Cannot look up admin users');
+      throw new ForbiddenException('No se puede consultar a los administradores.');
     }
     return { userId: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl };
   }

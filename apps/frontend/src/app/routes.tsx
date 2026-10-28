@@ -3,6 +3,7 @@ import {
   createBrowserRouter,
   Navigate,
   Outlet,
+  useParams,
   type RouteObject,
 } from 'react-router-dom';
 import { Spinner } from '@/components/ui';
@@ -10,6 +11,7 @@ import { AppLayout } from './AppLayout';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PlatformRoute } from './PlatformRoute';
 import { PlatformLayout } from './PlatformLayout';
+import { NotFoundRoute, PlatformNotFound } from './NotFoundPage';
 
 const LoginPage = lazy(() =>
   import('@/features/auth').then((m) => ({ default: m.LoginPage }))
@@ -124,6 +126,11 @@ function PageLoader() {
   );
 }
 
+function ActivityDeepLink() {
+  const { activityId = '' } = useParams();
+  return <Navigate to={`/activities?activityId=${encodeURIComponent(activityId)}`} replace />;
+}
+
 const routes: RouteObject[] = [
   {
     path: '/platform/login',
@@ -137,6 +144,7 @@ const routes: RouteObject[] = [
       { path: 'organizations', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationsPage /></Suspense> },
       { path: 'organizations/new', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationFormPage /></Suspense> },
       { path: 'organizations/:id', element: <Suspense fallback={<PageLoader />}><PlatformOrganizationDetailPage /></Suspense> },
+      { path: '*', element: <PlatformNotFound /> },
     ] }],
   },
   {
@@ -261,6 +269,11 @@ const routes: RouteObject[] = [
       {
         path: '/assignments',
         element: <Navigate to="/activities" replace />,
+      },
+      {
+        // Old/shared deep link: the workspace resolves the id (or says it is gone).
+        path: '/activities/:activityId',
+        element: <ActivityDeepLink />,
       },
       {
         path: '/activities',
@@ -441,27 +454,7 @@ const routes: RouteObject[] = [
   },
   {
     path: '*',
-    element: (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          color: 'var(--color-text-secondary)',
-          background: 'var(--color-bg-primary)',
-        }}
-      >
-        <h1 style={{ fontSize: '4rem', marginBottom: '1rem', color: 'var(--color-text-primary)' }}>
-          404
-        </h1>
-        <p>Página no encontrada.</p>
-        <a href="/dashboard" style={{ marginTop: '1rem', color: 'var(--color-accent-primary)' }}>
-          Ir al panel
-        </a>
-      </div>
-    ),
+    element: <NotFoundRoute />,
   },
 ];
 

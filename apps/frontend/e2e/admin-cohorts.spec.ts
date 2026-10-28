@@ -26,6 +26,6 @@ test.describe('Administración de cohortes', () => {
     await expect(subject).toBeVisible();
     await subject.getByRole('button', { name: /Acciones de/ }).click();
     await expect(page.getByRole('menuitem', { name: 'Archivar' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Borrar' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Eliminar' })).toBeVisible();
   });
 });

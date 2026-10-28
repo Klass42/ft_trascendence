@@ -94,6 +94,7 @@
   white-space: nowrap;
 }
 
+.personText { min-width: 0; }
 .muted { color: var(--color-text-muted); font-size: var(--text-xs); }
 .actions { display: flex; flex: none; gap: var(--space-1); }
 .error {

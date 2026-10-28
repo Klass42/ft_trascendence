@@ -121,7 +121,7 @@ test.describe('Course authoring (ADMIN)', () => {
     await modal.getByLabel('Título').fill('Curso Editado');
     await modal.getByRole('button', { name: 'Guardar cambios' }).click();
 
-    await expect(page.getByText('Curso actualizado')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Asignatura actualizada')).toBeVisible({ timeout: 8000 });
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Curso Editado');
   });
 
@@ -131,14 +131,14 @@ test.describe('Course authoring (ADMIN)', () => {
     await expect(page.getByText('Borrador', { exact: true })).toBeVisible({ timeout: 8000 });
 
     await page.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByText('Curso publicado')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Asignatura publicada')).toBeVisible({ timeout: 8000 });
     // The page reflects the new status without a reload.
     await expect(page.getByRole('button', { name: 'Guardar borrador' })).toBeVisible();
     await expect(page.getByText('Borrador', { exact: true })).toHaveCount(0);
     expect(await subjectStatus(request, id)).toBe('PUBLISHED');
 
     await page.getByRole('button', { name: 'Guardar borrador' }).click();
-    await expect(page.getByText('Curso guardado como borrador')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Asignatura guardada como borrador')).toBeVisible({ timeout: 8000 });
     await expect(page.getByRole('button', { name: 'Publicar' })).toBeVisible();
     expect(await subjectStatus(request, id)).toBe('DRAFT');
   });
@@ -152,7 +152,7 @@ test.describe('Course authoring (ADMIN)', () => {
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Eliminar' }).click();
 
-    await expect(page.getByText('Curso eliminado')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Asignatura eliminada')).toBeVisible({ timeout: 8000 });
     await expect(page).toHaveURL(new RegExp(`/courses/${COHORT}$`));
     const gone = await request.get(`${BASE_URL}/subjects/${id}?${q}`, { headers: { 'x-dev-user': ADMIN } });
     expect(gone.status()).toBe(404);

@@ -5,6 +5,8 @@ import type { CompleteLessonDTO } from '../types';
 
 interface UseCompleteLessonResult {
   completeLesson: (lessonId: string) => Promise<CompleteLessonDTO>;
+  /** Removes the caller's own completion of the lesson. */
+  uncompleteLesson: (lessonId: string) => Promise<CompleteLessonDTO>;
   isLoading: boolean;
   error: Error | null;
 }
@@ -37,5 +39,25 @@ export function useCompleteLesson(): UseCompleteLessonResult {
     }
   }, []);
 
-  return { completeLesson, isLoading, error };
+  const uncompleteLesson = useCallback(async (lessonId: string) => {
+    const u = userRef.current;
+    if (!u) throw new Error('Not authenticated');
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      return await apiClient.delete<CompleteLessonDTO>(
+        `/lessons/${lessonId}/complete?organizationId=${u.organizationId}&userId=${u.userId}`,
+      );
+    } catch (err) {
+      const e = err as Error;
+      setError(e);
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { completeLesson, uncompleteLesson, isLoading, error };
 }

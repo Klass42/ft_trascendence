@@ -27,7 +27,7 @@ export const DELETE_USER_COPY = {
   title: 'Eliminar cuenta definitivamente',
   confirm: 'Sí, eliminar definitivamente',
   hint:
-    'Eliminar borra la cuenta de forma permanente (no es una desactivación). Esta acción no se puede deshacer.',
+    'Eliminar quita la cuenta de forma permanente (no es una desactivación). Esta acción no se puede deshacer.',
 };
 
 export function DeleteUserDialog({ target, onCancel, onDeleted }: Props) {

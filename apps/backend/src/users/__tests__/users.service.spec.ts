@@ -25,6 +25,7 @@ const mkPrisma = () => ({
   organization: { findUnique: jest.fn(async () => null) }, 
   user: { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), delete: jest.fn() },
   friendship: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), delete: jest.fn() },
+  courseMembership: { findMany: jest.fn(async () => []) },
 }) as unknown as PrismaService;
 
 describe('UsersService', () => {
@@ -293,7 +294,7 @@ describe('UsersService', () => {
       mkFriendshipCreate.mockResolvedValue({ id: 'f1', requesterId: ADMIN_ID, addresseeId: 'user-student-0001', status: 'PENDING', createdAt: new Date() });
       const r = await service.sendFriendRequest(ADMIN_ID, 'user-student-0001', ORG_ID);
       expect(r.status).toBe('PENDING');
-      expect(notifications.emit).toHaveBeenCalledWith('user-student-0001', 'FRIEND_REQUEST', expect.objectContaining({ link: '/profile' }));
+      expect(notifications.emit).toHaveBeenCalledWith('user-student-0001', 'FRIEND_REQUEST', expect.objectContaining({ link: '/friends' }));
     });
 
     it('throws 409 if friendship already exists', async () => {
@@ -341,20 +342,59 @@ describe('UsersService', () => {
   });
 
   describe('searchUsers', () => {
-    it('searches only within the organization and returns no email', async () => {
-      const result = [{ id: 'user-teacher-0001', name: 'Theo', avatarUrl: null }];
+    it('searches only within the organization, never selects email and defaults to no relation', async () => {
       (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);
-      (prisma.user.findMany as jest.Mock).mockResolvedValue(result);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { id: 'user-teacher-0001', name: 'Theo', avatarUrl: null, role: 'TEACHER', courseMemberships: [] },
+      ]);
 
-      await expect(service.searchUsers('  th  ', ADMIN_ID, ORG_ID)).resolves.toEqual(result);
+      await expect(service.searchUsers('  th  ', ADMIN_ID, ORG_ID)).resolves.toEqual([
+        { id: 'user-teacher-0001', name: 'Theo', avatarUrl: null, role: 'TEACHER', sharedCourse: null, relation: 'NONE', friendshipId: null },
+      ]);
       const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(args.where.organizationId).toBe(ORG_ID);
+      expect(args.where.id).toEqual({ notIn: [ADMIN_ID] });
       expect(args.where.OR).toEqual([
         { name: { contains: 'th', mode: 'insensitive' } },
         { email: { contains: 'th', mode: 'insensitive' } },
       ]);
       expect(args.take).toBe(20);
-      expect(args.select).toEqual({ id: true, name: true, avatarUrl: true });
+      expect(args.select.email).toBeUndefined();
+      expect(args.select.courseMemberships.where.course).toEqual({ organizationId: ORG_ID });
+      const friendshipArgs = (prisma.friendship.findMany as jest.Mock).mock.calls[0][0];
+      expect(friendshipArgs.where.requester).toEqual({ is: { organizationId: ORG_ID } });
+      expect(friendshipArgs.where.addressee).toEqual({ is: { organizationId: ORG_ID } });
+      const membershipArgs = (prisma.courseMembership.findMany as jest.Mock).mock.calls[0][0];
+      expect(membershipArgs.where).toEqual({ userId: ADMIN_ID, course: { organizationId: ORG_ID } });
+    });
+
+    it('reports the relation with each person, hides blocked pairs and exposes the shared cohort', async () => {
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([
+        { id: 'f-friend', requesterId: ADMIN_ID, addresseeId: 'u-friend', status: 'ACCEPTED' },
+        { id: 'f-sent', requesterId: ADMIN_ID, addresseeId: 'u-sent', status: 'PENDING' },
+        { id: 'f-recv', requesterId: 'u-recv', addresseeId: ADMIN_ID, status: 'PENDING' },
+        { id: 'f-block', requesterId: 'u-blocked', addresseeId: ADMIN_ID, status: 'BLOCKED' },
+      ]);
+      (prisma.courseMembership.findMany as jest.Mock).mockResolvedValue([{ courseId: 'course-1' }]);
+      const row = (id: string, courseMemberships: unknown[] = []) => ({ id, name: id, avatarUrl: null, role: 'STUDENT', courseMemberships });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        row('u-friend', [{ course: { name: '1º ESO A' } }]),
+        row('u-sent'),
+        row('u-recv'),
+        row('u-new'),
+      ]);
+
+      const result = await service.searchUsers('u-', ADMIN_ID, ORG_ID);
+
+      expect(result.map(({ id, relation, friendshipId, sharedCourse }) => ({ id, relation, friendshipId, sharedCourse }))).toEqual([
+        { id: 'u-friend', relation: 'FRIEND', friendshipId: 'f-friend', sharedCourse: '1º ESO A' },
+        { id: 'u-sent', relation: 'PENDING_SENT', friendshipId: 'f-sent', sharedCourse: null },
+        { id: 'u-recv', relation: 'PENDING_RECEIVED', friendshipId: 'f-recv', sharedCourse: null },
+        { id: 'u-new', relation: 'NONE', friendshipId: null, sharedCourse: null },
+      ]);
+      const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
+      expect(args.where.id.notIn.sort()).toEqual([ADMIN_ID, 'u-blocked'].sort());
+      expect(args.select.courseMemberships.where.courseId).toEqual({ in: ['course-1'] });
     });
 
     it('rejects a search shorter than two characters', async () => {

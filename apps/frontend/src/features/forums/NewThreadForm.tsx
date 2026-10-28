@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, Textarea } from '@/components/ui';
 import { useCreateThread } from '@/lib/api';
 import type { ForumThreadListItemDTO } from '@/lib/api';
+import { CharCounter } from './CharCounter';
+import { FORUM_BODY_MAX, FORUM_TITLE_MAX, titleError } from './helpers';
 
 interface NewThreadFormProps {
   courseId: string;
@@ -18,25 +20,20 @@ export function NewThreadForm({
   const { create, isLoading } = useCreateThread();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [titleTouched, setTitleTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const invalidTitle = titleError(title);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    const trimmed = title.trim();
-    if (!trimmed) {
-      setError('El título es obligatorio.');
-      return;
-    }
-    if (trimmed.length > 200) {
-      setError('El título no puede superar los 200 caracteres.');
-      return;
-    }
+    setTitleTouched(true);
+    if (invalidTitle) return;
 
     try {
       const thread = await create(courseId, {
-        title: trimmed,
+        title: title.trim(),
         body: body.trim() || undefined,
       });
       onCreated(thread);
@@ -50,6 +47,7 @@ export function NewThreadForm({
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       style={{
         background: 'var(--color-bg-secondary)',
         border: '1px solid var(--color-border-primary)',
@@ -66,46 +64,27 @@ export function NewThreadForm({
       <Input
         label="Título"
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setTitleTouched(true);
+          setError(null);
+        }}
         placeholder="p. ej. Duda sobre el ejercicio 3"
-        maxLength={200}
+        maxLength={FORUM_TITLE_MAX}
+        error={titleTouched ? invalidTitle ?? undefined : undefined}
         required
       />
+      <CharCounter length={title.length} max={FORUM_TITLE_MAX} />
 
-      <div>
-        <label
-          htmlFor="new-thread-body"
-          style={{
-            display: 'block',
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 6,
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          Mensaje inicial (opcional)
-        </label>
-        <textarea
-          id="new-thread-body"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={3}
-          maxLength={5000}
-          placeholder="Describe tu pregunta o tema…"
-          style={{
-            width: '100%',
-            resize: 'vertical',
-            borderRadius: 10,
-            border: '1px solid var(--color-border-primary)',
-            background: 'var(--color-bg-primary)',
-            color: 'var(--color-text-primary)',
-            padding: '10px 12px',
-            fontSize: 14,
-            fontFamily: 'inherit',
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
+      <Textarea
+        label="Mensaje inicial (opcional)"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={3}
+        maxLength={FORUM_BODY_MAX}
+        placeholder="Describe tu pregunta o tema…"
+      />
+      <CharCounter length={body.length} max={FORUM_BODY_MAX} />
 
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: 13, margin: 0 }}>
@@ -114,7 +93,12 @@ export function NewThreadForm({
       )}
 
       <div style={{ display: 'flex', gap: 10 }}>
-        <Button type="submit" variant="primary" loading={isLoading}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={isLoading}
+          disabled={invalidTitle !== null}
+        >
           Crear hilo
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>

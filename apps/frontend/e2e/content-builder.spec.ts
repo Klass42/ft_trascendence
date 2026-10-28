@@ -69,7 +69,7 @@ async function attachmentsOf(request: APIRequestContext, lessonId: string) {
 async function openEditor(page: Page, subjectId: string) {
   await page.goto(`/courses/${COHORT}/subjects/${subjectId}`);
   await page.getByRole('button', { name: 'Modo edición' }).click({ timeout: 8000 });
-  await expect(page.getByText('Estructura del curso')).toBeVisible();
+  await expect(page.getByText('Estructura de la asignatura')).toBeVisible();
 }
 
 const sectionCard = (page: Page, title: string) =>
@@ -164,7 +164,7 @@ test.describe('Content builder (TEACHER)', () => {
     await lessonRow(page, 'Mi lección').getByRole('button', { name: 'Editar' }).click();
     await page.getByLabel('Título', { exact: true }).fill('Lección editada');
     await page.getByLabel('Contenido (Markdown)').fill('# Nuevo contenido');
-    await page.getByLabel('URL del video').fill('https://youtube.com/watch?v=test');
+    await page.getByLabel('URL del video').fill('https://youtube.com/watch?v=dQw4w9WgXcQ');
     await page.getByRole('button', { name: 'Guardar' }).click();
 
     await expect(page.getByText('Lección actualizada')).toBeVisible({ timeout: 8000 });
@@ -175,23 +175,35 @@ test.describe('Content builder (TEACHER)', () => {
     expect(lesson).toMatchObject({
       title: 'Lección editada',
       contentMd: '# Nuevo contenido',
-      videoUrl: 'https://youtube.com/watch?v=test',
+      videoUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
     });
+  });
+
+  test('rejects a lesson video that is not an https URL', async ({ page, request }) => {
+    const sectionId = await addSection(request, subject.id, 'Video', 1);
+    await addLesson(request, sectionId, 'Mi lección', 1);
+    await openEditor(page, subject.id);
+
+    await lessonRow(page, 'Mi lección').getByRole('button', { name: 'Editar' }).click();
+    await page.getByLabel('URL del video').fill('no-es-url');
+
+    await expect(page.getByText('Introduce una URL válida que empiece por https://')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Guardar' })).toBeDisabled();
   });
 
   test('deletes a lesson', async ({ page, request }) => {
     const sectionId = await addSection(request, subject.id, 'Lecciones', 1);
     await addLesson(request, sectionId, 'Se queda', 1);
-    await addLesson(request, sectionId, 'Para borrar', 2);
+    await addLesson(request, sectionId, 'Para eliminar', 2);
     await openEditor(page, subject.id);
 
-    await lessonRow(page, 'Para borrar').getByRole('button', { name: 'Eliminar' }).click();
+    await lessonRow(page, 'Para eliminar').getByRole('button', { name: 'Eliminar' }).click();
     const confirm = page.getByRole('dialog');
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Eliminar' }).click();
 
     await expect(page.getByText('Lección eliminada')).toBeVisible({ timeout: 8000 });
-    await expect(lessonRow(page, 'Para borrar')).toHaveCount(0);
+    await expect(lessonRow(page, 'Para eliminar')).toHaveCount(0);
     await expect(lessonRow(page, 'Se queda')).toBeVisible();
     const [saved] = await sectionsOf(request, subject.id);
     expect(saved.lessons.map((l) => l.title)).toEqual(['Se queda']);
@@ -199,16 +211,16 @@ test.describe('Content builder (TEACHER)', () => {
 
   test('deletes a section', async ({ page, request }) => {
     await addSection(request, subject.id, 'Se queda', 1);
-    await addSection(request, subject.id, 'Para borrar', 2);
+    await addSection(request, subject.id, 'Para eliminar', 2);
     await openEditor(page, subject.id);
 
-    await sectionCard(page, 'Para borrar').getByRole('button', { name: 'Eliminar' }).click();
+    await sectionCard(page, 'Para eliminar').getByRole('button', { name: 'Eliminar' }).click();
     const confirm = page.getByRole('dialog');
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Eliminar' }).click();
 
     await expect(page.getByText('Sección eliminada')).toBeVisible({ timeout: 8000 });
-    await expect(sectionCard(page, 'Para borrar')).toHaveCount(0);
+    await expect(sectionCard(page, 'Para eliminar')).toHaveCount(0);
     await expect(sectionCard(page, 'Se queda')).toBeVisible();
     expect((await sectionsOf(request, subject.id)).map((s) => s.title)).toEqual(['Se queda']);
   });

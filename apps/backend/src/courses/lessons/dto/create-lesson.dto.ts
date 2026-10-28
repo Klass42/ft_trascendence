@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUrl, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateLessonDto {
   @IsString()
@@ -10,9 +10,15 @@ export class CreateLessonDto {
   @IsOptional()
   contentMd?: string;
 
-  @IsString()
-  @IsOptional()
-  videoUrl?: string;
+  // Empty string or null clears the video; anything else must be an https URL.
+  @ValidateIf((_, value) => value !== undefined && value !== null && value !== '')
+  @IsString({ message: 'La URL del vídeo debe ser texto.' })
+  @MaxLength(2000, { message: 'La URL del vídeo no puede superar los 2000 caracteres.' })
+  @IsUrl(
+    { protocols: ['https'], require_protocol: true },
+    { message: 'La URL del vídeo debe ser una dirección https válida.' },
+  )
+  videoUrl?: string | null;
 
   @IsInt()
   @IsOptional()

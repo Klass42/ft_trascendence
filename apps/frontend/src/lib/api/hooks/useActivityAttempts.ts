@@ -41,7 +41,7 @@ export function useActivityAttempts(activityId: string | null): UseActivityAttem
   }, [activityId, user, nonce]);
 
   const start = useCallback(async () => {
-    if (!activityId) throw new Error('No hay actividad seleccionada.');
+    if (!activityId) throw new Error('No hay ninguna tarea seleccionada.');
     const attempt = await apiClient.post<AttemptDTO>(`/activities/${activityId}/attempts`);
     setAttempts((previous) => {
       const rest = (previous ?? []).filter((item) => item.id !== attempt.id);
@@ -102,4 +102,40 @@ export function useStaffAttempts(activityId: string | null): UseStaffAttemptsRes
   }, [activityId, user, nonce]);
 
   return { attempts, isLoading, error, refetch };
+}
+
+interface UseMyAttemptResult {
+  attempt: AttemptDTO | null;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+/** One of the learner's own attempts with its questions and per-answer results
+ * (answer keys only when the activity shows solutions). */
+export function useMyAttempt(attemptId: string | null): UseMyAttemptResult {
+  const { user } = useAuth();
+  const [attempt, setAttempt] = useState<AttemptDTO | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!attemptId || !user) {
+      setAttempt(null);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    setAttempt(null);
+    apiClient
+      .get<AttemptDTO>(`/attempts/${encodeURIComponent(attemptId)}`)
+      .then((data) => !cancelled && setAttempt(data))
+      .catch((err) => !cancelled && setError(err as Error))
+      .finally(() => !cancelled && setIsLoading(false));
+    return () => { cancelled = true; };
+  }, [attemptId, user]);
+
+  return { attempt, isLoading, error };
 }

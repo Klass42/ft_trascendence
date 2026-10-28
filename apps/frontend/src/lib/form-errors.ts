@@ -14,12 +14,13 @@ const FIELD_LABELS: Record<string, string> = {
 
 function fieldForMessage(message: string): string | undefined {
   const lower = message.toLowerCase();
-  if (lower.includes('organizationslug') || lower.includes('organization')) return 'organization';
-  if (lower.includes('email')) return 'email';
-  if (lower.includes('name')) return 'name';
-  if (lower.includes('title')) return 'title';
-  if (lower.includes('password')) return 'password';
-  if (lower.includes('bio')) return 'bio';
+  // The API answers in Spanish; the English keywords cover raw class-validator output.
+  if (lower.includes('organizationslug') || lower.includes('organization') || lower.includes('código de organización')) return 'organization';
+  if (lower.includes('email') || lower.includes('correo')) return 'email';
+  if (lower.includes('name') || lower.includes('nombre')) return 'name';
+  if (lower.includes('title') || lower.includes('título')) return 'title';
+  if (lower.includes('password') || lower.includes('contraseña')) return 'password';
+  if (lower.includes('bio') || lower.includes('descripción personal')) return 'bio';
   return undefined;
 }
 
@@ -28,16 +29,16 @@ function messageForField(field: string, source: string): string {
   if (field === 'organization') {
     return 'El código solo puede contener letras minúsculas, números y guiones.';
   }
-  if (lower.includes('must be shorter') || lower.includes('longer than')) {
+  if (lower.includes('must be shorter') || lower.includes('longer than') || lower.includes('no puede superar')) {
     return `${FIELD_LABELS[field] ?? 'Este campo'} supera la longitud permitida.`;
   }
-  if (lower.includes('must be longer')) {
+  if (lower.includes('must be longer') || lower.includes('debe tener al menos')) {
     return `${FIELD_LABELS[field] ?? 'Este campo'} es demasiado corto.`;
   }
-  if (field === 'email' && (lower.includes('email') || lower.includes('mail'))) {
+  if (field === 'email' && (lower.includes('email') || lower.includes('mail') || lower.includes('correo'))) {
     return 'Introduce un correo electrónico válido.';
   }
-  if (lower.includes('should not be empty')) return 'Este campo es obligatorio.';
+  if (lower.includes('should not be empty') || lower.includes('obligatori')) return 'Este campo es obligatorio.';
   return `Revisa ${FIELD_LABELS[field] ?? 'este campo'} e inténtalo de nuevo.`;
 }
 

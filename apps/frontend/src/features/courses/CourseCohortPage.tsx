@@ -74,7 +74,7 @@ function SubjectActionsMenu({ subject, onEdit, onToggleArchive, onDelete }: Subj
         subject.status === 'ARCHIVED'
           ? { label: 'Desarchivar', icon: <ArchiveRestore size={16} />, onClick: onToggleArchive }
           : { label: 'Archivar', icon: <Archive size={16} />, onClick: onToggleArchive },
-        { label: 'Borrar', icon: <Trash2 size={16} />, onClick: onDelete, danger: true },
+        { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: onDelete, danger: true },
       ]}
       align="right"
     />
@@ -216,10 +216,10 @@ export function CourseCohortPage() {
     setBusy(true);
     try {
       await apiClient.delete(`/courses/${course.id}`);
-      toast({ message: 'Cohorte borrada.', variant: 'success' });
+      toast({ message: 'Cohorte eliminada.', variant: 'success' });
       navigate('/courses');
     } catch (err) {
-      toast({ message: apiReason(err, 'No se pudo borrar. Si hay matrículas o intentos, archívala para conservar el historial.'), variant: 'error' });
+      toast({ message: apiReason(err, 'No se pudo eliminar. Si hay matrículas o intentos, archívala para conservar el historial.'), variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -268,10 +268,10 @@ export function CourseCohortPage() {
     try {
       await apiClient.delete(`/subjects/${subjectDeleteTarget.id}`);
       setSubjects((items) => items.filter((subject) => subject.id !== subjectDeleteTarget.id));
-      toast({ message: 'Asignatura borrada.', variant: 'success' });
+      toast({ message: 'Asignatura eliminada.', variant: 'success' });
       setSubjectDeleteTarget(null);
     } catch (err) {
-      toast({ message: apiReason(err, 'No se pudo borrar. Si tiene entregas o intentos, archívala.'), variant: 'error' });
+      toast({ message: apiReason(err, 'No se pudo eliminar. Si tiene entregas o intentos, archívala.'), variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -575,9 +575,9 @@ export function CourseCohortPage() {
 
       <ConfirmDialog
         open={courseDeleteOpen}
-        title="Borrar cohorte"
+        title="Eliminar cohorte"
         message={`Se borrará «${course.name}» y sus asignaturas. Si hay matrículas, entregas o intentos, tendrás que archivarla para conservar el historial.`}
-        confirmLabel="Borrar cohorte"
+        confirmLabel="Eliminar cohorte"
         variant="danger"
         loading={busy}
         onCancel={() => setCourseDeleteOpen(false)}
@@ -586,9 +586,9 @@ export function CourseCohortPage() {
 
       <ConfirmDialog
         open={subjectDeleteTarget !== null}
-        title="Borrar asignatura"
+        title="Eliminar asignatura"
         message={subjectDeleteTarget ? `Se borrará «${subjectDeleteTarget.title}» y su contenido. Si ya tiene entregas o intentos, tendrás que archivarla.` : ''}
-        confirmLabel="Borrar asignatura"
+        confirmLabel="Eliminar asignatura"
         variant="danger"
         loading={busy}
         onCancel={() => setSubjectDeleteTarget(null)}

@@ -46,7 +46,7 @@ export function ProtectedRoute({
   if (isLoading) {
     return (
       <div className={styles.loading}>
-        <Spinner size="lg" label="Checking authentication..." />
+        <Spinner size="lg" label="Comprobando sesión…" />
       </div>
     );
   }

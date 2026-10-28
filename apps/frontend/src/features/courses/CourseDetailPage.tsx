@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
+  ApiError,
   useCourseDetail,
   useSections,
   useProgress,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/api';
 import {
   Button,
+  EmptyState,
   Modal,
   FormField,
   useToast,
@@ -46,10 +48,10 @@ export function CourseDetailPage() {
   const { update, isLoading: updating } = useUpdateCourse();
   const { remove, isLoading: deleting } = useDeleteCourse();
 
-  const { data: fullCourse, isLoading: courseLoading, refetch: refetchCourse } = useCourseDetail(subjectId);
+  const { data: fullCourse, isLoading: courseLoading, error: courseError, refetch: refetchCourse } = useCourseDetail(subjectId);
   const { data: sections, isLoading: sectionsLoading } = useSections(fullCourse ? subjectId : undefined);
-  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse ? subjectId : undefined);
-  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse ? subjectId : undefined);
+  const { data: progress, isLoading: progressLoading } = useProgress(fullCourse && !isTeacher ? subjectId : undefined);
+  const { data: completedLessons, isLoading: completedLoading } = useCompletedLessons(fullCourse && !isTeacher ? subjectId : undefined);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -65,7 +67,7 @@ export function CourseDetailPage() {
   ) {
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
-        Cargando curso...
+        Cargando asignatura...
       </div>
     );
   }
@@ -73,6 +75,18 @@ export function CourseDetailPage() {
   const course = fullCourse;
 
   if (!course) {
+    // A deleted subject (e.g. opened from an old notification) is not an error.
+    if (courseError instanceof ApiError && courseError.isNotFound) {
+      return (
+        <div style={{ padding: '40px' }}>
+          <EmptyState
+            title="Esta asignatura ya no existe"
+            description="Es posible que se haya eliminado."
+            action={<Button onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}>Volver a la cohorte</Button>}
+          />
+        </div>
+      );
+    }
     return (
       <div style={{ padding: '40px', color: 'var(--color-text-secondary)' }}>
         Asignatura no encontrada
@@ -101,10 +115,10 @@ export function CourseDetailPage() {
         category: editCategory.trim() || undefined,
       });
       setEditOpen(false);
-      toast({ message: 'Curso actualizado', variant: 'success' });
+      toast({ message: 'Asignatura actualizada', variant: 'success' });
       refetchCourse();
     } catch {
-      toast({ message: 'Error al actualizar el curso', variant: 'error' });
+      toast({ message: 'Error al actualizar la asignatura', variant: 'error' });
     }
   };
 
@@ -112,7 +126,7 @@ export function CourseDetailPage() {
     try {
       if (!fullCourse) return;
       await update(fullCourse.id, { status });
-      toast({ message: `Curso ${status === 'PUBLISHED' ? 'publicado' : status === 'ARCHIVED' ? 'archivado' : 'guardado como borrador'}`, variant: 'success' });
+      toast({ message: `Asignatura ${status === 'PUBLISHED' ? 'publicada' : status === 'ARCHIVED' ? 'archivada' : 'guardada como borrador'}`, variant: 'success' });
       refetchCourse();
     } catch {
       toast({ message: 'Error al cambiar el estado', variant: 'error' });
@@ -123,10 +137,10 @@ export function CourseDetailPage() {
     try {
       if (!fullCourse) return;
       await remove(fullCourse.id);
-      toast({ message: 'Curso eliminado', variant: 'success' });
+      toast({ message: 'Asignatura eliminada', variant: 'success' });
       navigate(courseId ? `/courses/${courseId}` : '/courses');
     } catch {
-      toast({ message: 'Error al eliminar el curso', variant: 'error' });
+      toast({ message: 'Error al eliminar la asignatura', variant: 'error' });
     }
   };
 
@@ -151,7 +165,7 @@ export function CourseDetailPage() {
                 marginBottom: 12,
               }}
             >
-              ← Mis cursos
+              ← Volver a la cohorte
             </button>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
               {course.title}
@@ -198,7 +212,7 @@ export function CourseDetailPage() {
               fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
               background: 'rgba(255,255,255,.18)', padding: '3px 10px', borderRadius: 6,
             }}>
-              {course.status === 'DRAFT' ? 'Borrador' : 'Archivado'}
+              {course.status === 'DRAFT' ? 'Borrador' : 'Archivada'}
             </span>
           </div>
         )}
@@ -208,6 +222,7 @@ export function CourseDetailPage() {
             {course.course.name} · {course.course.academicYear}
           </div>
         )}
+        {!isTeacher && (
           <>
             <div style={{ display: 'flex', gap: 16, fontSize: 14, opacity: 0.92, marginTop: 6 }}>
               <span>Progreso {pct}%</span>
@@ -231,10 +246,23 @@ export function CourseDetailPage() {
               />
             </div>
           </>
+        )}
       </div>
 
       {(() => {
-        const lessonListContent = (
+        const lessonListContent = !sections?.some((sec) => (sec.lessons?.length ?? 0) > 0) ? (
+          <div className={styles.emptyContent}>
+            <EmptyState
+              title="Todavía no hay contenido"
+              description={isTeacher
+                ? 'Activa el modo edición para añadir secciones y lecciones.'
+                : 'Tu profesor aún no ha publicado lecciones en esta asignatura.'}
+              action={isTeacher && !editing
+                ? <Button size="sm" onClick={() => setEditing(true)}>Modo edición</Button>
+                : undefined}
+            />
+          </div>
+        ) : (
           <div style={{ padding: '26px 40px', maxWidth: 820 }}>
             {sections?.map((sec) => (
               <div key={sec.id}>
@@ -262,55 +290,21 @@ export function CourseDetailPage() {
                   {sec.lessons?.map((l) => {
                     const isDone = completedLessons?.includes(l.id);
                     return (
-                      <div
+                      <Link
                         key={l.id}
-                        onClick={() => navigate(`/courses/${courseId}/subjects/${subjectId}/lessons/${l.id}`)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 13,
-                          padding: '13px 16px',
-                          borderBottom: '1px solid var(--color-border-primary)',
-                          cursor: 'pointer',
-                        }}
+                        to={`/courses/${courseId}/subjects/${subjectId}/lessons/${l.id}`}
+                        className={styles.lessonRow}
                       >
-                        {isDone ? (
-                          <span
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              background: '#0f766e',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 'none',
-                            }}
-                          >
+                        <span className={isDone ? styles.lessonDone : styles.lessonTodo} aria-hidden="true">
+                          {isDone ? (
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5"/></svg>
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              width: 22,
-                              height: 22,
-                              borderRadius: '50%',
-                              background: 'var(--color-accent-primary)',
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 'none',
-                            }}
-                          >
+                          ) : (
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                          </span>
-                        )}
-                        <span style={{ flex: 1, fontSize: 14.5, fontWeight: isDone ? 500 : 600, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
-                          {l.title}
+                          )}
                         </span>
-                      </div>
+                        <span className={isDone ? styles.lessonTitleDone : styles.lessonTitle}>{l.title}</span>
+                        {isDone && <span className={styles.srOnly}>(completada)</span>}
+                      </Link>
                     );
                   })}
                 </div>
@@ -367,7 +361,7 @@ export function CourseDetailPage() {
       <Modal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        title="Editar curso"
+        title="Editar asignatura"
         footer={<Button loading={updating} onClick={handleUpdate}>Guardar cambios</Button>}
       >
         <FormField label="Título" required>
@@ -396,7 +390,7 @@ export function CourseDetailPage() {
         open={confirmDelete}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => { handleDelete(); setConfirmDelete(false); }}
-        title="Eliminar curso"
+        title="Eliminar asignatura"
         message={`¿Estás seguro de eliminar "${course.title}"? Esta acción no se puede deshacer.`}
         confirmLabel={deleting ? 'Eliminando...' : 'Eliminar'}
         variant="danger"

@@ -146,6 +146,7 @@ export function AssignmentForm({
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       style={{
         display: 'flex',
         flexDirection: 'column',

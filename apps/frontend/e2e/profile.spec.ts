@@ -46,14 +46,14 @@ test.describe('A5 — Perfil y cuenta reales', () => {
     await actAs(page, userId);
     await page.goto('/profile');
 
-    await page.getByRole('switch', { name: 'Notificaciones por email' }).click();
+    await page.getByRole('switch', { name: 'Notificaciones por correo electrónico' }).click();
     await expect(page.getByText('Notificaciones desactivadas')).toBeVisible();
     await page.getByLabel('Idioma').selectOption('en');
     await expect(page.getByText('Idioma guardado')).toBeVisible();
 
     await page.reload();
     await expect(
-      page.getByRole('switch', { name: 'Notificaciones por email' }),
+      page.getByRole('switch', { name: 'Notificaciones por correo electrónico' }),
     ).toHaveAttribute('aria-checked', 'false');
     await expect(page.getByLabel('Idioma')).toHaveValue('en');
     await page.screenshot({ path: 'e2e/screenshots/profile-prefs.png' });

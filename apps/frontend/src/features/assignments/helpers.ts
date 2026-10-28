@@ -13,18 +13,6 @@ export const STATUS_CHIP: Record<
   GRADED: { bg: '#e7f6ef', fg: '#0f766e', label: 'Calificado' },
 };
 
-/** Format an ISO date for display, or a dash when null. */
-export function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 /** True when the assignment's due date is in the past. */
 export function isOverdue(dueAt: string | null): boolean {
   return !!dueAt && new Date(dueAt).getTime() < Date.now();

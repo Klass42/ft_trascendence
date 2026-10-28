@@ -169,7 +169,7 @@ export function OrgSettingsPage() {
       setDeleteRequested(false);
       toast({
         message: result.wasPending
-          ? 'Solicitud de borrado cancelada.'
+          ? 'Solicitud de eliminación cancelada.'
           : 'No había ninguna solicitud pendiente.',
         variant: 'success',
       });
@@ -226,7 +226,7 @@ export function OrgSettingsPage() {
               error={fieldErrors.name}
             />
             <Input
-              label="Logo URL"
+              label="URL del logo"
               value={editLogoUrl}
               onChange={(e) => {
                 setEditLogoUrl(e.target.value);
@@ -288,9 +288,9 @@ export function OrgSettingsPage() {
 
       {isAdmin && (
         <section className={styles.dangerZone} aria-labelledby="org-deletion-request">
-          <h2 id="org-deletion-request" className={styles.dangerTitle}>Borrar organización</h2>
+          <h2 id="org-deletion-request" className={styles.dangerTitle}>Eliminar organización</h2>
           <p className={styles.dangerText}>
-            Un administrador no puede borrar la organización. La solicitud llega al superadmin,
+            Un administrador no puede eliminar la organización. La solicitud llega al superadmin,
             que es quien puede eliminarla.
           </p>
           {deleteStatusError && (
@@ -312,7 +312,7 @@ export function OrgSettingsPage() {
                 ? 'Consultando solicitud…'
                 : deleteRequested
                   ? 'Solicitud pendiente'
-                  : 'Solicitar borrado'}
+                  : 'Solicitar eliminación'}
             </Button>
             {deleteRequested && !checkingDeleteStatus && (
               <Button
@@ -329,8 +329,8 @@ export function OrgSettingsPage() {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Solicitar borrado"
-        message={`Esto no borra «${displayData.name}». Se avisará al superadmin para que decida si eliminarla.`}
+        title="Solicitar eliminación"
+        message={`Esto no elimina «${displayData.name}». Se avisará al superadmin para que decida si eliminarla.`}
         confirmLabel="Enviar solicitud"
         variant="danger"
         loading={isRequestingDelete}

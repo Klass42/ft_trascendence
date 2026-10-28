@@ -38,7 +38,7 @@ did nothing. The rework keeps the same stack, ports and target names, and change
 | Frontend image | `serve` on Node, 258 MB, no `.dockerignore` | static build on unprivileged nginx, 49 MB | smaller, no Node at runtime |
 | Caddy | 6 published ports, no security headers, OAuth callback without `/api` | 3 ports (app, redirect, Grafana), security headers, compression, callback fixed | less exposed; OAuth reaches the backend |
 | Monitoring access | Prometheus, Tempo, Loki open without auth; Grafana `admin/admin` | only Grafana published, generated password, no anonymous access | subject: "secure access to Grafana" |
-| Monitoring content | 3 scrape targets (1 permanently down), 0 exporters, 0 alert rules, 2 dashboards | 12 targets, node / postgres / blackbox exporters, 11 alert rules, 3 dashboards | subject: exporters, custom dashboards, alerting rules |
+| Monitoring content | 3 scrape targets (1 permanently down), 0 exporters, 0 alert rules, 2 dashboards | 10 targets, node / postgres / blackbox exporters, 11 alert rules, 3 dashboards | subject: exporters, custom dashboards, alerting rules |
 | Logs | Loki received nothing | backend logger also emits OTLP log records with the trace id | logs ↔ traces in Grafana |
 | Reliability | no restart policy, 3 health checks | `restart: unless-stopped`, 7 health checks, log rotation, ordered start-up | `make` returns when the app really answers |
 | CI | linters + build | + 348 backend tests, + a job that runs `make`, `make smoke` and the Playwright compose smoke | the single-command gate is tested on every PR |
@@ -46,6 +46,14 @@ did nothing. The rework keeps the same stack, ports and target names, and change
 Verified on the branch: `make` from scratch, `make smoke` 12/12, the team's compose E2E suites
 9/9, backend tests 348/348, alert `ServiceProbeFailed` fires 72 s after `docker compose stop
 backend` and resolves 12 s after it is started again.
+
+> **Update 2026-10-27 (David):** Tempo and Loki were removed afterwards (`e37afd16`); logs stay in
+> Docker (`make logs`), so the "Logs" row and the Loki note below are historical. Prometheus scrapes
+> 10 targets (see `infra/monitoring/prometheus/prometheus.yml`). The test counts above are from
+> 2026-10-05; the suites have grown since (CI runs all backend unit + integration tests). Since
+> then: `make env` also generates the platform superadmin password, Caddy sends a
+> Content-Security-Policy and no longer proxies `/uploads` (files go through signed
+> `/api/files/:id/content` URLs) — PR #87.
 
 **Touches outside my directories** (need the owners' review):
 - `apps/backend/src/telemetry/otel-logger.ts` (new), two lines in `apps/backend/src/main.ts`, the
@@ -58,14 +66,14 @@ re-seeds it). The old `infra/docker/.env` is no longer read.
 ## 2. Next steps
 
 - [ ] Run `make` + `make smoke` on a campus machine (rootless Docker) — only tested on a laptop.
-- [ ] First green run of the new workflow on GitHub.
+- [x] First green run of the new workflow on GitHub (green on every PR since #66).
 - [ ] **Health check + status page + automated backups + restore runbook** (DevOps Minor, +1
       point): scheduled `pg_dump`, `make backup` / `make restore`, a status page.
-- [ ] README "Instructions" section (mandatory README is still the template).
+- [x] README "Instructions" section.
 - [ ] Shared ESLint flat config, lint blocking in CI (`pnpm lint` fails today: no config).
 - [ ] Full Playwright suite in CI (only the compose smoke runs now).
 - [ ] Alertmanager with a notification channel; alerts are visible only in Grafana today.
-- [ ] Content-Security-Policy header — only after every screen is checked for console errors.
+- [x] Content-Security-Policy header (#87, checked with a Playwright pass: no violations).
 - [ ] Drop devDependencies from the backend image (~630 MB → ~400 MB).
 
 ## Module points I carry

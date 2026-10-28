@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["e2e/responsive.spec.ts"]
+  "include": ["e2e/responsive.spec.ts", "e2e/activity-preview.spec.ts"]
 }

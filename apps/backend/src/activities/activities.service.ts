@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   Activity,
+  AttemptStatus,
   Prisma,
   PublicationStatus,
   NotificationType,
@@ -23,6 +24,9 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AuthUser } from '@/common/auth';
+import { PreviewGradeDto } from './dto/preview-grade.dto';
+import { gradeResponses } from './grading/grade-responses';
 
 @Injectable()
 export class ActivitiesService {
@@ -57,11 +61,11 @@ export class ActivitiesService {
       include: { subject: true },
     });
     if (!activity) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     const access = await this.requireSubject(activity.subjectId, actingUserId, staffOnly);
     if (!access.isStaff && activity.status !== PublicationStatus.PUBLISHED) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     return { activity, subject: activity.subject, access };
   }
@@ -74,7 +78,7 @@ export class ActivitiesService {
 
     if (dto.templateId && dto.sourceActivityId) {
       throw new BadRequestException(
-        'templateId and sourceActivityId are mutually exclusive',
+        'Indica una plantilla o una tarea de origen, pero no ambas.',
       );
     }
 
@@ -84,8 +88,8 @@ export class ActivitiesService {
       dto,
     );
 
-    if (dto.status === PublicationStatus.PUBLISHED && blocks.length === 0) {
-      throw new BadRequestException('no se puede publicar vacía');
+    if (dto.status === PublicationStatus.PUBLISHED) {
+      this.assertPublishableBlocks(blocks, true);
     }
 
     const created = await this.prisma.activity.create({
@@ -180,6 +184,58 @@ export class ActivitiesService {
     return this.viewFor(full ?? activity, access.isStaff);
   }
 
+  /** Grade a teacher's local preview without creating attempts or answers. */
+  async previewGrade(activityId: string, actingUserId: string, dto: PreviewGradeDto) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { organizationId: true },
+    });
+    if (!actor?.organizationId) {
+      throw new NotFoundException('Tarea no encontrada.');
+    }
+
+    const activity = await this.prisma.activity.findFirst({
+      where: {
+        id: activityId,
+        subject: { is: { organizationId: actor.organizationId } },
+      },
+      include: {
+        subject: true,
+        questions: { orderBy: { order: 'asc' } },
+      },
+    });
+    if (!activity) {
+      throw new NotFoundException('Tarea no encontrada.');
+    }
+
+    // Same authorship gate as authoring, including assistants and org admins.
+    await this.requireSubject(activity.subjectId, actingUserId, true);
+
+    const questions = new Map(activity.questions.map((question) => [question.id, question]));
+    for (const answer of dto.answers) {
+      const question = questions.get(answer.questionId);
+      if (!question) {
+        throw new BadRequestException(
+          `La pregunta ${answer.questionId} no pertenece a esta tarea`,
+        );
+      }
+      const adapter = getAdapter(question.kind);
+      adapter.validateContent(question.content);
+      adapter.validateResponse(answer.response);
+    }
+
+    const grade = gradeResponses(activity.questions, dto.answers, activity.maxScore);
+    return {
+      score: grade.score,
+      maxScore: activity.maxScore,
+      results: grade.results,
+      solutions: activity.questions.map((question) => ({
+        questionId: question.id,
+        content: question.content as Record<string, unknown>,
+      })),
+    };
+  }
+
   async update(activityId: string, actingUserId: string, dto: UpdateActivityDto) {
     const { activity, subject } = await this.requireActivity(
       activityId,
@@ -195,7 +251,10 @@ export class ActivitiesService {
     this.assertWindow(merged.openAt, merged.dueAt, merged.closeAt);
 
     if (dto.status === PublicationStatus.PUBLISHED) {
-      await this.assertPublishable(activityId);
+      await this.assertPublishable(
+        activityId,
+        activity.status !== PublicationStatus.PUBLISHED,
+      );
     }
 
     const updated = await this.prisma.activity.update({
@@ -254,14 +313,16 @@ export class ActivitiesService {
   }
 
   async remove(activityId: string, actingUserId: string) {
-    const { activity, subject } = await this.requireActivity(activityId, actingUserId, true);
+    const { activity, subject, access } = await this.requireActivity(activityId, actingUserId, true);
     const attempts = await this.prisma.attempt.count({
       where: { activityId },
     });
     if (attempts > 0) {
-      throw new ConflictException('archivar en su lugar');
+      throw new ConflictException('No se puede eliminar una tarea con intentos; archívala en su lugar.');
     }
     await this.prisma.activity.delete({ where: { id: activityId } });
+    // Publish/change/grade notices deep-link to `…activityId=<id>`, now a 404.
+    await this.notifications?.removeByLink(access.subject.organizationId, { endsWith: [`activityId=${activityId}`] });
     if (activity.status === PublicationStatus.PUBLISHED) {
       await this.notifyStudents(subject, actingUserId, NotificationType.ACTIVITY_REMOVED, `Tarea eliminada: ${activity.title} en ${subject.title}`, activity.id, `/courses/${subject.courseId}/subjects/${subject.id}`);
     }
@@ -304,6 +365,62 @@ export class ActivitiesService {
       createdAt: a.createdAt.toISOString(),
       dueAt: a.dueAt ? a.dueAt.toISOString() : null,
     }));
+  }
+
+  /**
+   * Activities the signed-in student still has to hand in, soonest deadline
+   * first (feeds "Próxima entrega"). Only PUBLISHED activities of PUBLISHED
+   * subjects in non-archived cohorts the user belongs to, inside their
+   * organization. Left out: closed windows (closeAt passed) and activities the
+   * student already handed in (a retry is optional, not a pending delivery);
+   * one with an attempt in progress stays. Overdue-but-open activities stay
+   * (late attempts are accepted).
+   */
+  async listMyPendingActivities(user: AuthUser, now: Date = new Date()) {
+    const activities = await this.prisma.activity.findMany({
+      where: {
+        status: PublicationStatus.PUBLISHED,
+        OR: [{ closeAt: null }, { closeAt: { gt: now } }],
+        subject: {
+          organizationId: user.organizationId,
+          status: PublicationStatus.PUBLISHED,
+          course: {
+            organizationId: user.organizationId,
+            status: { not: 'ARCHIVED' },
+            memberships: { some: { userId: user.userId } },
+          },
+        },
+      },
+      select: {
+        id: true,
+        subjectId: true,
+        title: true,
+        description: true,
+        openAt: true,
+        dueAt: true,
+        closeAt: true,
+        attemptsAllowed: true,
+        attempts: { where: { userId: user.userId }, select: { status: true } },
+      },
+    });
+
+    const deadline = (a: { dueAt: Date | null; closeAt: Date | null }) =>
+      (a.dueAt ?? a.closeAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+
+    return activities
+      .filter((a) => {
+        const inProgress = a.attempts.some((t) => t.status === AttemptStatus.IN_PROGRESS);
+        return inProgress || a.attempts.length === 0;
+      })
+      .sort((a, b) => deadline(a) - deadline(b) || a.title.localeCompare(b.title))
+      .map(({ attempts, ...a }) => ({
+        ...a,
+        openAt: a.openAt?.toISOString() ?? null,
+        dueAt: a.dueAt?.toISOString() ?? null,
+        closeAt: a.closeAt?.toISOString() ?? null,
+        attemptsUsed: attempts.length,
+        inProgress: attempts.some((t) => t.status === AttemptStatus.IN_PROGRESS),
+      }));
   }
 
   // ─── Authoring: questions ─────────────────────────────────────────────────
@@ -352,7 +469,7 @@ export class ActivitiesService {
       this.validateQuestionContent(nextKind, dto.content);
     } else if (dto.kind !== undefined && dto.kind !== question.kind) {
       throw new BadRequestException(
-        'Changing a question kind requires new matching content',
+        'Para cambiar el tipo de pregunta hay que enviar también su nuevo contenido.',
       );
     }
 
@@ -437,7 +554,7 @@ export class ActivitiesService {
       !questionIds.every((id) => existingIds.has(id))
     ) {
       throw new BadRequestException(
-        'questionIds must list exactly the activity’s questions',
+        'Debes indicar exactamente las preguntas de la tarea.',
       );
     }
 
@@ -479,7 +596,7 @@ export class ActivitiesService {
       where: { id: questionId },
     });
     if (!question) {
-      throw new NotFoundException(`Question ${questionId} not found`);
+      throw new NotFoundException('Pregunta no encontrada.');
     }
     await this.requireActivity(question.activityId, actingUserId, true);
     return question;
@@ -541,18 +658,48 @@ export class ActivitiesService {
   private async assertNoAttempts(activityId: string): Promise<void> {
     const count = await this.prisma.attempt.count({ where: { activityId } });
     if (count > 0) {
-      throw new ConflictException('la estructura está bloqueada');
+      throw new ConflictException('La estructura de la tarea está bloqueada porque ya tiene intentos.');
     }
   }
 
-  private async assertPublishable(activityId: string): Promise<void> {
+  private async assertPublishable(
+    activityId: string,
+    checkEachQuestion: boolean,
+  ): Promise<void> {
     const questions = await this.prisma.question.findMany({
       where: { activityId },
-      select: { points: true },
+      orderBy: { order: 'asc' },
+      select: { kind: true, points: true },
     });
+    this.assertPublishableBlocks(questions, checkEachQuestion);
+  }
+
+  /** A task can only be published with at least one question, a total above 0
+   * and, when `checkEachQuestion`, no 0-point question. FILE_UPLOAD may carry
+   * 0 points: it is the optional evidence companion of an essay (seed data and
+   * migrated assignments). `checkEachQuestion` is false when re-saving an
+   * already-published task so legacy data keeps being editable. */
+  private assertPublishableBlocks(
+    questions: Array<{ kind: QuestionKind; points: number }>,
+    checkEachQuestion: boolean,
+  ): void {
+    if (questions.length === 0) {
+      throw new BadRequestException('La tarea no se puede publicar vacía: añade al menos una pregunta.');
+    }
     const total = questions.reduce((sum, q) => sum + q.points, 0);
-    if (questions.length === 0 || total === 0) {
-      throw new BadRequestException('no se puede publicar vacía');
+    if (total === 0) {
+      throw new BadRequestException(
+        'No se puede publicar una tarea con 0 puntos en total: asigna puntos a sus preguntas.',
+      );
+    }
+    if (!checkEachQuestion) return;
+    const zero = questions.findIndex(
+      (q) => q.points <= 0 && q.kind !== QuestionKind.FILE_UPLOAD,
+    );
+    if (zero !== -1) {
+      throw new BadRequestException(
+        `La pregunta ${zero + 1} tiene 0 puntos: asigna al menos 1 punto antes de publicar.`,
+      );
     }
   }
 
@@ -574,7 +721,7 @@ export class ActivitiesService {
         where: { id: dto.templateId },
       });
       if (!template || template.organizationId !== organizationId) {
-        throw new NotFoundException(`Task template ${dto.templateId} not found`);
+        throw new NotFoundException('Plantilla de tarea no encontrada.');
       }
       return this.normalizeBlocks(template.blocks);
     }
@@ -589,7 +736,7 @@ export class ActivitiesService {
       });
       if (!sourceRef) {
         throw new NotFoundException(
-          `Activity ${dto.sourceActivityId} not found`,
+          'Tarea no encontrada.',
         );
       }
 
@@ -600,7 +747,7 @@ export class ActivitiesService {
         // missing one in the same organization.
         if (error instanceof ForbiddenException) {
           throw new NotFoundException(
-            `Activity ${dto.sourceActivityId} not found`,
+            'Tarea no encontrada.',
           );
         }
         throw error;
@@ -618,7 +765,7 @@ export class ActivitiesService {
       });
       if (!source) {
         throw new NotFoundException(
-          `Activity ${dto.sourceActivityId} not found`,
+          'Tarea no encontrada.',
         );
       }
       return source.questions.map((q) => ({
@@ -674,7 +821,7 @@ export class ActivitiesService {
         select: { id: true },
       });
       if (files.length !== fileIds.length) {
-        throw new BadRequestException('One or more files are not in this organization');
+        throw new BadRequestException('Uno o más archivos no pertenecen a esta organización.');
       }
     }
     await this.prisma.activityFile.deleteMany({ where: { activityId } });

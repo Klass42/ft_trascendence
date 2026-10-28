@@ -10,7 +10,7 @@ import {
 import { useActivityMutations } from '@/lib/api';
 import type { ActivityDTO, QuestionDTO } from '@/lib/api';
 import { QuestionForm } from './QuestionForm';
-import { KIND_LABELS } from './helpers';
+import { KIND_LABELS, longPointsLabel } from './helpers';
 
 /**
  * Staff list of an activity's questions with add / edit / delete / reorder.
@@ -24,7 +24,7 @@ interface Props {
 
 export function QuestionList({ activity, onChanged }: Props) {
   const { toast } = useToast();
-  const { deleteQuestion, reorderQuestions, isLoading } = useActivityMutations();
+  const { createQuestion, deleteQuestion, reorderQuestions, isLoading } = useActivityMutations();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<QuestionDTO | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<QuestionDTO | null>(null);
@@ -62,6 +62,25 @@ export function QuestionList({ activity, onChanged }: Props) {
     }
   }
 
+  async function duplicate(question: QuestionDTO) {
+    try {
+      await createQuestion(activity.id, {
+        kind: question.kind,
+        prompt: question.prompt,
+        points: question.points,
+        order: questions.length,
+        content: { ...question.content },
+      });
+      toast({ variant: 'success', message: 'Pregunta duplicada.' });
+      onChanged();
+    } catch (err) {
+      toast({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'No se pudo duplicar la pregunta.',
+      });
+    }
+  }
+
   return (
     <div>
       <div
@@ -85,7 +104,7 @@ export function QuestionList({ activity, onChanged }: Props) {
       {questions.length === 0 ? (
         <EmptyState
           title="Sin preguntas todavía"
-          description="Añade la primera pregunta para que la actividad sea realizable."
+          description="Añade la primera pregunta para que la tarea sea realizable."
         />
       ) : (
         <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -104,7 +123,7 @@ export function QuestionList({ activity, onChanged }: Props) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <Badge variant="neutral">{KIND_LABELS[q.kind]}</Badge>
                     <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
-                      {q.points} {q.points === 1 ? 'punto' : 'puntos'}
+                      {longPointsLabel(q.points)}
                     </span>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
@@ -115,7 +134,8 @@ export function QuestionList({ activity, onChanged }: Props) {
                   <Button variant="ghost" size="sm" aria-label={`Subir pregunta ${i + 1}`} disabled={i === 0 || isLoading} onClick={() => move(i, -1)}>↑</Button>
                   <Button variant="ghost" size="sm" aria-label={`Bajar pregunta ${i + 1}`} disabled={i === questions.length - 1 || isLoading} onClick={() => move(i, 1)}>↓</Button>
                   <Button variant="outline" size="sm" onClick={() => setEditing(q)}>Editar</Button>
-                  <Button variant="danger" size="sm" onClick={() => setConfirmDelete(q)}>Borrar</Button>
+                  <Button variant="outline" size="sm" aria-label={`Duplicar pregunta ${i + 1}`} disabled={isLoading} onClick={() => void duplicate(q)}>Duplicar</Button>
+                  <Button variant="danger" size="sm" onClick={() => setConfirmDelete(q)}>Eliminar</Button>
                 </div>
               </div>
             </li>
@@ -152,9 +172,9 @@ export function QuestionList({ activity, onChanged }: Props) {
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title="Borrar pregunta"
-        message="¿Seguro que quieres borrar esta pregunta? Esta acción no se puede deshacer."
-        confirmLabel="Borrar"
+        title="Eliminar pregunta"
+        message="¿Seguro que quieres eliminar esta pregunta? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
         variant="danger"
         loading={isLoading}
         onConfirm={handleDelete}

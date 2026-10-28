@@ -75,7 +75,7 @@ describe('CSV import (#108)', () => {
     const report = await service.importInvitations('org1', 'admin', csv);
     expect(report).toMatchObject({ total: 5, created: 1, failed: 4 });
     expect(report.results.map((r) => [r.line, r.ok])).toEqual([[2, true], [3, false], [4, false], [5, false], [6, false]]);
-    expect(report.results[4].error).toMatch(/ya pertenece/);
+    expect(report.results[4].error).toMatch(/Ya existe una persona con ese correo/);
     expect(prisma.auditLog.create).toHaveBeenLastCalledWith({ data: expect.objectContaining({ action: 'INVITATIONS_IMPORTED' }) });
   });
 

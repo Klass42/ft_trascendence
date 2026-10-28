@@ -123,6 +123,7 @@ export type {
   ProgressDTO,
   CompleteLessonDTO,
   MyProgressItem,
+  PendingActivityDTO,
   CohortStatus,
   PublicationStatus,
   SubjectStaffRole,
@@ -168,6 +169,8 @@ export type {
   AnswerDTO,
   AttemptDTO,
   SaveAnswersInput,
+  PreviewGradeResult,
+  PreviewGradeResponse,
   GradeAttemptInput,
 } from './types/activity';
 
@@ -197,6 +200,8 @@ export type {
   ForumPostDTO,
   CreateThreadInput,
   CreatePostInput,
+  UpdateThreadInput,
+  UpdatePostInput,
 } from './types/forum';
 
 export type {

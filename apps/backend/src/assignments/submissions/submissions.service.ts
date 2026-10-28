@@ -73,7 +73,7 @@ export class SubmissionsService {
       });
       if (files.length !== fileIds.length) {
         throw new BadRequestException(
-          'One or more files are invalid or not owned by you',
+          'Uno o más archivos no son válidos o no son tuyos.',
         );
       }
     }

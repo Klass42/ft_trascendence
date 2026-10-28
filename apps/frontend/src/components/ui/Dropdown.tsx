@@ -9,7 +9,7 @@
  * Usage:
  *   <Dropdown trigger={<MoreVertical size={18} />} items={[
  *     { label: 'Editar', icon: <Pencil/>, onClick: edit },
- *     { label: 'Borrar', icon: <Trash/>, danger: true, onClick: del },
+ *     { label: 'Eliminar', icon: <Trash/>, danger: true, onClick: del },
  *   ]} />
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -25,11 +25,13 @@ export interface DropdownItem {
 
 export interface DropdownProps {
   trigger: ReactNode;
+  /** Accessible name for the trigger button (required when `trigger` is an icon) */
+  triggerLabel?: string;
   items: DropdownItem[];
   align?: 'left' | 'right';
 }
 
-export function Dropdown({ trigger, items, align = 'right' }: DropdownProps) {
+export function Dropdown({ trigger, triggerLabel, items, align = 'right' }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -55,6 +57,7 @@ export function Dropdown({ trigger, items, align = 'right' }: DropdownProps) {
         type="button"
         className={styles.trigger}
         onClick={() => setOpen((o) => !o)}
+        aria-label={triggerLabel}
         aria-haspopup="menu"
         aria-expanded={open}
       >

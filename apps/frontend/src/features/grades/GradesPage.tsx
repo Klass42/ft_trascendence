@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Badge, EmptyState, Select, Spinner } from '@/components/ui';
 import { formatFinalPercent, subjectSelectorLabel, useAuth, useMySubjects, useMyGrades } from '@/lib/api';
 import type { MyGradeDTO } from '@/lib/api';
-import { formatDate } from '@/features/assignments/helpers';
+import { formatDateTime } from '@/lib/format';
 import { ATTEMPT_STATUS_BADGE } from '@/features/activities/helpers';
 import { GradebookPage } from '@/features/gradebook';
 import styles from './GradesPage.module.css';
@@ -51,11 +51,11 @@ function StudentGrades() {
         )}
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
         <EmptyState
-          title="No estás inscrito en ningún curso"
+          title="No estás inscrito en ninguna asignatura"
           description="Cuando te matricules, verás aquí tus notas."
         />
       )}
@@ -81,7 +81,7 @@ function StudentGrades() {
           {grades.length === 0 && (
             <EmptyState
               title="Aún no hay notas"
-              description="Este curso no tiene tareas publicadas."
+              description="Esta asignatura no tiene tareas publicadas."
             />
           )}
 
@@ -119,7 +119,7 @@ function GradeRow({ grade }: { grade: MyGradeDTO }) {
           </div>
           {grade.dueAt && (
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              Vence {formatDate(grade.dueAt)}
+              Vence {formatDateTime(grade.dueAt)}
             </div>
           )}
         </div>

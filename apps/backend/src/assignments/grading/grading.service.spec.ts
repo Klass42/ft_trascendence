@@ -159,10 +159,12 @@ describe('GradingService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('the gradebook reflects graded activity attempts and a final', async () => {
-    const ACTIVITY_ID = 'act-1';
-    const ATTEMPT_ID = 'att-1';
-    const prisma = {
+  const ACTIVITY_ID = 'act-1';
+  const ATTEMPT_ID = 'att-1';
+
+  /** Prisma fake for a one-student, one-activity gradebook with the given attempt. */
+  function gradebookPrisma(attempt: { score: number | null; status: string }) {
+    return {
       course: {
         findUnique: async ({ where }: any) =>
           where.id === COURSE_ID
@@ -229,13 +231,17 @@ describe('GradingService', () => {
             id: ATTEMPT_ID,
             activityId: ACTIVITY_ID,
             userId: STUDENT,
-            score: 8,
-            status: 'GRADED',
+            score: attempt.score,
+            status: attempt.status,
             attemptNo: 1,
           },
         ],
       },
     } as unknown as PrismaService;
+  }
+
+  it('the gradebook reflects graded activity attempts and a final', async () => {
+    const prisma = gradebookPrisma({ score: 8, status: 'GRADED' });
     const service = buildService(prisma, []);
 
     const gradebook = await service.getGradebook(COURSE_ID, TEACHER);
@@ -245,9 +251,30 @@ describe('GradingService', () => {
     const cell = gradebook.students[0].cells[0];
     expect(cell.activityId).toBe(ACTIVITY_ID);
     expect(cell.score).toBe(8);
+    expect(cell.partialScore).toBeNull();
     expect(cell.status).toBe('GRADED');
     expect(cell.attemptId).toBe(ATTEMPT_ID);
     expect(gradebook.students[0].final).toBe(0.8);
+  });
+
+  it('a SUBMITTED attempt shows as pending: no final score, no final grade, "Por calificar" in the CSV', async () => {
+    const prisma = gradebookPrisma({ score: 4, status: 'SUBMITTED' });
+    const service = buildService(prisma, []);
+
+    const gradebook = await service.getGradebook(COURSE_ID, TEACHER);
+    const cell = gradebook.students[0].cells[0];
+    expect(cell).toMatchObject({
+      attemptId: ATTEMPT_ID,
+      status: 'SUBMITTED',
+      score: null,
+      partialScore: 4,
+    });
+    expect(gradebook.students[0].final).toBeNull();
+
+    const { csv } = await service.getGradebookCsv(COURSE_ID, TEACHER);
+    const row = csv.split('\r\n')[1].split(',');
+    expect(row[2]).toBe('Por calificar');
+    expect(csv).not.toContain(',4,');
   });
 
   // ── A4-teacher: aggregated teacher-dashboard summary ─────────────────────
@@ -261,7 +288,16 @@ describe('GradingService', () => {
           findMany: async () => [{ id: COURSE_ID, status: 'PUBLISHED', courseId: COURSE_ID }],
         },
         courseMembership: {
-          findMany: async () => [{ userId: STUDENT }, { userId: STUDENT }],
+          findMany: async () => [
+            { userId: STUDENT, courseId: COURSE_ID, user: { subjectStaff: [] } },
+            { userId: STUDENT, courseId: COURSE_ID, user: { subjectStaff: [] } },
+            // Staff of the taught subject who also holds a membership: not a student.
+            {
+              userId: TEACHER,
+              courseId: COURSE_ID,
+              user: { subjectStaff: [{ subjectId: COURSE_ID }] },
+            },
+          ],
         },
         enrollment: {
           findMany: async ({ where }: any) => {
@@ -308,7 +344,7 @@ describe('GradingService', () => {
       const summary = await service.getTeachingSummary(TEACHER);
 
       expect(summary.activeCourses).toBe(1);
-      expect(summary.totalStudents).toBe(1); // deduped
+      expect(summary.totalStudents).toBe(1); // deduped, staff excluded
       expect(summary.pendingCount).toBe(1);
       expect(summary.pending).toHaveLength(1);
       expect(summary.pending[0]).toMatchObject({

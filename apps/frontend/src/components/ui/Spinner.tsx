@@ -28,7 +28,7 @@ export interface SpinnerProps extends HTMLAttributes<HTMLDivElement> {
 // =============================================================================
 
 export const Spinner = forwardRef<HTMLDivElement, SpinnerProps>(
-  ({ size = 'md', label = 'Loading...', className, ...props }, ref) => {
+  ({ size = 'md', label = 'Cargando…', className, ...props }, ref) => {
     const classNames = [styles.spinner, styles[size], className]
       .filter(Boolean)
       .join(' ');

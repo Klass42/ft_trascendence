@@ -18,13 +18,13 @@ import { AddStaffDto } from './dto/add-staff.dto';
 import { UpdateStaffRoleDto } from './dto/update-staff-role.dto';
 import { AuthUser } from '@/common/auth';
 import { CourseAccessService } from './course-access.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsService, type LinkMatchers } from '../notifications/notifications.service';
 
 const subjectLabelSelect = {
   id: true,
   title: true,
   status: true,
-  course: { select: { id: true, name: true, academicYear: true } },
+  course: { select: { id: true, name: true, academicYear: true, status: true } },
 } satisfies Prisma.SubjectSelect;
 
 @Injectable()
@@ -113,7 +113,7 @@ export class CoursesService {
       where: { id, organizationId: user.organizationId },
       select: { id: true, _count: { select: { memberships: true } } },
     });
-    if (!course) throw new NotFoundException(`Course ${id} not found`);
+    if (!course) throw new NotFoundException('Cohorte no encontrada.');
 
     const [attempt, submission] = await Promise.all([
       this.prisma.attempt.findFirst({
@@ -134,7 +134,7 @@ export class CoursesService {
 
     if (course._count.memberships > 0 || attempt || submission) {
       throw new ConflictException(
-        'Cannot delete a cohort with enrollments or attempts; archive it instead',
+        'No se puede eliminar una cohorte con matrículas o intentos; archívala en su lugar.',
       );
     }
     const recipients = this.notifications
@@ -143,7 +143,15 @@ export class CoursesService {
     const courseName = this.notifications
       ? (await this.requireCourse(id, user.organizationId)).name
       : '';
+    const staleLinks = await this.deletedLinks(
+      user.organizationId,
+      this.notifications
+        ? await this.prisma.subject.findMany({ where: { courseId: id, organizationId: user.organizationId }, select: { id: true, courseId: true } })
+        : [],
+      { equals: [`/courses/${id}`], startsWith: [`/courses/${id}/`] },
+    );
     await this.prisma.course.delete({ where: { id } });
+    await this.notifications?.removeByLink(user.organizationId, staleLinks);
     await this.emitUsers(recipients, user.organizationId, user.userId, `Cohorte eliminada: ${courseName}`, `/courses`);
   }
 
@@ -189,7 +197,7 @@ export class CoursesService {
   async updateSubject(subjectId: string, user: AuthUser, dto: UpdateSubjectDto) {
     const subject = await this.requireSubject(subjectId, user.organizationId);
     if (subject.organizationId !== subject.course.organizationId) {
-      throw new BadRequestException('Subject organization does not match its course');
+      throw new BadRequestException('La asignatura no pertenece a la organización de su cohorte.');
     }
     const updated = await this.prisma.subject.update({
       where: { id: subject.id },
@@ -234,13 +242,15 @@ export class CoursesService {
 
     if (attempt || submission) {
       throw new ConflictException(
-        'No se puede borrar una asignatura con intentos o entregas; archívala en su lugar.',
+        'No se puede eliminar una asignatura con intentos o entregas; archívala en su lugar.',
       );
     }
     const recipients = this.notifications
       ? await this.subjectRecipients(subjectId, user.organizationId, subject.status === 'PUBLISHED')
       : [];
+    const staleLinks = await this.deletedLinks(user.organizationId, [{ id: subject.id, courseId: subject.courseId }]);
     await this.prisma.subject.delete({ where: { id: subject.id } });
+    await this.notifications?.removeByLink(user.organizationId, staleLinks);
     await this.emitUsers(recipients, user.organizationId, user.userId, `Asignatura eliminada: ${subject.title}`, `/courses`);
   }
 
@@ -266,14 +276,14 @@ export class CoursesService {
           const course = await tx.course.findFirst({
             where: { id: courseId, organizationId: user.organizationId },
           });
-          if (!course) throw new NotFoundException(`Course ${courseId} not found`);
+          if (!course) throw new NotFoundException('Cohorte no encontrada.');
 
           const target = await tx.user.findFirst({
             where: { id: dto.userId, organizationId: user.organizationId },
             select: { id: true, role: true },
           });
           if (!target) {
-            throw new NotFoundException('User not found in this organization');
+            throw new NotFoundException('Usuario no encontrado en esta organización.');
           }
           if (target.role !== 'STUDENT' && target.role !== 'TEACHER') {
             throw new ForbiddenException(
@@ -338,7 +348,7 @@ export class CoursesService {
       },
     });
     if (!membership) {
-      throw new NotFoundException('Membership not found');
+      throw new NotFoundException('Matrícula no encontrada.');
     }
     await this.prisma.courseMembership.delete({ where: { id: membership.id } });
     await this.emitUsers([memberUserId], user.organizationId, user.userId, `Has dejado de estar matriculado en ${course.name}`, `/courses`, NotificationType.MEMBERSHIP_CHANGED);
@@ -347,7 +357,7 @@ export class CoursesService {
   async listMembers(courseId: string, user: AuthUser) {
     await this.courseAccess.assertCourseReadable(courseId, user);
     if (user.role === 'STUDENT') {
-      throw new ForbiddenException('Course staff access is required');
+      throw new ForbiddenException('Solo el profesorado puede ver los miembros de la cohorte.');
     }
     return this.prisma.courseMembership.findMany({
       where: { courseId, course: { organizationId: user.organizationId } },
@@ -382,7 +392,7 @@ export class CoursesService {
       select: { id: true, role: true },
     });
     if (!target) {
-      throw new NotFoundException('User not found in this organization');
+      throw new NotFoundException('Usuario no encontrado en esta organización.');
     }
     if (target.role !== 'TEACHER' && target.role !== 'ADMIN') {
       throw new ForbiddenException(
@@ -412,7 +422,7 @@ export class CoursesService {
     const staff = await this.prisma.subjectStaff.findUnique({
       where: { subjectId_userId: { subjectId, userId: staffUserId } },
     });
-    if (!staff) throw new NotFoundException('Staff assignment not found');
+    if (!staff) throw new NotFoundException('Asignación de profesorado no encontrada.');
     const updated = await this.prisma.subjectStaff.update({
       where: { id: staff.id },
       data: { role: dto.role },
@@ -426,7 +436,7 @@ export class CoursesService {
     const staff = await this.prisma.subjectStaff.findUnique({
       where: { subjectId_userId: { subjectId, userId: staffUserId } },
     });
-    if (!staff) throw new NotFoundException('Staff assignment not found');
+    if (!staff) throw new NotFoundException('Asignación de profesorado no encontrada.');
     await this.prisma.subjectStaff.delete({ where: { id: staff.id } });
     await this.emitUsers([staffUserId], user.organizationId, user.userId, `Ya no formas parte del equipo de ${subject.title}`, `/courses`, NotificationType.MEMBERSHIP_CHANGED);
   }
@@ -465,7 +475,7 @@ export class CoursesService {
     const course = await this.prisma.course.findFirst({
       where: { id, organizationId },
     });
-    if (!course) throw new NotFoundException(`Course ${id} not found`);
+    if (!course) throw new NotFoundException('Cohorte no encontrada.');
     return course;
   }
 
@@ -475,7 +485,7 @@ export class CoursesService {
       include: { course: true },
     });
     if (!subject || subject.course.organizationId !== organizationId) {
-      throw new NotFoundException(`Subject ${id} not found`);
+      throw new NotFoundException('Asignatura no encontrada.');
     }
     return subject;
   }
@@ -485,12 +495,12 @@ export class CoursesService {
     if (status === 'PLANNED' || status === 'ACTIVE' || status === 'ARCHIVED') {
       return status;
     }
-    throw new BadRequestException('status must be PLANNED, ACTIVE, or ARCHIVED');
+    throw new BadRequestException('El estado debe ser PLANNED, ACTIVE o ARCHIVED.');
   }
 
   private assertDateWindow(startsOn: string, endsOn: string) {
     if (new Date(endsOn).getTime() <= new Date(startsOn).getTime()) {
-      throw new BadRequestException('endsOn must be after startsOn');
+      throw new BadRequestException('La fecha de fin debe ser posterior a la de inicio.');
     }
   }
 
@@ -594,6 +604,44 @@ export class CoursesService {
 
   private async emitUsers(userIds: readonly string[], organizationId: string, actorId: string, title: string, link: string, type: NotificationType = NotificationType.COURSE_CHANGED) {
     await this.notifications?.emitMany(userIds, type, { title, link }, { organizationId, actorId });
+  }
+
+  /**
+   * Links of the notifications that stop resolving once `subjects` are deleted:
+   * the subject pages, their activity/grade views and their forum threads.
+   * Collected before the delete because the threads cascade with the subject.
+   */
+  private async deletedLinks(
+    organizationId: string,
+    subjects: Array<{ id: string; courseId: string }>,
+    extra: LinkMatchers = {},
+  ): Promise<LinkMatchers> {
+    if (!this.notifications) return {};
+    try {
+      const threads = subjects.length
+        ? await this.prisma.forumThread.findMany({
+            where: { subjectId: { in: subjects.map(({ id }) => id) }, subject: { organizationId } },
+            select: { id: true },
+          })
+        : [];
+      return {
+        equals: [
+          ...(extra.equals ?? []),
+          ...subjects.map(({ id, courseId }) => `/courses/${courseId}/subjects/${id}`),
+          ...threads.map(({ id }) => `/forums/${id}`),
+        ],
+        startsWith: [
+          ...(extra.startsWith ?? []),
+          ...subjects.flatMap(({ id, courseId }) => [
+            `/courses/${courseId}/subjects/${id}/`,
+            `/activities?subjectId=${id}&`,
+            `/grades?subjectId=${id}&`,
+          ]),
+        ],
+      };
+    } catch {
+      return {};
+    }
   }
 
   private async orgAdminIds(organizationId: string): Promise<string[]> {

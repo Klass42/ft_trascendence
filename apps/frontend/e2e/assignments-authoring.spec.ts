@@ -27,7 +27,7 @@ test.describe('Tareas — authoring & window', () => {
     const edited = `${title} (editada)`;
 
     await page.goto('/activities');
-    const course = page.getByRole('combobox', { name: 'Curso' });
+    const course = page.getByRole('combobox', { name: 'Asignatura' });
     await expect(course).toBeVisible({ timeout: 8000 });
     await course.selectOption(COURSE_ID);
 
@@ -84,9 +84,9 @@ test.describe('Tareas — authoring & window', () => {
     );
     expect(status).toBe(400);
 
-    await page.getByRole('button', { name: 'Borrar tarea' }).click();
+    await page.getByRole('button', { name: 'Eliminar tarea' }).click();
     await page
-      .getByRole('button', { name: 'Borrar', exact: true })
+      .getByRole('button', { name: 'Eliminar', exact: true })
       .last()
       .click();
     await expect(

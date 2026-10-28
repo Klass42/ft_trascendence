@@ -19,15 +19,15 @@ import {
   type FinalAttempt,
   type FinalItem,
 } from './final-grade';
+import {
+  GRADABLE_ACTIVITY_STATUSES,
+  gradableActivitiesWhere,
+  pickCell,
+  subjectStudentsWhere,
+  type GradebookCell,
+} from '../../activities/gradable-activities';
 
-/** One student's score for one activity inside the gradebook matrix. */
-export interface GradebookCell {
-  activityId: string;
-  /** Best GRADED attempt, or a SUBMITTED one if none is graded yet. */
-  attemptId: string | null;
-  score: number | null;
-  status: AttemptStatus | null;
-}
+export type { GradebookCell };
 
 /**
  * Grading + gradebook. Sits inside the assignments module so `app.module.ts`
@@ -58,7 +58,7 @@ export class GradingService {
       select: { id: true, userId: true, assignmentId: true },
     });
     if (!submission) {
-      throw new NotFoundException(`Submission ${submissionId} not found`);
+      throw new NotFoundException('Entrega no encontrada.');
     }
 
     // Staff-only gate; also derives the tenant org from the parent course.
@@ -70,7 +70,7 @@ export class GradingService {
 
     if (dto.score > assignment.maxScore) {
       throw new BadRequestException(
-        `Score must be between 0 and ${assignment.maxScore}`,
+        `La nota debe estar entre 0 y ${assignment.maxScore}.`,
       );
     }
 
@@ -104,7 +104,8 @@ export class GradingService {
 
   /**
    * The full gradebook for a course (staff only): every enrolled student × every
-   * published/archived activity, plus a `final` average of countable items.
+   * gradable (non-draft) activity, plus a `final` average of countable items.
+   * "Gradable" and "student" are defined once in `gradable-activities.ts`.
    */
   async getGradebook(subjectId: string, actingUserId: string) {
     const { subject } = await this.assignments.requireCourseMembership(
@@ -114,10 +115,7 @@ export class GradingService {
     );
 
     const activities = await this.prisma.activity.findMany({
-      where: {
-        subjectId,
-        status: { in: [PublicationStatus.PUBLISHED, PublicationStatus.ARCHIVED] },
-      },
+      where: gradableActivitiesWhere(subjectId, subject.organizationId),
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -131,10 +129,7 @@ export class GradingService {
     });
 
     const enrollments = await this.prisma.courseMembership.findMany({
-      where: {
-        courseId: subject.courseId,
-        course: { organizationId: subject.organizationId },
-      },
+      where: subjectStudentsWhere(subject),
       include: {
         user: { select: { id: true, name: true, email: true, avatarUrl: true } },
       },
@@ -191,10 +186,7 @@ export class GradingService {
     );
 
     const activities = await this.prisma.activity.findMany({
-      where: {
-        subjectId,
-        status: { in: [PublicationStatus.PUBLISHED, PublicationStatus.ARCHIVED] },
-      },
+      where: gradableActivitiesWhere(subjectId, subject.organizationId),
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -303,21 +295,47 @@ export class GradingService {
       (subject) => subject.status === 'PUBLISHED',
     ).length;
 
+    // Same notion of "student" as the gradebook and analytics: a STUDENT cohort
+    // member who is not staff of the subject being counted.
     const studentEnrollments = await this.prisma.courseMembership.findMany({
       where: {
         courseId: { in: staffSubjects.map((subject) => subject.courseId) },
         course: { organizationId },
+        user: { role: 'STUDENT' },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        courseId: true,
+        user: {
+          select: {
+            subjectStaff: {
+              where: { subjectId: { in: subjectIds } },
+              select: { subjectId: true },
+            },
+          },
+        },
+      },
     });
     const totalStudents = new Set(
-      studentEnrollments.map((e) => e.userId),
+      studentEnrollments
+        .filter((e) =>
+          staffSubjects.some(
+            (subject) =>
+              subject.courseId === e.courseId &&
+              !e.user.subjectStaff.some((s) => s.subjectId === subject.id),
+          ),
+        )
+        .map((e) => e.userId),
     ).size;
 
     // Attempts awaiting manual grading (subjective blocks still pending).
     const pendingWhere = {
       status: AttemptStatus.SUBMITTED,
-      activity: { subjectId: { in: subjectIds } },
+      activity: {
+        subjectId: { in: subjectIds },
+        status: { in: GRADABLE_ACTIVITY_STATUSES },
+        subject: { organizationId },
+      },
     };
     const [pendingCount, pendingRows] = await Promise.all([
       this.prisma.attempt.count({ where: pendingWhere }),
@@ -378,7 +396,13 @@ export class GradingService {
     const rows = gradebook.students.map((student) => [
       student.user.name ?? '',
       student.user.email ?? '',
-      ...student.cells.map((c) => (c.score != null ? String(c.score) : '')),
+      ...student.cells.map((c) =>
+        c.status === AttemptStatus.SUBMITTED
+          ? 'Por calificar'
+          : c.score != null
+            ? String(c.score)
+            : '',
+      ),
       student.final == null ? '' : (Math.round(student.final * 1000) / 10).toFixed(1),
     ]);
 
@@ -420,40 +444,4 @@ function toFinalAttempt(a: {
     status: a.status as FinalAttempt['status'],
     score: a.score,
   };
-}
-
-/** Best GRADED attempt wins; else a SUBMITTED one; else empty cell. */
-function pickCell(
-  activityId: string,
-  attempts: Array<{
-    id: string;
-    score: number | null;
-    status: AttemptStatus;
-    attemptNo?: number;
-  }>,
-): GradebookCell {
-  const graded = attempts.filter((a) => a.status === AttemptStatus.GRADED);
-  if (graded.length > 0) {
-    const best = graded.reduce((acc, a) =>
-      (a.score ?? -Infinity) > (acc.score ?? -Infinity) ? a : acc,
-    );
-    return {
-      activityId,
-      attemptId: best.id,
-      score: best.score,
-      status: best.status,
-    };
-  }
-  const submitted = attempts
-    .filter((a) => a.status === AttemptStatus.SUBMITTED)
-    .sort((a, b) => (b.attemptNo ?? 0) - (a.attemptNo ?? 0));
-  if (submitted[0]) {
-    return {
-      activityId,
-      attemptId: submitted[0].id,
-      score: submitted[0].score,
-      status: submitted[0].status,
-    };
-  }
-  return { activityId, attemptId: null, score: null, status: null };
 }

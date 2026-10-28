@@ -10,6 +10,7 @@ import {
   Tabs,
   useToast,
 } from '@/components/ui';
+import { apiClient } from '@/lib/api';
 import {
   useActivityMutations,
   useSaveAsTemplate,
@@ -17,13 +18,14 @@ import {
   useTeachingActivities,
 } from '@/lib/api';
 import type { ActivityDTO, TaskTemplateDTO, TeachingActivityDTO } from '@/lib/api';
-import { formatDate } from '../assignments/helpers';
+import { formatDate } from '@/lib/format';
 import { STATUS_BADGE } from './helpers';
 
 interface Props {
   courseId: string;
   open: boolean;
   onClose: () => void;
+  onPreview: (activity: ActivityDTO, gradeUrl: string) => void;
   onInstantiated: (activity: ActivityDTO) => void;
 }
 
@@ -31,7 +33,7 @@ interface Props {
  * Staff library: org templates and previous tasks. Instantiating copies blocks
  * into a new activity in `courseId` (attempts/grades stay on the source).
  */
-export function TaskLibrary({ courseId, open, onClose, onInstantiated }: Props) {
+export function TaskLibrary({ courseId, open, onClose, onPreview, onInstantiated }: Props) {
   return (
     <Modal open={open} onClose={onClose} title="Biblioteca de tareas" size="lg">
       <Tabs
@@ -42,6 +44,7 @@ export function TaskLibrary({ courseId, open, onClose, onInstantiated }: Props) 
             content: (
               <TemplatesTab
                 courseId={courseId}
+                onPreview={onPreview}
                 onInstantiated={onInstantiated}
               />
             ),
@@ -52,6 +55,7 @@ export function TaskLibrary({ courseId, open, onClose, onInstantiated }: Props) 
             content: (
               <PreviousTab
                 courseId={courseId}
+                onPreview={onPreview}
                 onInstantiated={onInstantiated}
               />
             ),
@@ -64,15 +68,54 @@ export function TaskLibrary({ courseId, open, onClose, onInstantiated }: Props) 
 
 function TemplatesTab({
   courseId,
+  onPreview,
   onInstantiated,
 }: {
   courseId: string;
+  onPreview: Props['onPreview'];
   onInstantiated: (activity: ActivityDTO) => void;
 }) {
   const { toast } = useToast();
   const { data, isLoading, error, remove } = useTaskTemplates();
   const { createActivity, isLoading: creating } = useActivityMutations();
   const [pendingDelete, setPendingDelete] = useState<TaskTemplateDTO | null>(null);
+
+  function preview(template: TaskTemplateDTO) {
+    if (!Array.isArray(template.blocks) || template.blocks.length === 0) return;
+    const id = `preview-${template.id}`;
+    const now = new Date().toISOString();
+    const activity: ActivityDTO = {
+      id,
+      subjectId: courseId,
+      type: 'QUIZ',
+      title: template.title,
+      description: template.description,
+      openAt: null,
+      dueAt: null,
+      closeAt: null,
+      maxScore: template.blocks.reduce((sum, block) => sum + block.points, 0),
+      attemptsAllowed: 1,
+      timeLimitSec: null,
+      config: {},
+      status: 'DRAFT',
+      countsTowardFinal: true,
+      templateId: template.id,
+      createdAt: now,
+      updatedAt: now,
+      questions: template.blocks.map((block, index) => ({
+        id: `${template.id}:${index}`,
+        activityId: id,
+        kind: block.kind,
+        prompt: block.prompt,
+        points: block.points,
+        order: block.order,
+        content: block.content,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    };
+    onPreview(activity, `/task-templates/${encodeURIComponent(template.id)}/preview/grade`);
+  }
 
   async function instantiate(template: TaskTemplateDTO) {
     try {
@@ -100,7 +143,7 @@ function TemplatesTab({
     } catch (err) {
       toast({
         variant: 'error',
-        message: err instanceof Error ? err.message : 'No se pudo borrar la plantilla.',
+        message: err instanceof Error ? err.message : 'No se pudo eliminar la plantilla.',
       });
     }
   }
@@ -136,20 +179,25 @@ function TemplatesTab({
             align: 'right',
             render: (row) => (
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                {row.blocks.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => preview(row)}>
+                    Vista previa
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="primary"
                   onClick={() => void instantiate(row)}
                   loading={creating}
                 >
-                  Usar en este curso
+                  Usar en esta asignatura
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setPendingDelete(row)}
                 >
-                  Borrar
+                  Eliminar
                 </Button>
               </div>
             ),
@@ -160,15 +208,15 @@ function TemplatesTab({
         empty={
           <EmptyState
             title="Sin plantillas todavía"
-            description="Guarda una tarea como plantilla para reutilizar sus bloques."
+            description="Guarda una tarea como plantilla para reutilizar sus preguntas."
           />
         }
       />
       <ConfirmDialog
         open={!!pendingDelete}
-        title="Borrar plantilla"
-        message={`¿Borrar «${pendingDelete?.title}»? Las tareas ya creadas no se tocan.`}
-        confirmLabel="Borrar"
+        title="Eliminar plantilla"
+        message={`¿Eliminar «${pendingDelete?.title}»? Las tareas ya creadas no se tocan.`}
+        confirmLabel="Eliminar"
         variant="danger"
         onConfirm={() => void confirmDelete()}
         onCancel={() => setPendingDelete(null)}
@@ -179,9 +227,11 @@ function TemplatesTab({
 
 function PreviousTab({
   courseId,
+  onPreview,
   onInstantiated,
 }: {
   courseId: string;
+  onPreview: Props['onPreview'];
   onInstantiated: (activity: ActivityDTO) => void;
 }) {
   const { toast } = useToast();
@@ -189,13 +239,25 @@ function PreviousTab({
   const { createActivity, isLoading: creating } = useActivityMutations();
   const { save, isLoading: saving } = useSaveAsTemplate();
 
+  async function preview(row: TeachingActivityDTO) {
+    try {
+      const activity = await apiClient.get<ActivityDTO>(`/activities/${encodeURIComponent(row.id)}`);
+      onPreview(activity, `/activities/${encodeURIComponent(row.id)}/preview/grade`);
+    } catch (err) {
+      toast({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'No se pudo cargar la tarea para previsualizar.',
+      });
+    }
+  }
+
   async function duplicate(row: TeachingActivityDTO) {
     try {
       const created = await createActivity(courseId, {
         title: row.title,
         sourceActivityId: row.id,
       });
-      toast({ variant: 'success', message: 'Tarea duplicada en este curso.' });
+      toast({ variant: 'success', message: 'Tarea duplicada en esta asignatura.' });
       onInstantiated(created);
     } catch (err) {
       toast({
@@ -270,6 +332,13 @@ function PreviousTab({
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <Button
                 size="sm"
+                variant="outline"
+                onClick={() => void preview(row)}
+              >
+                Vista previa
+              </Button>
+              <Button
+                size="sm"
                 variant="primary"
                 onClick={() => void duplicate(row)}
                 loading={creating}
@@ -293,7 +362,7 @@ function PreviousTab({
       empty={
         <EmptyState
           title="Sin tareas anteriores"
-          description="Cuando publiques tareas en tus cursos, aparecerán aquí para duplicarlas."
+          description="Cuando publiques tareas en tus asignaturas, aparecerán aquí para duplicarlas."
         />
       }
     />

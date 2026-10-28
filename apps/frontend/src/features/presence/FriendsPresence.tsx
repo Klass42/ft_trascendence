@@ -59,7 +59,8 @@ export function FriendsPresence() {
 
   return (
     <Dropdown
-      trigger={<span aria-label={`Amigos en línea: ${onlineCount}`}>{trigger}</span>}
+      trigger={trigger}
+      triggerLabel={`Amigos en línea: ${onlineCount}`}
       items={items}
       align="right"
     />

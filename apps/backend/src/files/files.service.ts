@@ -111,14 +111,14 @@ export class FilesService {
       where: { objectKey, organizationId: user.organizationId },
       select: { id: true },
     });
-    if (!file) throw new NotFoundException('File not found');
+    if (!file) throw new NotFoundException('Archivo no encontrado.');
     return this.getSignedUrl(file.id, user);
   }
 
   /** A file is readable only through an authorized reference or by its uploader when unlinked. */
   async assertCanRead(fileId: string, user: AuthUser): Promise<FileWithReferences> {
     const file = await this.findFile(fileId, user.organizationId);
-    if (!file) throw new NotFoundException(`File ${fileId} not found`);
+    if (!file) throw new NotFoundException('Archivo no encontrado.');
 
     const answers = await this.findAnswerReferences(fileId, user.organizationId);
     const hasReferences = file.lessonAttachments.length > 0
@@ -177,7 +177,7 @@ export class FilesService {
     if (!hasReferences && file.uploaderId === user.userId) return file;
     // Orphan whose owner was deleted: org ADMIN can still read during retention.
     if (!hasReferences && !file.uploaderId && user.role === 'ADMIN') return file;
-    throw new ForbiddenException('You cannot access this file');
+    throw new ForbiddenException('No tienes acceso a este archivo.');
   }
 
   /** Verifies a short-lived HMAC capability, then streams the stored object. */
@@ -194,7 +194,7 @@ export class FilesService {
       || expiresAt <= now
       || expiresAt > now + FILE_URL_TTL_SECONDS + 5
       || !/^[a-f0-9]{64}$/i.test(signature)) {
-      throw new ForbiddenException('Invalid or expired file URL');
+      throw new ForbiddenException('El enlace del archivo no es válido o ha caducado.');
     }
 
     const expected = this.signContentUrl(fileId, organizationId, expiresAt);
@@ -202,11 +202,11 @@ export class FilesService {
     const expectedBytes = Buffer.from(expected, 'hex');
     if (suppliedBytes.length !== expectedBytes.length
       || !timingSafeEqual(suppliedBytes, expectedBytes)) {
-      throw new ForbiddenException('Invalid or expired file URL');
+      throw new ForbiddenException('El enlace del archivo no es válido o ha caducado.');
     }
 
     const file = await this.findFile(fileId, organizationId);
-    if (!file) throw new NotFoundException(`File ${fileId} not found`);
+    if (!file) throw new NotFoundException('Archivo no encontrado.');
     const stream = await this.storage.getObject(file.objectKey);
     return { file, stream };
   }
@@ -221,7 +221,7 @@ export class FilesService {
     const isOwner = fileRecord.uploaderId === user.userId;
     const isOrgAdminOrphan = !fileRecord.uploaderId && user.role === 'ADMIN';
     if (!isOwner && !isOrgAdminOrphan) {
-      throw new ForbiddenException('You cannot delete this file');
+      throw new ForbiddenException('No puedes eliminar este archivo.');
     }
 
     const answers = await this.findAnswerReferences(fileId, organizationId);
@@ -241,7 +241,7 @@ export class FilesService {
       + fileRecord.assignmentFiles.length + fileRecord.activityFiles.length
       + fileRecord.learningResources.length + answers.length > 0) {
       throw new ConflictException(
-        'Remove this file from its avatar, lesson, activity, submission, or resource before deleting it',
+        'Quita este archivo de su avatar, lección, tarea, entrega o recurso antes de eliminarlo.',
       );
     }
 
@@ -327,7 +327,7 @@ export class FilesService {
 
   private signContentUrl(fileId: string, organizationId: string, expires: number): string {
     const secret = process.env.FILE_URL_SIGNING_SECRET || process.env.JWT_ACCESS_SECRET;
-    if (!secret) throw new ServiceUnavailableException('File URL signing is not configured');
+    if (!secret) throw new ServiceUnavailableException('La firma de enlaces de archivo no está configurada.');
     return createHmac('sha256', secret)
       .update(`${fileId}\n${organizationId}\n${expires}`)
       .digest('hex');

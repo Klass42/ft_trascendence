@@ -1,0 +1,23 @@
+.standalone {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.inApp {
+  padding: var(--space-6) var(--space-4);
+}
+
+/* The EmptyState title is a <p>; the real page heading stays available to screen readers. */
+

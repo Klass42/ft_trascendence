@@ -20,10 +20,11 @@ import {
   type UpdateLearningResourceInput,
 } from '@/lib/api';
 import { mapApiValidationErrors } from '@/lib/form-errors';
+import { plural } from '@/lib/format';
 import { FolderTree } from './FolderTree';
 import { ResourceCard } from './ResourceCard';
 import styles from './ResourcesPage.module.css';
-import { RESOURCE_STATUSES, RESOURCE_TYPES, countLabel, doneLabel, splitList, validateExternalUrl, type Targets } from './resource-helpers';
+import { RESOURCE_STATUSES, RESOURCE_TYPES, countLabel, splitList, validateExternalUrl, type Targets } from './resource-helpers';
 
 const EMPTY_FORM = {
   title: '', description: '', type: 'DOCUMENT' as LearningResourceType,
@@ -106,7 +107,7 @@ export function ResourcesPage() {
     }
     setConfirm({
       title: 'Archivar recursos',
-      message: `Se archivarán ${countLabel({ resourceIds: ids, folderIds: [] })}.${targets.folderIds.length ? ' Las carpetas seleccionadas no se archivan.' : ''}`,
+      message: `Se ${ids.length === 1 ? 'archivará' : 'archivarán'} ${countLabel({ resourceIds: ids, folderIds: [] })}.${targets.folderIds.length ? ' Las carpetas seleccionadas no se archivan.' : ''}`,
       confirmLabel: 'Archivar',
       variant: 'primary',
       run: async () => {
@@ -114,7 +115,7 @@ export function ResourcesPage() {
         for (const id of ids) {
           try { await mutations.update(id, { status: 'ARCHIVED' }); ok += 1; } catch { /* reported below */ }
         }
-        toast({ variant: ok === ids.length ? 'success' : 'error', message: ok === ids.length ? `${doneLabel('Archivad', { resourceIds: ids, folderIds: [] })}.` : `Archivados ${ok} de ${ids.length} recursos.` });
+        toast({ variant: ok === ids.length ? 'success' : 'error', message: ok === ids.length ? `Se ${ok === 1 ? 'ha archivado' : 'han archivado'} ${plural(ok, 'recurso', 'recursos')}.` : `Se ${ok === 1 ? 'ha archivado' : 'han archivado'} ${ok} de ${plural(ids.length, 'recurso', 'recursos')}.` });
       },
     });
   };
@@ -123,7 +124,7 @@ export function ResourcesPage() {
     const single = targets.resourceIds.length + targets.folderIds.length === 1;
     setConfirm({
       title: single ? (targets.folderIds.length ? 'Eliminar carpeta' : 'Eliminar recurso') : 'Eliminar selección',
-      message: `Se eliminarán ${countLabel(targets)} de la biblioteca.`
+      message: `Se ${single ? 'eliminará' : 'eliminarán'} ${countLabel(targets)} de la biblioteca.`
         + (targets.folderIds.length ? ' El contenido de las carpetas eliminadas pasa a la raíz.' : '')
         + ' Los archivos almacenados no se borrarán.',
       confirmLabel: 'Eliminar',
@@ -133,7 +134,7 @@ export function ResourcesPage() {
           if (single && targets.resourceIds.length) await mutations.remove(targets.resourceIds[0]);
           else if (single) await mutations.removeFolder(targets.folderIds[0]);
           else await mutations.batchDelete(targets);
-          toast({ variant: 'success', message: `${doneLabel('Eliminad', targets)}.` });
+          toast({ variant: 'success', message: `Se ${single ? 'ha eliminado' : 'han eliminado'} ${countLabel(targets)}.` });
           if (targets.folderIds.includes(folderId ?? '')) setFolderId(null);
         } catch (err) {
           toast({ variant: 'error', message: errorMessage(err, 'No se pudo eliminar.') });
@@ -167,7 +168,7 @@ export function ResourcesPage() {
     }
     toast({
       variant: ok === total ? 'success' : 'error',
-      message: ok === total ? `${doneLabel('Publicad', targets)} en el curso.` : `Publicados ${ok} de ${total} elementos.`,
+      message: ok === total ? `Se ${total === 1 ? 'ha publicado' : 'han publicado'} ${countLabel(targets)} en la asignatura.` : `Se ${ok === 1 ? 'ha publicado' : 'han publicado'} ${ok} de ${plural(total, 'elemento', 'elementos')}.`,
     });
     setPublishTargets(null);
     clearSelection();
@@ -211,7 +212,7 @@ export function ResourcesPage() {
     for (const id of targets.folderIds) {
       try { await mutations.updateFolder(id, { parentId: destination }); ok += 1; } catch { /* counted */ }
     }
-    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `${doneLabel('Movid', targets)}.` : `Movidos ${ok} de ${total} elementos.` });
+    toast({ variant: ok === total ? 'success' : 'error', message: ok === total ? `Se ${total === 1 ? 'ha movido' : 'han movido'} ${countLabel(targets)}.` : `Se ${ok === 1 ? 'ha movido' : 'han movido'} ${ok} de ${plural(total, 'elemento', 'elementos')}.` });
     setMoveTargets(null);
     clearSelection();
     await reloadAll();
@@ -225,7 +226,7 @@ export function ResourcesPage() {
         trigger={<><MoreVertical size={18} aria-hidden="true" /><span style={visuallyHidden}>Acciones de {resource.title}</span></>}
         items={[
           { label: 'Editar', icon: <Pencil size={16} />, onClick: () => setEditing(resource), disabled: !manage },
-          { label: 'Publicar en curso', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
+          { label: 'Publicar en asignatura', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
           { label: 'Archivar', icon: <Archive size={16} />, onClick: () => askArchive(one), disabled: !manage || resource.status === 'ARCHIVED' },
           { label: 'Mover a…', icon: <FolderInput size={16} />, onClick: () => setMoveTargets(one), disabled: !manage },
           { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: () => askDelete(one), danger: true, disabled: !manage },
@@ -243,7 +244,7 @@ export function ResourcesPage() {
         trigger={<><MoreVertical size={18} aria-hidden="true" /><span style={visuallyHidden}>Acciones de {folder.name}</span></>}
         items={[
           { label: 'Abrir', icon: <FolderOpen size={16} />, onClick: () => openFolder(folder.id) },
-          { label: 'Publicar en curso', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
+          { label: 'Publicar en asignatura', icon: <Send size={16} />, onClick: () => setPublishTargets(one) },
           { label: 'Renombrar', icon: <Pencil size={16} />, onClick: () => setFolderModal({ mode: 'rename', folder }), disabled: !manage },
           { label: 'Mover a…', icon: <FolderInput size={16} />, onClick: () => setMoveTargets(one), disabled: !manage },
           { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: () => askDelete(one), danger: true, disabled: !manage },
@@ -258,7 +259,7 @@ export function ResourcesPage() {
       ? (resources?.find((r) => r.id === publishTargets.resourceIds[0])?.title ?? folderById.get(publishTargets.folderIds[0])?.name ?? '')
       : countLabel(publishTargets))
     : '';
-  // Hide courses already linked when publishing a single item.
+  // Hide subjects already linked when publishing a single item.
   const publishExclude = publishTargets && publishTargets.resourceIds.length + publishTargets.folderIds.length === 1
     ? (resources?.find((r) => r.id === publishTargets.resourceIds[0])?.subjects.map((l) => l.subjectId)
       ?? folderById.get(publishTargets.folderIds[0])?.subjects.map((l) => l.subjectId) ?? [])
@@ -316,7 +317,7 @@ export function ResourcesPage() {
 
       {selectMode && (
         <div role="toolbar" aria-label="Acciones sobre la selección" style={batchBarStyle}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>{selectionCount ? `${countLabel(selection)} seleccionados` : 'Nada seleccionado'}</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{selectionCount ? `${selectionCount === 1 ? 'Seleccionado' : 'Seleccionados'}: ${countLabel(selection)}` : 'Nada seleccionado'}</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button size="sm" variant="secondary" leftIcon={<Send size={14} />} disabled={!selectionCount} onClick={() => setPublishTargets(selection)}>Publicar</Button>
             <Button size="sm" variant="secondary" leftIcon={<Archive size={14} />} disabled={!selection.resourceIds.length} onClick={() => askArchive(selection)}>Archivar</Button>
@@ -365,7 +366,7 @@ export function ResourcesPage() {
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontWeight: 700, fontSize: 15 }}>{folder.name}</span>
                   <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    {folder._count.resources} recursos · {folder._count.children} subcarpetas
+                    {plural(folder._count.resources, 'recurso', 'recursos')} · {plural(folder._count.children, 'subcarpeta', 'subcarpetas')}
                     {folder.subjects.length > 0 && ` · publicada en ${folder.subjects.map((l) => l.subject.title).join(', ')}`}
                   </span>
                 </span>
@@ -589,10 +590,10 @@ function PublishModal({ title, hasFolders, excludeSubjectIds, courses, open, onC
   const submit = async () => { if (courseId) { await onPublish(courseId, required); setCourseId(''); } };
   return <Modal open={open} onClose={onClose} title={`Publicar: ${title}`} footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={() => void submit()} loading={loading} disabled={!courseId}>Publicar</Button></>}>
     {eligible.length ? <div style={{ display: 'grid', gap: 12 }}>
-      <Select label="Curso" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: '', label: 'Selecciona un curso' }, ...eligible.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))]} />
+      <Select label="Asignatura" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={[{ value: '', label: 'Selecciona una asignatura' }, ...eligible.map((course) => ({ value: course.id, label: subjectSelectorLabel(course) }))]} />
       <label style={{ fontSize: 14 }}><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Recurso obligatorio</label>
-      {hasFolders && <p style={{ ...messageStyle, margin: 0 }}>Las carpetas quedan vinculadas: lo que añadas después dentro (también en subcarpetas) aparecerá en el curso automáticamente.</p>}
-    </div> : <EmptyState title="No hay cursos disponibles" description="No tienes otros cursos donde vincular este recurso." />}
+      {hasFolders && <p style={{ ...messageStyle, margin: 0 }}>Las carpetas quedan vinculadas: lo que añadas después dentro (también en subcarpetas) aparecerá en la asignatura automáticamente.</p>}
+    </div> : <EmptyState title="No hay asignaturas disponibles" description="No tienes otras asignaturas publicadas donde vincular este recurso." />}
   </Modal>;
 }
 
@@ -637,7 +638,7 @@ function FolderNameModal({ state, onClose, onSave, loading }: {
   if (key !== lastKey) { setLastKey(key); setName(state?.mode === 'rename' ? state.folder.name : ''); }
   const submit = (event?: React.FormEvent) => { event?.preventDefault(); if (name.trim()) void onSave(name.trim()); };
   return <Modal open={!!state} onClose={onClose} title={state?.mode === 'rename' ? 'Renombrar carpeta' : 'Nueva carpeta'} size="sm" footer={<><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button form="folder-form" type="submit" loading={loading} disabled={!name.trim()}>Guardar</Button></>}>
-    <form id="folder-form" onSubmit={submit}><Input label="Nombre" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></form>
+    <form id="folder-form" noValidate onSubmit={submit}><Input label="Nombre" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></form>
   </Modal>;
 }
 

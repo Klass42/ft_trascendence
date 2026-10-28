@@ -14,6 +14,7 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { ReorderQuestionsDto } from './dto/reorder-questions.dto';
+import { PreviewGradeDto } from './dto/preview-grade.dto';
 
 /**
  * Authoring + read endpoints for the activity engine (B1). Routes are prefixed
@@ -42,6 +43,11 @@ export class ActivitiesController {
     return this.activities.findAllForCourse(subjectId, user.userId);
   }
 
+  @Get('me/pending-activities')
+  listMyPending(@CurrentUser() user: AuthUser) {
+    return this.activities.listMyPendingActivities(user);
+  }
+
   @Get('me/teaching/activities')
   listTeaching(@CurrentUser() user: AuthUser) {
     return this.activities.listTeachingActivities(user.userId);
@@ -50,6 +56,15 @@ export class ActivitiesController {
   @Get('activities/:id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.activities.findOne(id, user.userId);
+  }
+
+  @Post('activities/:id/preview/grade')
+  previewGrade(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: PreviewGradeDto,
+  ) {
+    return this.activities.previewGrade(id, user.userId, dto);
   }
 
   @Patch('activities/:id')

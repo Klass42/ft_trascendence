@@ -457,14 +457,14 @@ function FileUploadEditor({ content, onChange }: Omit<Props, 'kind'>) {
 
   return (
     <FieldGroup
-      label="Entrega de ficheros"
+      label="Entrega de archivos"
       hint="El alumno sube archivos; se corrige a mano."
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Input
           type="number"
           min={1}
-          label="Número máximo de ficheros"
+          label="Número máximo de archivos"
           value={maxFiles}
           onChange={(e) => {
             const n = Number(e.target.value);

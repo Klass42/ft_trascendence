@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   HttpCode,
@@ -49,6 +50,38 @@ export class EnrollmentsController {
       lessonId,
       user.organizationId,
       user.userId,
+    );
+  }
+
+  /** Unmarks the caller's own completion; staff cannot edit other learners' progress. */
+  @Delete('lessons/:lessonId/complete')
+  @HttpCode(200)
+  async uncompleteLesson(
+    @Param('lessonId', ParseIdPipe) lessonId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const lesson = await this.enrollmentsService.findLessonSubjectId(
+      lessonId,
+      user.organizationId,
+    );
+    await this.courseAccess.assertSubjectReadable(lesson.subjectId, user);
+    return this.enrollmentsService.uncompleteLesson(
+      lessonId,
+      user.organizationId,
+      user.userId,
+    );
+  }
+
+  /** Per-student completed lessons for the subject's cohort. Subject staff or admin only. */
+  @Get('subjects/:subjectId/lesson-progress')
+  async getLessonProgress(
+    @Param('subjectId', ParseIdPipe) subjectId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.courseAccess.assertSubjectStaff(subjectId, user);
+    return this.enrollmentsService.getSubjectLessonProgress(
+      subjectId,
+      user.organizationId,
     );
   }
 

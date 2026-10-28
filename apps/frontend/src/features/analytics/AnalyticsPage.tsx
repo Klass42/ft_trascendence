@@ -123,10 +123,10 @@ export function AnalyticsPage() {
         </div>
       </div>
 
-      {coursesLoading && <Spinner size="md" label="Cargando cursos…" />}
+      {coursesLoading && <Spinner size="md" label="Cargando asignaturas…" />}
 
       {!coursesLoading && (!courses || courses.length === 0) && (
-        <p className={styles.muted}>No hay cursos disponibles.</p>
+        <p className={styles.muted}>No hay asignaturas disponibles.</p>
       )}
 
       {courseId && overview.isLoading && (
@@ -135,7 +135,7 @@ export function AnalyticsPage() {
 
       {anyError && (
         <p className={styles.error}>
-          No se pudieron cargar las analíticas (¿eres profesor de este curso?).
+          No se pudieron cargar las analíticas (¿eres profesor de esta asignatura?).
         </p>
       )}
 
@@ -178,6 +178,10 @@ export function AnalyticsPage() {
                   />
                 </div>
               </div>
+
+              <p className={`${styles.rangeNote} ${styles.noPrint}`}>
+                El rango filtra solo la gráfica de entregas; el resto de cifras cubre toda la asignatura.
+              </p>
 
               {rangeError ? (
                 <p className={styles.error}>{rangeError}</p>

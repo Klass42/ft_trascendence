@@ -24,7 +24,7 @@ export async function assertCourseLimit(db: Db, organizationId: string) {
   const org = await limits(db, organizationId);
   if (org?.maxCourses == null) return;
   const count = await db.course.count({ where: { organizationId } });
-  if (count + 1 > org.maxCourses) throw new ForbiddenException(`La organización ha alcanzado el límite de cursos de su plan (${org.maxCourses}).`);
+  if (count + 1 > org.maxCourses) throw new ForbiddenException(`La organización ha alcanzado el límite de cohortes de su plan (${org.maxCourses}).`);
 }
 
 export async function assertStorageLimit(db: Db, organizationId: string, incomingBytes: number) {

@@ -70,7 +70,7 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     } else {
       const slug = typeof query.organizationSlug === 'string' ? query.organizationSlug : '';
       if (!ORG_SLUG.test(slug)) {
-        throw new BadRequestException('Organization code is required');
+        throw new BadRequestException('El código de organización es obligatorio.');
       }
 
       const state = this.createState(slug);
@@ -91,7 +91,7 @@ export class GoogleAuthGuard extends AuthGuard('google') {
   getAuthenticateOptions(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<GoogleOAuthRequest>();
     if (req.path?.endsWith('/google/callback')) return {};
-    if (!req.googleOAuthState) throw new BadRequestException('Organization code is required');
+    if (!req.googleOAuthState) throw new BadRequestException('El código de organización es obligatorio.');
     return { state: req.googleOAuthState };
   }
 

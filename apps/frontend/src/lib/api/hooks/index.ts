@@ -11,7 +11,7 @@ export { useDeleteLesson } from './useDeleteLesson';
 export { useReorderLessons } from './useReorderLessons';
 export { useAttachFile } from './useAttachFile';
 export { useDetachFile } from './useDetachFile';
-export { useUpcomingAssignments } from './useUpcomingAssignments';
+export { useMyPendingActivities } from './useMyPendingActivities';
 export { useCourses } from './useCourses';
 export { useMySubjects } from './useMySubjects';
 export { useCourseDetail } from './useCourseDetail';
@@ -21,6 +21,7 @@ export { useLesson } from './useLesson';
 export { useLessonById } from './useLessonById';
 export { useProgress } from './useProgress';
 export { useCompleteLesson } from './useCompleteLesson';
+export { useLessonProgress, type StudentLessonProgress } from './useLessonProgress';
 export { useEnroll } from './useEnroll';
 export { useCompletedLessons } from './useCompletedLessons';
 export { useMyProgress } from './useMyProgress';
@@ -34,7 +35,7 @@ export { useDeleteAssignment } from './useDeleteAssignment';
 export { useTeachingSummary } from './useTeachingSummary';
 export { useActivities, useActivity } from './useActivities';
 export { useActivityMutations } from './useActivityMutations';
-export { useActivityAttempts, useStaffAttempts } from './useActivityAttempts';
+export { useActivityAttempts, useMyAttempt, useStaffAttempts } from './useActivityAttempts';
 export { useTaskTemplates } from './useTaskTemplates';
 export { useSaveAsTemplate } from './useSaveAsTemplate';
 export { useTeachingActivities } from './useTeachingActivities';
@@ -48,6 +49,10 @@ export {
   useCreateThread,
   useCreatePost,
   usePinThread,
+  useUpdateThread,
+  useDeleteThread,
+  useUpdatePost,
+  useDeletePost,
 } from './useForumMutations';
 export {
   useAnalyticsOverview,

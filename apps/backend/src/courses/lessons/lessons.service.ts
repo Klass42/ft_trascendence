@@ -24,7 +24,7 @@ export class LessonsService {
     });
 
     if (!section || section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Section ${sectionId} not found`);
+      throw new NotFoundException('Sección no encontrada.');
     }
 
     return section;
@@ -43,7 +43,7 @@ export class LessonsService {
     });
 
     if (!lesson || lesson.section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     return lesson;
@@ -61,7 +61,7 @@ export class LessonsService {
     });
 
     if (!lesson || lesson.sectionId !== sectionId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     return lesson;
@@ -80,7 +80,7 @@ export class LessonsService {
         sectionId,
         title: dto.title,
         contentMd: dto.contentMd,
-        videoUrl: dto.videoUrl,
+        videoUrl: dto.videoUrl || null,
         order: dto.order ?? 0,
       },
     });
@@ -121,7 +121,7 @@ export class LessonsService {
     });
 
     if (!lesson || lesson.section.subject.organizationId !== organizationId) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     return this.prisma.lesson.findUnique({
@@ -141,7 +141,10 @@ export class LessonsService {
 
     const updated = await this.prisma.lesson.update({
       where: { id: lessonId },
-      data: dto,
+      data: {
+        ...dto,
+        ...(dto.videoUrl !== undefined && { videoUrl: dto.videoUrl || null }),
+      },
     });
     await this.notifyContent(lessonId, organizationId, actorId, `Lección actualizada: ${updated.title}`);
     return updated;
@@ -166,7 +169,7 @@ export class LessonsService {
     actorId?: string,
   ) {
     if (!orderedIds || orderedIds.length === 0) {
-      throw new BadRequestException('orderedIds must not be empty');
+      throw new BadRequestException('La lista de elementos a ordenar no puede estar vacía.');
     }
 
     await this.findSectionOrThrow(sectionId, organizationId);
@@ -181,7 +184,7 @@ export class LessonsService {
 
     if (missing.length > 0) {
       throw new NotFoundException(
-        `Lessons not found: ${missing.join(', ')}`,
+        'Alguna de las lecciones indicadas no existe.',
       );
     }
 
@@ -213,7 +216,7 @@ export class LessonsService {
       !lesson ||
       lesson.section.subject.organizationId !== organizationId
     ) {
-      throw new NotFoundException(`Lesson ${lessonId} not found`);
+      throw new NotFoundException('Lección no encontrada.');
     }
 
     const file = await this.prisma.file.findUnique({
@@ -221,7 +224,7 @@ export class LessonsService {
     });
 
     if (!file || file.organizationId !== organizationId) {
-      throw new NotFoundException(`File ${fileId} not found`);
+      throw new NotFoundException('Archivo no encontrado.');
     }
 
     const attachment = await this.prisma.lessonAttachment.create({
@@ -249,7 +252,7 @@ export class LessonsService {
       !attachment ||
       attachment.lesson.section.subject.organizationId !== organizationId
     ) {
-      throw new NotFoundException(`Attachment not found`);
+      throw new NotFoundException('Adjunto no encontrado.');
     }
 
     await this.prisma.lessonAttachment.delete({

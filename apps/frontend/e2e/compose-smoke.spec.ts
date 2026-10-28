@@ -31,10 +31,29 @@ test.describe('E2E deployment smoke — Compose over HTTPS', () => {
     await expect(page).toHaveURL(/\/privacy$/);
     await expect(page.getByRole('heading', { name: 'Política de privacidad' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Datos que tratamos' })).toBeVisible();
+    await expect(page.getByText('Última actualización: 27 de octubre de 2026')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'https://github.com/Klass42/ft_trascendence/issues' }).first()).toHaveAttribute(
+      'href',
+      'https://github.com/Klass42/ft_trascendence/issues',
+    );
 
     await page.goto('/terms');
     await expect(page.getByRole('heading', { name: 'Términos de servicio' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Contenido y conducta' })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('E2E-PUBLIC-03: unknown route shows a standalone 404 with a login button and legal links', async ({ page }) => {
+    const errors = captureConsoleErrors(page);
+    await page.goto('/ruta-que-no-existe');
+    await expect(page.getByRole('main')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Página no encontrada' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Iniciar sesión' })).toHaveAttribute('href', '/login');
+    const legal = page.getByRole('navigation', { name: 'Legal' });
+    await expect(legal.getByRole('link', { name: 'Privacidad' })).toBeVisible();
+    await expect(legal.getByRole('link', { name: 'Términos' })).toBeVisible();
+    await legal.getByRole('link', { name: 'Privacidad' }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
     expect(errors).toEqual([]);
   });
 

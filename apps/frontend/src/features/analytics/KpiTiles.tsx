@@ -1,4 +1,5 @@
 import type { AnalyticsOverviewDTO } from '@/lib/api';
+import { plural } from '@/lib/format';
 import styles from './analytics.module.css';
 
 interface Props {
@@ -15,19 +16,19 @@ export function KpiTiles({ overview }: Props) {
     {
       label: 'Tareas',
       value: String(overview.assignments),
-      hint: `${overview.lessons} lecciones`,
+      hint: plural(overview.lessons, 'lección', 'lecciones'),
     },
     {
       label: 'Tasa de entrega',
       value: pct(overview.submissions.rate),
-      hint: `${overview.submissions.total}/${overview.submissions.expected} entregas`,
+      hint: `${overview.submissions.total} de ${plural(overview.submissions.expected, 'entrega', 'entregas')}`,
     },
     {
       label: 'Nota media',
       value: overview.averageGrade != null ? `${overview.averageGrade}%` : '—',
       hint:
         overview.submissions.graded > 0
-          ? `${overview.submissions.graded} calificadas`
+          ? plural(overview.submissions.graded, 'calificada', 'calificadas')
           : 'sin calificar',
     },
     {
@@ -38,7 +39,7 @@ export function KpiTiles({ overview }: Props) {
     {
       label: 'Actividad de foro',
       value: String(overview.forum.posts),
-      hint: `${overview.forum.threads} ${overview.forum.threads === 1 ? 'hilo' : 'hilos'}`,
+      hint: plural(overview.forum.threads, 'hilo', 'hilos'),
     },
   ];
 

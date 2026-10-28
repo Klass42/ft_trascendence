@@ -40,7 +40,7 @@ Definidos en `components/ui/tokens.css`:
 - **Formularios**: usa los controles del kit (traen label/error). Valida en cliente Y servidor. Acciones
   al pie (primario a la derecha, `ghost`/Cancelar a su izquierda). En Modal, van en `footer`.
 - **Tablas**: `Table` con `empty`. Acciones por fila → `Dropdown`. Estado → `Badge`.
-- **Feedback**: tras crear/editar/borrar → `toast({ variant: 'success', message: … })`. Acción
+- **Feedback**: tras crear/editar/eliminar → `toast({ variant: 'success', message: … })`. Acción
   destructiva → `ConfirmDialog` antes.
 - **Responsive**: nada con scroll horizontal en el body; tablas y bloques anchos con su propio scroll.
 - **Accesibilidad**: labels asociados, foco visible, navegable por teclado, `aria-*` donde aplique.
@@ -51,3 +51,84 @@ Definidos en `components/ui/tokens.css`:
 - Datos mock/hardcodeados en producción.
 - Botones/inputs "a mano" en vez del kit.
 - Vistas sin estado vacío/carga/error.
+
+---
+
+## Glosario de texto de la interfaz
+
+Guía corta para que todo el texto visible use las mismas palabras. Los identificadores de
+código, rutas y campos de la API **no cambian** (están en inglés: `Course`, `Subject`,
+`Activity`, `Question`…); esta tabla solo fija cómo se llaman en pantalla.
+
+### Estructura académica
+
+| En pantalla | Qué es | En el código | Nunca en la UI |
+|---|---|---|---|
+| **Curso** (menú y listado) / **Cohorte** (gestión) | Grupo de alumnos de un año académico, p. ej. «1º A · 2025-2026». El menú y la página de listado dicen «Cursos» / «Mis cursos» (decisión del equipo, 28-oct-2026); los formularios de administración que crean o editan el grupo dicen «cohorte». | `Course` | — |
+| **Asignatura** | Materia dentro de un curso. Los selectores de Tareas, Foros, Notas, Analíticas y Biblioteca eligen asignaturas. | `Subject` (`useMySubjects`) | «Curso» (para una asignatura) |
+| **Año académico** | Periodo de la cohorte, p. ej. «2026-2027». | `academicYear` | — |
+| **Sección** y **Lección** | Estructura del contenido de una asignatura (libro → secciones → lecciones). | `Section`, `Lesson` | — |
+| **Recurso** / **Biblioteca** | Material reutilizable de la organización (libros, enlaces, documentos). Se «publica en una asignatura». | `LearningResource` | — |
+
+### Evaluación
+
+| En pantalla | Qué es | En el código | Nunca en la UI |
+|---|---|---|---|
+| **Tarea** | Lo que el profesor publica y el alumno realiza. | `Activity` (y `Assignment`, heredado) | «Actividad» (salvo «Actividad de foro» y «actividad académica» en sentido general) |
+| **Pregunta** | Cada elemento evaluable de una tarea. | `Question` | «Bloque» |
+| **Enunciado** | Texto/recursos que explican qué hay que hacer. | `description`, `prompt` | — |
+| **Intento** | Cada vez que un alumno realiza una tarea. | `Attempt` | — |
+| **Entrega** | Un intento enviado al profesor. | `submittedAt`, `Submission` | — |
+| **Calificaciones** | Vista del profesor con las notas de sus alumnos (`/grades`). | `gradebook` | «Datos», «gradebook», «libro de notas» |
+| **Mis notas** | Vista del alumno con sus notas (`/grades`). | — | «Datos» |
+| **Nota** | Valor numérico de una entrega o pregunta. | `score`, `awarded` | — |
+| **Archivo** | Fichero subido. | `File` | «Fichero» |
+
+El menú lateral usa el mismo nombre que el título de la página: alumnos ven «Mis notas»,
+profesores «Calificaciones»; todos ven «Cursos» (página «Mis cursos»).
+
+### Personas y organización
+
+| En pantalla | Notas |
+|---|---|
+| **Organización** | El centro/academia. El identificador de acceso se llama «Código de organización». |
+| **Administrador** | Rol `ADMIN`. No usar «Admin» en etiquetas (sí en textos técnicos como `admin@…`). |
+| **Profesor** | Rol `TEACHER`. |
+| **Alumno** | Rol `STUDENT`. No usar «Estudiante». |
+| **Correo electrónico** | Siempre así en etiquetas, errores y ayudas. Nunca «Email» ni «e-mail» (excepción: la parte de ejemplo de un placeholder, p. ej. `nombre@ejemplo.es`). |
+| **Contraseña**, **Iniciar sesión**, **Cerrar sesión** | Fijos; los usan los tests e2e. |
+
+### Estados (concordancia de género)
+
+| Sustantivo | Borrador | Publicado | Archivado | Planificado |
+|---|---|---|---|---|
+| Cohorte (f.) | — | — | Archivada | Planificada |
+| Asignatura (f.) | Borrador | Publicada | Archivada | — |
+| Tarea (f.) | Borrador | Publicada | Archivada | — |
+| Organización (f.) | — | Activa | Archivada | — |
+| Recurso (m.) | Borrador | Publicado | Archivado | — |
+
+«En curso» es invariable. Los mensajes de confirmación concuerdan con el sustantivo:
+«Asignatura archivada», «Cohorte archivada», «Tarea archivada», «Recurso archivado».
+
+### Formatos y plurales
+
+- Fechas: usar siempre `src/lib/format.ts` (locale `es-ES`). Corta «27 oct 2026», con hora
+  «27 oct 2026, 23:03», cabecera «Martes, 27 de octubre» (solo la primera letra en mayúscula).
+  No llamar directamente a `toLocaleDateString` / `Intl.DateTimeFormat` en las pantallas.
+- Plurales: `plural(n, 'recurso', 'recursos')` → «1 recurso», «2 recursos». Nada de «(s)».
+  Los verbos concuerdan con el número: «Se ha eliminado 1 recurso», «Se han eliminado 2 recursos».
+- Errores de validación: el formulario valida en español (`noValidate` en todos los `<form>`);
+  no depender de los mensajes nativos del navegador.
+- Mensajes del backend: siempre en español (clase de excepción y estado HTTP no cambian).
+  Los mensajes por defecto de `class-validator` se traducen en
+  `apps/backend/src/common/pipes/validation-errors.ts`; un `message` explícito en el decorador
+  tiene prioridad. El límite de peticiones responde «Demasiados intentos. Espera un momento y
+  vuelve a intentarlo.».
+
+### Eliminar (no «Borrar»)
+
+- Toda acción destructiva dice **Eliminar** (botones, diálogos, toasts y mensajes del backend):
+  «Eliminar tarea», «Tarea eliminada», «No se pudo eliminar». El sustantivo es **eliminación**
+  («Solicitar eliminación» de la organización). «Borrador» (estado de una tarea sin publicar)
+  no cambia. Decisión del equipo, 28-oct-2026: se eligió la forma más usada en la interfaz.

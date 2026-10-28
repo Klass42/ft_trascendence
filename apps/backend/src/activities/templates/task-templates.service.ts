@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -14,6 +15,8 @@ import { getAdapter } from '../blocks/registry';
 import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
 import { SaveAsTemplateDto } from './dto/save-as-template.dto';
 import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
+import { SaveAnswersDto } from '../attempts/dto/save-answers.dto';
+import { gradeResponses } from '../grading/grade-responses';
 
 export type TemplateBlock = {
   kind: QuestionKind;
@@ -61,9 +64,52 @@ export class TaskTemplatesService {
       where: { id },
     });
     if (!template || template.organizationId !== user.organizationId) {
-      throw new NotFoundException(`Task template ${id} not found`);
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
     }
     return template;
+  }
+
+  /** Grade a local template preview without creating an activity or attempt. */
+  async previewGrade(id: string, actingUserId: string, dto: SaveAnswersDto) {
+    const user = await this.requireOrgUser(actingUserId);
+    await this.assertCanList(user);
+    const template = await this.prisma.taskTemplate.findFirst({
+      where: { id, organizationId: user.organizationId },
+    });
+    if (!template) {
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
+    }
+
+    const blocks = template.blocks as unknown as TemplateBlock[];
+    this.validateBlocks(blocks);
+    const questions = blocks.map((block, index) => ({
+      id: templateQuestionId(id, index),
+      kind: block.kind,
+      content: block.content,
+      points: block.points,
+    }));
+    const questionsById = new Map(questions.map((question) => [question.id, question]));
+    for (const answer of dto.answers) {
+      const question = questionsById.get(answer.questionId);
+      if (!question) {
+        throw new BadRequestException(
+          `La pregunta ${answer.questionId} no pertenece a esta plantilla`,
+        );
+      }
+      getAdapter(question.kind).validateResponse(answer.response);
+    }
+
+    const maxScore = questions.reduce((total, question) => total + question.points, 0);
+    const grade = gradeResponses(questions, dto.answers, maxScore);
+    return {
+      score: grade.score,
+      maxScore,
+      results: grade.results,
+      solutions: questions.map((question) => ({
+        questionId: question.id,
+        content: question.content as Record<string, unknown>,
+      })),
+    };
   }
 
   async update(id: string, actingUserId: string, dto: UpdateTaskTemplateDto) {
@@ -99,7 +145,7 @@ export class TaskTemplatesService {
       },
     });
     if (!activity) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
 
     await this.access.assertSubjectStaffForUser(activity.subjectId, actingUserId);
@@ -137,7 +183,7 @@ export class TaskTemplatesService {
       where: { id: actingUserId },
     });
     if (!user?.organizationId) {
-      throw new NotFoundException('Task templates not found');
+      throw new NotFoundException('Plantillas de tarea no encontradas.');
     }
     return user as typeof user & { organizationId: string };
   }
@@ -157,7 +203,7 @@ export class TaskTemplatesService {
       },
     });
     if (!staff) {
-      throw new NotFoundException('Task templates not found');
+      throw new NotFoundException('Plantillas de tarea no encontradas.');
     }
   }
 
@@ -170,7 +216,7 @@ export class TaskTemplatesService {
       return;
     }
     throw new ForbiddenException(
-      'Only teachers and administrators can create templates',
+      'Solo profesores y administradores pueden crear plantillas.',
     );
   }
 
@@ -180,16 +226,20 @@ export class TaskTemplatesService {
       where: { id },
     });
     if (!template || template.organizationId !== user.organizationId) {
-      throw new NotFoundException(`Task template ${id} not found`);
+      throw new NotFoundException('Plantilla de tarea no encontrada.');
     }
     if (
       template.createdById !== actingUserId &&
       user.role !== GlobalRole.ADMIN
     ) {
       throw new ForbiddenException(
-        'Only the author or an organization admin can modify this template',
+        'Solo el autor o un administrador de la organización pueden modificar esta plantilla.',
       );
     }
     return template;
   }
+}
+
+export function templateQuestionId(templateId: string, index: number): string {
+  return `${templateId}:${index}`;
 }

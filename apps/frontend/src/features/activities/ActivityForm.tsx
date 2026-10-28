@@ -33,6 +33,8 @@ const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
   { value: 'ARCHIVED', label: 'Archivada' },
 ];
 
+type FieldErrors = Partial<Record<'title' | 'attempts' | 'openAt' | 'dueAt' | 'closeAt', string>>;
+
 export function ActivityForm({
   courseId,
   initial,
@@ -56,6 +58,17 @@ export function ActivityForm({
     initial?.countsTowardFinal ?? true,
   );
   const [fileValues, setFileValues] = useState<FileValue[]>([]);
+  const [errors, setErrors] = useState<FieldErrors>({});
+
+  /** Update a field and drop its stale error (the others stay until re-validated). */
+  function clearError(...fields: Array<keyof FieldErrors>) {
+    setErrors((prev) => {
+      if (!fields.some((field) => prev[field])) return prev;
+      const next = { ...prev };
+      for (const field of fields) delete next[field];
+      return next;
+    });
+  }
 
   const uploading = fileValues.some(
     (f) => f.status === 'uploading' || f.status === 'pending',
@@ -63,21 +76,20 @@ export function ActivityForm({
 
   async function handleSave() {
     const trimmed = title.trim();
-    if (!trimmed) {
-      toast({ variant: 'error', message: 'El título es obligatorio.' });
-      return;
-    }
     const att = Number(attempts);
-    if (!Number.isInteger(att) || att < 0) {
-      toast({ variant: 'error', message: 'Los intentos deben ser un entero ≥ 0 (0 = ilimitados).' });
-      return;
-    }
     const o = toIso(openAt);
     const d = toIso(dueAt);
     const c = toIso(closeAt);
-    if (o && d && o > d) return fail('La apertura no puede ser posterior a la entrega.');
-    if (d && c && d > c) return fail('La entrega no puede ser posterior al cierre.');
-    if (o && c && o > c) return fail('La apertura no puede ser posterior al cierre.');
+    const found: FieldErrors = {};
+    if (!trimmed) found.title = 'El título es obligatorio.';
+    if (attempts.trim() === '' || !Number.isInteger(att) || att < 0) {
+      found.attempts = 'Debe ser un entero ≥ 0 (0 = ilimitados).';
+    }
+    if (o && d && o > d) found.dueAt = 'La entrega no puede ser anterior a la apertura.';
+    if (d && c && d > c) found.closeAt = 'El cierre no puede ser anterior a la entrega.';
+    else if (o && c && o > c) found.closeAt = 'El cierre no puede ser anterior a la apertura.';
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
 
     const uploadedIds = fileValues
       .filter((f) => f.status === 'done')
@@ -110,10 +122,6 @@ export function ActivityForm({
     }
   }
 
-  function fail(message: string) {
-    toast({ variant: 'error', message });
-  }
-
   return (
     <div
       style={{
@@ -130,13 +138,16 @@ export function ActivityForm({
             }),
       }}
     >
-      <FormField label="Título" required>
+      <FormField label="Título" required error={errors.title}>
         {(field) => (
           <Input
             {...field}
             value={title}
             maxLength={200}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              clearError('title');
+            }}
             placeholder="Ej. Examen mixto · unidad 3"
           />
         )}
@@ -155,14 +166,17 @@ export function ActivityForm({
       </FormField>
 
       <div style={{ flex: '1 1 120px', maxWidth: 220 }}>
-        <FormField label="Intentos" hint="0 = ilimitados">
+        <FormField label="Intentos" hint="0 = ilimitados" error={errors.attempts}>
           {(field) => (
             <Input
               {...field}
               type="number"
               min={0}
               value={attempts}
-              onChange={(e) => setAttempts(e.target.value)}
+              onChange={(e) => {
+                setAttempts(e.target.value);
+                clearError('attempts');
+              }}
             />
           )}
         </FormField>
@@ -188,7 +202,10 @@ export function ActivityForm({
             label="Apertura"
             mode="datetime"
             value={openAt}
-            onChange={(e) => setOpenAt(e.target.value)}
+            onChange={(e) => {
+              setOpenAt(e.target.value);
+              clearError('dueAt', 'closeAt');
+            }}
           />
         </div>
         <div style={{ flex: '1 1 180px' }}>
@@ -196,7 +213,11 @@ export function ActivityForm({
             label="Entrega"
             mode="datetime"
             value={dueAt}
-            onChange={(e) => setDueAt(e.target.value)}
+            error={errors.dueAt}
+            onChange={(e) => {
+              setDueAt(e.target.value);
+              clearError('dueAt', 'closeAt');
+            }}
           />
         </div>
         <div style={{ flex: '1 1 180px' }}>
@@ -204,7 +225,11 @@ export function ActivityForm({
             label="Cierre"
             mode="datetime"
             value={closeAt}
-            onChange={(e) => setCloseAt(e.target.value)}
+            error={errors.closeAt}
+            onChange={(e) => {
+              setCloseAt(e.target.value);
+              clearError('dueAt', 'closeAt');
+            }}
           />
         </div>
       </div>

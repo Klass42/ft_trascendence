@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
-import { Button, Input, Modal, Spinner, Textarea } from '@/components/ui';
+import { Badge, Button, Input, Modal, Spinner, Textarea } from '@/components/ui';
 import { apiClient, useGradeAttempt } from '@/lib/api';
-import type { ActivityDTO, AttemptDTO, QuestionDTO } from '@/lib/api';
-import { isSubjective } from '../activities/helpers';
+import type { ActivityDTO, AnswerDTO, AttemptDTO, GradeAttemptInput, QuestionDTO } from '@/lib/api';
+import {
+  formatAnswer,
+  formatSolution,
+  isAnswered,
+  isSubjective,
+  KIND_LABELS,
+  pointsLabel,
+} from '../activities/helpers';
+import styles from './GradePanel.module.css';
+
+/** Mirrors the backend `GRADE_FEEDBACK_MAX` (per-question comment length). */
+const GRADE_FEEDBACK_MAX = 2000;
 
 export interface GradeTarget {
   attemptId: string;
@@ -28,6 +39,8 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
   const [attempt, setAttempt] = useState<AttemptDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [awarded, setAwarded] = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [initialComments, setInitialComments] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -41,16 +54,24 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
       .then(([act, attempts]) => {
         if (cancelled) return;
         const found = attempts.find((a) => a.id === target.attemptId) ?? null;
+        if (!found) {
+          setLoadError('No se encontró la entrega. Puede que ya no exista.');
+          return;
+        }
         setActivity(act);
         setAttempt(found);
         setFeedback(found?.feedback ?? '');
         const initial: Record<string, string> = {};
+        const initialNotes: Record<string, string> = {};
         for (const q of act.questions ?? []) {
-          if (!isSubjective(q.kind, q.content)) continue;
           const ans = found?.answers?.find((a) => a.questionId === q.id);
+          initialNotes[q.id] = ans?.feedback ?? '';
+          if (!isSubjective(q.kind, q.content)) continue;
           initial[q.id] = ans?.awarded != null ? String(ans.awarded) : '';
         }
         setAwarded(initial);
+        setComments(initialNotes);
+        setInitialComments(initialNotes);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -62,28 +83,42 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
     };
   }, [target.activityId, target.attemptId]);
 
-  const subjective = useMemo(
-    () => (activity?.questions ?? []).filter((q) => isSubjective(q.kind, q.content)),
+  const questions = useMemo(
+    () => [...(activity?.questions ?? [])].sort((a, b) => a.order - b.order),
     [activity],
+  );
+  const subjective = useMemo(
+    () => questions.filter((q) => isSubjective(q.kind, q.content)),
+    [questions],
   );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    const answers: { questionId: string; awarded: number }[] = [];
-    for (const q of subjective) {
+    const answers: GradeAttemptInput['answers'] = [];
+    for (const q of questions) {
+      const item: GradeAttemptInput['answers'][number] = { questionId: q.id };
       const raw = awarded[q.id];
-      if (raw === undefined || raw === '') continue;
-      const value = Number(raw);
-      if (!Number.isFinite(value) || value < 0 || value > q.points) {
-        setError(`La nota de «${q.prompt.slice(0, 40)}» debe estar entre 0 y ${q.points}.`);
+      if (raw !== undefined && raw !== '') {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > q.points) {
+          setError(`La nota de «${q.prompt.slice(0, 40)}» debe estar entre 0 y ${q.points}.`);
+          return;
+        }
+        item.awarded = value;
+      }
+      const comment = (comments[q.id] ?? '').trim();
+      if (comment.length > GRADE_FEEDBACK_MAX) {
+        setError(`El comentario de «${q.prompt.slice(0, 40)}» no puede superar ${GRADE_FEEDBACK_MAX} caracteres.`);
         return;
       }
-      answers.push({ questionId: q.id, awarded: value });
+      // An emptied comment is sent too so the backend clears the stored one.
+      if (comment || comment !== (initialComments[q.id] ?? '').trim()) item.feedback = comment;
+      if (item.awarded !== undefined || item.feedback !== undefined) answers.push(item);
     }
-    if (answers.length === 0) {
-      setError('Indica al menos una nota en un bloque subjetivo.');
+    if (subjective.length > 0 && answers.length === 0) {
+      setError('Indica al menos una nota o un comentario.');
       return;
     }
 
@@ -100,86 +135,47 @@ export function GradePanel({ target, onClose, onGraded }: GradePanelProps) {
 
   return (
     <Modal open onClose={onClose} title="Calificar" size="md">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
-          {target.studentName} · {target.title}
+      <form onSubmit={handleSubmit} noValidate className={styles.form}>
+        <div className={styles.context}>
+          {[attempt?.user?.name ?? target.studentName, target.title].filter(Boolean).join(' · ')}
         </div>
 
         {!activity && !loadError && <Spinner size="md" label="Cargando intento…" />}
-        {loadError && (
-          <p style={{ color: 'var(--color-error)', fontSize: 13, margin: 0 }}>{loadError}</p>
-        )}
+        {loadError && <p className={styles.error}>{loadError}</p>}
 
         {activity && subjective.length === 0 && (
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 14, margin: 0 }}>
-            Esta tarea no tiene bloques de corrección manual.
-          </p>
+          <p className={styles.muted}>Esta tarea no tiene preguntas de corrección manual.</p>
         )}
 
-        {subjective.map((q) => (
-          <SubjectiveRow
-            key={q.id}
-            question={q}
-            value={awarded[q.id] ?? ''}
-            onChange={(v) => setAwarded((prev) => ({ ...prev, [q.id]: v }))}
-          />
-        ))}
-
-        {attempt?.answers && (
-          <div>
-            {subjective.map((q) => {
-              const answer = attempt.answers?.find((a) => a.questionId === q.id);
-              const text = answer?.response?.text;
-              const responseFileIds = Array.isArray(answer?.response?.fileIds)
-                ? answer.response.fileIds.filter((id): id is string => typeof id === 'string')
-                : [];
-              const files = q.kind === 'FILE_UPLOAD'
-                ? (answer?.files ?? []).filter((file) => responseFileIds.includes(file.id))
-                : [];
-              if ((typeof text !== 'string' || !text) && files.length === 0) return null;
-              return (
-                <div
-                  key={q.id}
-                  style={{
-                    marginTop: 8,
-                    background: 'var(--color-bg-primary)',
-                    border: '1px solid var(--color-border-primary)',
-                    borderRadius: 9,
-                    padding: '10px 12px',
-                  }}
-                >
-                  {typeof text === 'string' && text && (
-                    <p style={{ fontSize: 13.5, whiteSpace: 'pre-wrap', margin: 0 }}>
-                      <strong>Respuesta:</strong> {text}
-                    </p>
-                  )}
-                  {files.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <strong style={{ fontSize: 13.5 }}>Archivos entregados:</strong>
-                      {files.map((file) => (
-                        <SubmissionFile key={file.id} file={file} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        {activity && (
+          <ol className={styles.questions}>
+            {questions.map((q, index) => (
+              <GradeQuestion
+                key={q.id}
+                question={q}
+                number={index + 1}
+                answer={attempt?.answers?.find((a) => a.questionId === q.id)}
+                awarded={awarded[q.id] ?? ''}
+                onAwardedChange={(v) => setAwarded((prev) => ({ ...prev, [q.id]: v }))}
+                comment={comments[q.id] ?? ''}
+                onCommentChange={(v) => setComments((prev) => ({ ...prev, [q.id]: v }))}
+              />
+            ))}
+          </ol>
         )}
 
         <Textarea
-          label="Feedback (opcional)"
+          label="Comentario general (opcional)"
           value={feedback}
+          maxLength={GRADE_FEEDBACK_MAX}
           onChange={(e) => setFeedback(e.target.value)}
           rows={4}
-          placeholder="Comentarios para el alumno…"
+          placeholder="Valoración global del intento…"
         />
 
-        {error && (
-          <p style={{ color: 'var(--color-error)', fontSize: 13, margin: 0 }}>{error}</p>
-        )}
+        {error && <p className={styles.error} role="alert">{error}</p>}
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <div className={styles.actions}>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
@@ -219,7 +215,7 @@ function SubmissionFile({ file }: { file: { id: string; originalName: string } }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+    <div className={styles.fileItem}>
       <Button
         type="button"
         variant="outline"
@@ -230,29 +226,89 @@ function SubmissionFile({ file }: { file: { id: string; originalName: string } }
       >
         {file.originalName}
       </Button>
-      {error && <span role="alert" style={{ color: 'var(--color-error)', fontSize: 12 }}>{error}</span>}
+      {error && <span role="alert" className={styles.fileError}>{error}</span>}
     </div>
   );
 }
 
-function SubjectiveRow({
+function GradeQuestion({
   question,
-  value,
-  onChange,
+  number,
+  answer,
+  awarded,
+  onAwardedChange,
+  comment,
+  onCommentChange,
 }: {
   question: QuestionDTO;
-  value: string;
-  onChange: (v: string) => void;
+  number: number;
+  answer?: AnswerDTO;
+  awarded: string;
+  onAwardedChange: (v: string) => void;
+  comment: string;
+  onCommentChange: (v: string) => void;
 }) {
+  const manual = isSubjective(question.kind, question.content);
+  const answered = isAnswered(question.kind, answer?.response);
+  const fileIds = Array.isArray(answer?.response?.fileIds)
+    ? answer.response.fileIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const files = question.kind === 'FILE_UPLOAD'
+    ? (answer?.files ?? []).filter((file) => fileIds.includes(file.id))
+    : [];
+  const verdict = !manual && answered && typeof answer?.correct === 'boolean' ? answer.correct : null;
   return (
-    <Input
-      label={`${question.prompt.slice(0, 80) || 'Bloque'} (0 – ${question.points})`}
-      type="number"
-      min={0}
-      max={question.points}
-      step="any"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <li className={styles.question}>
+      <div className={styles.questionHead}>
+        <span>Pregunta {number}</span>
+        <span className={styles.headMeta}>
+          {KIND_LABELS[question.kind]} · {pointsLabel(question.points)}
+          {verdict !== null && (
+            <Badge variant={verdict ? 'success' : 'error'}>{verdict ? 'Correcta' : 'Incorrecta'}</Badge>
+          )}
+        </span>
+      </div>
+      <p className={styles.prompt}>{question.prompt}</p>
+      <div className={styles.answerBox}>
+        <span className={styles.answerLabel}>Respuesta del alumno</span>
+        {files.length > 0 ? (
+          <div className={styles.files}>
+            {files.map((file) => (
+              <SubmissionFile key={file.id} file={file} />
+            ))}
+          </div>
+        ) : (
+          <p className={[styles.answer, answered ? '' : styles.unanswered].filter(Boolean).join(' ')}>
+            {formatAnswer(question, answer?.response)}
+          </p>
+        )}
+      </div>
+      {!manual && (
+        <p className={styles.solution}>
+          <strong>Respuesta correcta:</strong> {formatSolution(question, question.content)}
+          {typeof answer?.awarded === 'number' && ` · Obtenido: ${answer.awarded}/${question.points}`}
+        </p>
+      )}
+      {manual && (
+        <Input
+          label={`Puntos de la pregunta ${number} (0 – ${question.points})`}
+          type="number"
+          min={0}
+          max={question.points}
+          step="any"
+          value={awarded}
+          onChange={(e) => onAwardedChange(e.target.value)}
+        />
+      )}
+      <Textarea
+        label="Comentario para el alumno (opcional)"
+        value={comment}
+        onChange={(e) => onCommentChange(e.target.value)}
+        rows={2}
+        maxLength={GRADE_FEEDBACK_MAX}
+        hint={`${comment.length}/${GRADE_FEEDBACK_MAX}`}
+        error={comment.length > GRADE_FEEDBACK_MAX ? `Máximo ${GRADE_FEEDBACK_MAX} caracteres.` : undefined}
+      />
+    </li>
   );
 }

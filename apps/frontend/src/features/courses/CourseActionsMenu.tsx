@@ -24,7 +24,7 @@ export function CourseActionsMenu({ course, onEdit, onToggleArchive, onDelete }:
         course.status === 'ARCHIVED'
           ? { label: 'Desarchivar', icon: <ArchiveRestore size={16} />, onClick: onToggleArchive }
           : { label: 'Archivar', icon: <Archive size={16} />, onClick: onToggleArchive },
-        { label: 'Borrar', icon: <Trash2 size={16} />, onClick: onDelete, danger: true },
+        { label: 'Eliminar', icon: <Trash2 size={16} />, onClick: onDelete, danger: true },
       ]}
       align="right"
     />

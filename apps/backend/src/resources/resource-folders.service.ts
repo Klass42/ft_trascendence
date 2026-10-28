@@ -51,13 +51,13 @@ export class ResourceFoldersService {
 
   private assertLibraryStaff(user: AuthUser) {
     if (user.role !== 'ADMIN' && user.role !== 'TEACHER') {
-      throw new ForbiddenException('Only teachers and administrators can use the resource library');
+      throw new ForbiddenException('Solo profesores y administradores pueden usar la biblioteca de recursos.');
     }
   }
 
-  private assertOwnerOrAdmin(item: { createdById: string }, user: AuthUser, label = 'folder') {
+  private assertOwnerOrAdmin(item: { createdById: string }, user: AuthUser, label = 'carpeta') {
     if (user.role !== 'ADMIN' && item.createdById !== user.userId) {
-      throw new ForbiddenException(`Only the ${label} owner or an administrator can manage it`);
+      throw new ForbiddenException(`Solo quien creó la ${label} o un administrador puede gestionarla.`);
     }
   }
 
@@ -65,7 +65,7 @@ export class ResourceFoldersService {
     const folder = await this.prisma.resourceFolder.findFirst({
       where: { id, organizationId: user.organizationId },
     });
-    if (!folder) throw new NotFoundException(`Folder ${id} not found`);
+    if (!folder) throw new NotFoundException('Carpeta no encontrada.');
     return folder;
   }
 
@@ -201,16 +201,17 @@ export class ResourceFoldersService {
     const result = { deletedResources: resourceIds.length, deletedFolders: folderIds.length };
     if (this.notifications) {
       const parts = [
-        result.deletedResources && `${result.deletedResources} recurso(s)`,
-        result.deletedFolders && `${result.deletedFolders} carpeta(s)`,
+        result.deletedResources && `${result.deletedResources} ${result.deletedResources === 1 ? 'recurso' : 'recursos'}`,
+        result.deletedFolders && `${result.deletedFolders} ${result.deletedFolders === 1 ? 'carpeta' : 'carpetas'}`,
       ].filter(Boolean).join(' y ');
+      const verb = result.deletedResources + result.deletedFolders === 1 ? 'se ha eliminado' : 'se han eliminado';
       await this.notifications.emitMany(
         async () => (await this.prisma.user.findMany({
           where: { organizationId: user.organizationId, role: { in: ['ADMIN', 'TEACHER'] } },
           select: { id: true },
         })).map(({ id }) => id),
         NotificationType.RESOURCE_CHANGED,
-        { title: `Biblioteca: eliminados ${parts}`, link: '/resources' },
+        { title: `Biblioteca: ${verb} ${parts}`, link: '/resources' },
         { organizationId: user.organizationId, actorId: user.userId },
       );
     }

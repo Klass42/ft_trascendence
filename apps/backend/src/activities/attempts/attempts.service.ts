@@ -20,7 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { ActivitiesService } from '../activities.service';
 import { getAdapter } from '../blocks/registry';
-import { gradeQuestion, isAutoGradable } from '../grading/graders';
+import { gradeResponses } from '../grading/grade-responses';
 import { SaveAnswersDto } from './dto/save-answers.dto';
 import { GradeAttemptDto } from './dto/grade-attempt.dto';
 
@@ -83,7 +83,7 @@ export class AttemptsService {
       const question = questions.get(a.questionId);
       if (!question) {
         throw new BadRequestException(
-          `La pregunta ${a.questionId} no pertenece a esta actividad`,
+          `La pregunta ${a.questionId} no pertenece a esta tarea`,
         );
       }
       const adapter = getAdapter(question.kind);
@@ -128,29 +128,30 @@ export class AttemptsService {
 
     const { activity } = attempt;
     const answersByQ = new Map(attempt.answers.map((a) => [a.questionId, a]));
-
-    let awardedSum = 0;
-    let totalPoints = 0;
-    let hasManual = false;
+    const grade = gradeResponses(
+      activity.questions,
+      attempt.answers.map((answer) => ({
+        questionId: answer.questionId,
+        response: answer.response,
+      })),
+      activity.maxScore,
+    );
+    const gradesByQuestion = new Map(grade.results.map((result) => [result.questionId, result]));
     const answerUpdates: Prisma.PrismaPromise<unknown>[] = [];
 
     for (const q of activity.questions) {
-      totalPoints += q.points;
       const answer = answersByQ.get(q.id);
+      const result = gradesByQuestion.get(q.id);
 
-      if (isAutoGradable(q.kind, q.content)) {
-        const { correct, awarded } = gradeQuestion(
-          q.kind,
-          q.content,
-          answer?.response ?? {},
-          q.points,
-        );
-        awardedSum += awarded;
+      if (result?.autoGradable) {
         if (answer) {
           answerUpdates.push(
             this.prisma.answer.update({
               where: { id: answer.id },
-              data: { correct, awarded },
+              data: {
+                correct: result.correct ?? false,
+                awarded: result.awarded ?? 0,
+              },
             }),
           );
         } else {
@@ -169,21 +170,19 @@ export class AttemptsService {
           );
         }
       } else {
-        hasManual = true;
+        // Manual work remains pending for staff, exactly as before.
       }
     }
 
     const now = new Date();
-    const scaledObjective =
-      totalPoints > 0 ? (awardedSum / totalPoints) * activity.maxScore : 0;
 
-    const attemptData: Prisma.AttemptUpdateInput = hasManual
+    const attemptData: Prisma.AttemptUpdateInput = grade.hasManual
       ? { status: AttemptStatus.SUBMITTED, submittedAt: now }
       : {
           status: AttemptStatus.GRADED,
           submittedAt: now,
           gradedAt: now,
-          score: round2(scaledObjective),
+          score: grade.score,
         };
 
     await this.prisma.$transaction([
@@ -195,15 +194,22 @@ export class AttemptsService {
       organizationId: activity.subject.organizationId,
     });
 
-    if (!hasManual) {
+    if (!grade.hasManual) {
       await this.notifyGraded(
         actingUserId,
         activity,
-        round2(scaledObjective),
+        grade.score,
+        attempt.attemptNo,
       );
     } else {
-      await this.notifySubmitted(actingUserId, activity);
+      await this.notifySubmitted(actingUserId, activity, attemptId);
     }
+    return this.studentView(attemptId, actingUserId);
+  }
+
+  /** One of the acting user's own attempts with its activity (questions, and
+   * answer keys only when `showSolutions` allows it on a graded attempt). */
+  async getMine(attemptId: string, actingUserId: string) {
     return this.studentView(attemptId, actingUserId);
   }
 
@@ -296,7 +302,7 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     await this.activities.requireActivity(
       attempt.activityId,
       actingUserId,
@@ -314,10 +320,15 @@ export class AttemptsService {
       const question = questions.get(item.questionId);
       if (!question) {
         throw new BadRequestException(
-          `La pregunta ${item.questionId} no pertenece a esta actividad`,
+          `La pregunta ${item.questionId} no pertenece a esta tarea`,
         );
       }
-      if (item.awarded > question.points) {
+      if (item.awarded === undefined && item.feedback === undefined) {
+        throw new BadRequestException(
+          `Indica la nota o un comentario para la pregunta ${item.questionId}`,
+        );
+      }
+      if (item.awarded !== undefined && item.awarded > question.points) {
         throw new BadRequestException(
           `La nota no puede superar ${question.points}`,
         );
@@ -325,6 +336,12 @@ export class AttemptsService {
     }
 
     for (const item of dto.answers) {
+      const feedback =
+        item.feedback === undefined ? undefined : item.feedback.trim() || null;
+      const patch = {
+        ...(item.awarded !== undefined && { awarded: item.awarded }),
+        ...(feedback !== undefined && { feedback }),
+      };
       await this.prisma.answer.upsert({
         where: {
           attemptId_questionId: {
@@ -336,9 +353,9 @@ export class AttemptsService {
           attemptId,
           questionId: item.questionId,
           response: {} as Prisma.InputJsonValue,
-          awarded: item.awarded,
+          ...patch,
         },
-        update: { awarded: item.awarded },
+        update: patch,
       });
     }
 
@@ -382,6 +399,7 @@ export class AttemptsService {
         attempt.userId,
         attempt.activity,
         graded.score ?? 0,
+        attempt.attemptNo,
       );
     }
     return graded;
@@ -402,7 +420,7 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
@@ -425,17 +443,55 @@ export class AttemptsService {
         },
       },
     });
-    if (!attempt) throw new NotFoundException(`Attempt ${attemptId} not found`);
+    if (!attempt) throw new NotFoundException('Intento no encontrado.');
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
     await this.requireStudentActivity(attempt.activityId, actingUserId, false);
 
-    return this.projectStudentAttempt(
+    const projected = this.projectStudentAttempt(
       attempt,
       attempt.activity,
       attempt.activity,
     );
+    // The learner may see the names of their own uploads (never someone else's,
+    // never another organization's) so the review can say what was delivered.
+    const kinds = new Map(
+      attempt.activity.questions.map((question) => [question.id, question.kind]),
+    );
+    const fileIds = [
+      ...new Set(
+        attempt.answers.flatMap((answer) =>
+          kinds.get(answer.questionId) === QuestionKind.FILE_UPLOAD
+            ? responseFileIds(answer.response)
+            : [],
+        ),
+      ),
+    ];
+    if (!fileIds.length) return projected;
+    const files = await this.prisma.file.findMany({
+      where: {
+        id: { in: fileIds },
+        organizationId: attempt.activity.subject.organizationId,
+        uploaderId: actingUserId,
+      },
+      select: { id: true, originalName: true },
+    });
+    const filesById = new Map(files.map((file) => [file.id, file]));
+    return {
+      ...projected,
+      answers: projected.answers.map((answer) =>
+        kinds.get(answer.questionId) === QuestionKind.FILE_UPLOAD
+          ? {
+              ...answer,
+              files: responseFileIds(answer.response).flatMap((id) => {
+                const file = filesById.get(id);
+                return file ? [file] : [];
+              }),
+            }
+          : answer,
+      ),
+    };
   }
 
   private projectStudentAttempt(
@@ -467,6 +523,11 @@ export class AttemptsService {
         attemptId: answer.attemptId,
         questionId: answer.questionId,
         response: answer.response,
+        // Like the attempt-level comment, a per-question comment is not a
+        // solution: it is not gated by `showSolutions`, only by publication.
+        ...(attempt.status === AttemptStatus.GRADED && {
+          feedback: answer.feedback,
+        }),
         ...(reveal && {
           correct: answer.correct,
           awarded: answer.awarded,
@@ -522,10 +583,10 @@ export class AttemptsService {
       actingUserId,
     );
     if (!required.access.isMember) {
-      throw new ForbiddenException('Debes estar matriculado en este curso');
+      throw new ForbiddenException('Debes estar matriculado en esta cohorte.');
     }
     if (required.activity.status !== PublicationStatus.PUBLISHED) {
-      throw new NotFoundException(`Activity ${activityId} not found`);
+      throw new NotFoundException('Tarea no encontrada.');
     }
     if (checkWindow) this.assertOpenWindow(required.activity);
     return required;
@@ -534,10 +595,10 @@ export class AttemptsService {
   private assertOpenWindow(activity: Activity) {
     const now = new Date();
     if (activity.openAt && now < activity.openAt) {
-      throw new BadRequestException('La actividad aún no está abierta');
+      throw new BadRequestException('La tarea aún no está abierta.');
     }
     if (activity.closeAt && now > activity.closeAt) {
-      throw new BadRequestException('La actividad está cerrada');
+      throw new BadRequestException('La tarea está cerrada.');
     }
   }
 
@@ -561,7 +622,7 @@ export class AttemptsService {
             });
             if (activity.attemptsAllowed > 0 && used >= activity.attemptsAllowed) {
               throw new BadRequestException(
-                'No quedan intentos disponibles para esta actividad',
+                'No quedan intentos disponibles para esta tarea.',
               );
             }
 
@@ -617,7 +678,7 @@ export class AttemptsService {
     const maxFiles = content.maxFiles as number;
     if (fileIds.length > maxFiles) {
       throw new BadRequestException(
-        `No puedes adjuntar más de ${maxFiles} fichero(s)`,
+        `No puedes adjuntar más de ${maxFiles} ${maxFiles === 1 ? 'archivo' : 'archivos'}`,
       );
     }
 
@@ -632,7 +693,7 @@ export class AttemptsService {
         })
       : [];
     if (files.length !== fileIds.length) {
-      throw new BadRequestException('Uno o más ficheros no son válidos');
+      throw new BadRequestException('Uno o más archivos no son válidos.');
     }
 
     const acceptedTypes = Array.isArray(content.accept)
@@ -643,7 +704,7 @@ export class AttemptsService {
       files.some((file) => !this.isAcceptedFile(file, acceptedTypes))
     ) {
       throw new BadRequestException(
-        'Uno o más ficheros no cumplen el tipo permitido',
+        'Uno o más archivos no cumplen el tipo permitido.',
       );
     }
   }
@@ -663,7 +724,11 @@ export class AttemptsService {
   }
 
   /** Tell the subject's staff that an attempt is waiting for manual grading. */
-  private async notifySubmitted(studentId: string, activity: ActivityWithSubject) {
+  private async notifySubmitted(
+    studentId: string,
+    activity: ActivityWithSubject,
+    attemptId: string,
+  ) {
     const student = await this.prisma.user
       .findUnique({ where: { id: studentId }, select: { name: true } })
       .catch(() => null);
@@ -682,7 +747,7 @@ export class AttemptsService {
       {
         title: 'Nueva entrega para corregir',
         body: `${student?.name ?? 'Un alumno'} ha entregado «${activity.title}»`,
-        link: `/grades?subjectId=${activity.subjectId}&activityId=${activity.id}`,
+        link: `/grades?subjectId=${activity.subjectId}&activityId=${activity.id}&attemptId=${attemptId}`,
       },
       { organizationId: activity.subject.organizationId, actorId: studentId },
     );
@@ -692,10 +757,11 @@ export class AttemptsService {
     userId: string,
     activity: Activity,
     score: number,
+    attemptNo: number,
   ) {
     await this.notifications.emit(userId, NotificationType.GRADE_PUBLISHED, {
-      title: 'Actividad calificada',
-      body: `Tu intento de «${activity.title}» ha sido calificado: ${score}/${activity.maxScore}`,
+      title: 'Tarea calificada',
+      body: `Tu intento ${attemptNo} de «${activity.title}» ha sido calificado: ${score}/${activity.maxScore}`,
       link: `/activities?activityId=${activity.id}`,
     });
   }

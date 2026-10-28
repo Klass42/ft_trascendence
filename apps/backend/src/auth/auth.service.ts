@@ -59,10 +59,10 @@ export class AuthService {
     try {
       decoded = this.jwt.verify(token, { secret });
     } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('La sesión no es válida. Inicia sesión de nuevo.');
     }
     if (typeof decoded !== 'object' || decoded === null) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('La sesión no es válida. Inicia sesión de nuevo.');
     }
     const claims = decoded as { sub?: unknown; jti?: unknown; purpose?: unknown };
     if (
@@ -71,7 +71,7 @@ export class AuthService {
       claims.jti.length === 0 ||
       claims.purpose !== 'refresh'
     ) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('La sesión no es válida. Inicia sesión de nuevo.');
     }
     return { sub: claims.sub, jti: claims.jti };
   }
@@ -180,12 +180,12 @@ export class AuthService {
   }> {
     const user = await this.prisma.user.findFirst({ where: { organization: { slug: dto.organizationSlug! }, email: dto.email }, include: { organization: { select: { status: true } } } });
     if (!user || !user.passwordHash) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Correo electrónico o contraseña incorrectos.');
     }
 
     const valid = await argon2.verify(user.passwordHash, dto.password);
     if (!valid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Correo electrónico o contraseña incorrectos.');
     }
 
     // Issue #106: only after a valid password, tell the user the org is suspended.
@@ -194,7 +194,7 @@ export class AuthService {
     }
 
     if (!user.emailVerifiedAt) {
-      throw new ForbiddenException('Email not verified');
+      throw new ForbiddenException('Confirma tu correo electrónico antes de iniciar sesión.');
     }
 
     const tokens = await this.issueTokens(user.id);
@@ -206,7 +206,7 @@ export class AuthService {
       where: { organizationId: null, platformRole: 'SUPERADMIN', email: dto.email },
     });
     if (!user?.passwordHash || !(await argon2.verify(user.passwordHash, dto.password))) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Correo electrónico o contraseña incorrectos.');
     }
     const tokens = await this.issueTokens(user.id);
     return { user: this.mapUser(user), ...tokens };
@@ -228,15 +228,15 @@ export class AuthService {
 
     if (!session) {
       await this.prisma.session.deleteMany({ where: { userId: claims.sub } });
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('La sesión no es válida. Inicia sesión de nuevo.');
     }
 
     if (claims.sub !== session.userId || claims.jti !== session.id) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('La sesión no es válida. Inicia sesión de nuevo.');
     }
 
     if (session.expiresAt < new Date()) {
-      throw new UnauthorizedException('Refresh token expired');
+      throw new UnauthorizedException('La sesión ha caducado. Inicia sesión de nuevo.');
     }
     if (session.user.organization && session.user.organization.status !== 'ACTIVE') {
       await this.prisma.session.deleteMany({ where: { userId: session.userId } });
@@ -305,7 +305,7 @@ export class AuthService {
   async getMe(userId: string): Promise<AuthUser> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('User no longer exists');
+      throw new UnauthorizedException('La cuenta ya no existe.');
     }
     return this.mapUser(user);
   }
@@ -350,7 +350,7 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const organization = await this.activeOrganization(organizationSlug);
     const email = profile.email?.trim().toLowerCase();
-    if (!email) throw new UnauthorizedException('Google account has no email');
+    if (!email) throw new UnauthorizedException('La cuenta de Google no tiene correo electrónico.');
 
     const oauthAccount = await this.prisma.oAuthAccount.findUnique({
       where: {
@@ -364,7 +364,7 @@ export class AuthService {
 
     if (oauthAccount) {
       if (oauthAccount.user.organizationId !== organization.id) {
-        throw new ForbiddenException('This Google account is linked to another organization');
+        throw new ForbiddenException('Esta cuenta de Google está vinculada a otra organización.');
       }
       return this.issueTokens(oauthAccount.userId);
     }
@@ -432,12 +432,12 @@ export class AuthService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const invitation = await tx.organizationInvitation.findUnique({ where: { tokenHash }, include: { organization: true } });
-        if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= now || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('Invalid or expired invitation');
+        if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= now || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('La invitación no es válida o ha caducado.');
         const existing = await tx.user.findFirst({ where: { organizationId: invitation.organizationId, email: invitation.email } });
-        if (existing) throw new ConflictException('Email already registered in this organization');
+        if (existing) throw new ConflictException('Este correo electrónico ya está registrado en la organización.');
         await assertUserLimit(tx as any, invitation.organizationId);
         const claimed = await tx.organizationInvitation.updateMany({ where: { id: invitation.id, status: 'PENDING' }, data: { status: 'ACCEPTED', acceptedAt: now } });
-        if (claimed.count !== 1) throw new UnauthorizedException('Invalid or expired invitation');
+        if (claimed.count !== 1) throw new UnauthorizedException('La invitación no es válida o ha caducado.');
         const user = await tx.user.create({ data: { organizationId: invitation.organizationId, email: invitation.email, name: dto.name, passwordHash: await argon2.hash(dto.password), role: invitation.role, emailVerifiedAt: now } });
         await tx.auditLog.create({ data: { action: 'INVITATION_ACCEPTED', organizationId: invitation.organizationId, targetUserId: user.id, metadata: { role: invitation.role } } });
         return user;

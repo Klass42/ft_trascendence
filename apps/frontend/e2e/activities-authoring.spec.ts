@@ -20,7 +20,7 @@ test.describe('B2a — activity authoring', () => {
     const title = `E2E quiz ${Date.now()}`;
 
     await page.goto('/activities');
-    const course = page.getByRole('combobox', { name: 'Curso' });
+    const course = page.getByRole('combobox', { name: 'Asignatura' });
     await expect(course).toBeVisible({ timeout: 8000 });
     await course.selectOption(COURSE_ID);
 
@@ -37,7 +37,7 @@ test.describe('B2a — activity authoring', () => {
 
     // Can't publish without questions.
     await page.getByRole('button', { name: 'Publicar' }).click();
-    await expect(page.getByText(/Añade al menos un bloque/)).toBeVisible({
+    await expect(page.getByText(/Añade al menos una pregunta/)).toBeVisible({
       timeout: 8000,
     });
 
@@ -58,8 +58,8 @@ test.describe('B2a — activity authoring', () => {
     await expect(page.getByText('Publicada').first()).toBeVisible({ timeout: 8000 });
 
     // ── Delete (cleanup) ─────────────────────────────────────────────────
-    await page.getByRole('button', { name: 'Borrar tarea' }).click();
-    await page.getByRole('button', { name: 'Borrar', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Eliminar tarea' }).click();
+    await page.getByRole('button', { name: 'Eliminar', exact: true }).last().click();
     await expect(
       page.getByRole('heading', { level: 2, name: title }),
     ).toHaveCount(0, { timeout: 8000 });

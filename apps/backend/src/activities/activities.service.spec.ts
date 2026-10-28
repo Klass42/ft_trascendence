@@ -125,7 +125,7 @@ describe('ActivitiesService tenancy', () => {
     const prisma = prismaFake();
     const svc = new ActivitiesService(prisma, accessFromPrisma(prisma));
     await expect(svc.findOne(ACTIVITY, 'stranger-999')).rejects.toThrow(
-      /not found/i,
+      /no encontrada/i,
     );
   });
 });
@@ -144,7 +144,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     content: { options: ['3', '4'], correct: [1] },
   };
 
-  function build() {
+  function build(notifications?: unknown) {
     const activities: any[] = [];
     const questions: any[] = [];
     const attempts: any[] = [];
@@ -153,8 +153,9 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     const withIncludes = (row: any, include: any) => {
       if (!row) return null;
       const out: any = { ...row };
-      if (include?.course) {
+      if (include?.course || include?.subject) {
         out.course = { id: COURSE, organizationId: ORG, title: 'Web 101' };
+        out.subject = out.course;
       }
       if (include?.questions) {
         out.questions = questions
@@ -273,7 +274,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
     };
 
     return {
-      service: new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma)),
+      service: new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma), notifications as never),
       activities,
       questions,
       attempts,
@@ -335,7 +336,7 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
       ConflictException,
     );
     await expect(service.addQuestion(created.id, TEACHER, MCQ_DTO)).rejects.toThrow(
-      /la estructura está bloqueada/,
+      /estructura de la tarea está bloqueada/,
     );
   });
 
@@ -353,8 +354,62 @@ describe('ActivitiesService authoring (flag, derived maxScore, lock)', () => {
       ConflictException,
     );
     await expect(service.remove(created.id, TEACHER)).rejects.toThrow(
-      /archivar en su lugar/,
+      /archívala en su lugar/,
     );
+  });
+
+  it('remove deletes the notifications that deep-link to the deleted activity', async () => {
+    const notify = { emitMany: jest.fn(), removeByLink: jest.fn() };
+    const { service, activities } = build(notify);
+    const created = await service.create(COURSE, TEACHER, { title: 'Borrador' });
+
+    await service.remove(created.id, TEACHER);
+
+    expect(activities.find((a: any) => a.id === created.id)).toBeUndefined();
+    expect(notify.removeByLink).toHaveBeenCalledWith(expect.any(String), {
+      endsWith: [`activityId=${created.id}`],
+    });
+  });
+
+  it('refuses to publish a task whose total is 0 points', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Sin puntos' });
+    await service.addQuestion(created.id, TEACHER, { ...MCQ_DTO, points: 0 });
+
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).rejects.toThrow(/0 puntos en total/);
+  });
+
+  it('refuses to publish when any non-upload question has 0 points', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Mixta' });
+    await service.addQuestion(created.id, TEACHER, MCQ_DTO);
+    await service.addQuestion(created.id, TEACHER, { ...MCQ_DTO, points: 0 });
+
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).rejects.toThrow(/La pregunta 2 tiene 0 puntos/);
+  });
+
+  it('still publishes a 0-point FILE_UPLOAD companion and re-saves published tasks', async () => {
+    const { service } = build();
+    const created = await service.create(COURSE, TEACHER, { title: 'Con fichero' });
+    await service.addQuestion(created.id, TEACHER, MCQ_DTO);
+    await service.addQuestion(created.id, TEACHER, {
+      kind: QuestionKind.FILE_UPLOAD,
+      prompt: 'Evidencia',
+      points: 0,
+      content: { maxFiles: 1 },
+    });
+
+    const published = await service.update(created.id, TEACHER, {
+      status: PublicationStatus.PUBLISHED,
+    });
+    expect(published.status).toBe(PublicationStatus.PUBLISHED);
+    await expect(
+      service.update(created.id, TEACHER, { status: PublicationStatus.PUBLISHED }),
+    ).resolves.toBeDefined();
   });
 
   it('publishing with no questions throws BadRequestException', async () => {
@@ -418,5 +473,94 @@ describe('ActivitiesService source activity authorization', () => {
       select: { subjectId: true },
     });
     expect(prisma.activity.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ActivitiesService.listMyPendingActivities', () => {
+  const ORG = 'org-klass-0001';
+  const USER = {
+    userId: 'user-lucia-001', email: 'lucia@example.test', name: 'Lucía',
+    avatarUrl: null, organizationId: ORG, role: 'STUDENT',
+    emailNotificationsEnabled: true, preferredLanguage: 'es',
+  } as const;
+  const NOW = new Date('2026-10-27T12:00:00Z');
+  const day = (n: number) => new Date(NOW.getTime() + n * 86400000);
+  const row = (
+    id: string,
+    over: Partial<{
+      dueAt: Date | null; closeAt: Date | null; attemptsAllowed: number;
+      attempts: { status: string }[];
+    }> = {},
+  ) => ({
+    id, subjectId: 'subj-1', title: id, description: null, openAt: null,
+    dueAt: null, closeAt: null, attemptsAllowed: 1, attempts: [], ...over,
+  });
+  const build = (rows: ReturnType<typeof row>[]) => {
+    const findMany = jest.fn().mockResolvedValue(rows);
+    const svc = new ActivitiesService(
+      { activity: { findMany } } as unknown as PrismaService,
+      {} as never,
+    );
+    return { svc, findMany };
+  };
+
+  it('scopes the query to published work of the user in their organization, skipping archived cohorts and closed windows', async () => {
+    const { svc, findMany } = build([]);
+    await svc.listMyPendingActivities(USER, NOW);
+
+    const args = findMany.mock.calls[0][0];
+    expect(args.where.status).toBe('PUBLISHED');
+    expect(args.where.OR).toEqual([{ closeAt: null }, { closeAt: { gt: NOW } }]);
+    expect(args.where.subject).toEqual({
+      organizationId: ORG,
+      status: 'PUBLISHED',
+      course: {
+        organizationId: ORG,
+        status: { not: 'ARCHIVED' },
+        memberships: { some: { userId: USER.userId } },
+      },
+    });
+    expect(args.select.attempts).toEqual({
+      where: { userId: USER.userId },
+      select: { status: true },
+    });
+  });
+
+  it('drops activities already handed in (graded or submitted)', async () => {
+    const { svc } = build([
+      row('graded', { dueAt: day(1), attempts: [{ status: 'GRADED' }] }),
+      row('submitted', { dueAt: day(1), attempts: [{ status: 'SUBMITTED' }] }),
+      row('fresh', { dueAt: day(2) }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => a.id)).toEqual(['fresh']);
+  });
+
+  it('drops handed-in work even with retries left, keeps untouched and in-progress ones', async () => {
+    const { svc } = build([
+      row('retry-left', { dueAt: day(1), attemptsAllowed: 2, attempts: [{ status: 'GRADED' }] }),
+      row('unlimited-done', { dueAt: day(1), attemptsAllowed: 0, attempts: [{ status: 'SUBMITTED' }] }),
+      row('untouched', { dueAt: day(2), attemptsAllowed: 0 }),
+      row('resuming', { dueAt: day(3), attemptsAllowed: 2, attempts: [{ status: 'GRADED' }, { status: 'IN_PROGRESS' }] }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => [a.id, a.attemptsUsed, a.inProgress])).toEqual([
+      ['untouched', 0, false],
+      ['resuming', 2, true],
+    ]);
+  });
+
+  it('sorts by dueAt then closeAt, undated last, and serializes dates', async () => {
+    const { svc } = build([
+      row('undated'),
+      row('closeOnly', { closeAt: day(5) }),
+      row('late', { dueAt: day(9) }),
+      row('soon', { dueAt: day(1), closeAt: day(30) }),
+    ]);
+    const out = await svc.listMyPendingActivities(USER, NOW);
+    expect(out.map((a) => a.id)).toEqual(['soon', 'closeOnly', 'late', 'undated']);
+    expect(out[0].dueAt).toBe(day(1).toISOString());
+    expect(out[3].dueAt).toBeNull();
+    expect(out[0]).not.toHaveProperty('attempts');
   });
 });

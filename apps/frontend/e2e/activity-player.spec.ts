@@ -13,7 +13,7 @@ test.describe('B2b — activity player', () => {
 
   test('student opens a published activity and saves an answer draft', async ({ page }) => {
     await page.goto('/activities');
-    const course = page.getByRole('combobox', { name: 'Curso' });
+    const course = page.getByRole('combobox', { name: 'Asignatura' });
     await expect(course).toBeVisible({ timeout: 8000 });
     await course.selectOption(COURSE_ID);
 

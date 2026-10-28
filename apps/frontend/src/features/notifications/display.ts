@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { NotificationType } from '@/lib/api';
+import { formatLongDate, formatRelativeTime } from '@/lib/format';
 
 const DOT_COLORS: Record<NotificationType, string> = {
   NEW_ASSIGNMENT: 'var(--color-warning)',
@@ -40,25 +41,26 @@ const DOT_COLORS: Record<NotificationType, string> = {
   SYSTEM: 'var(--color-text-secondary)',
 };
 
+/** Short, human label shown under each notification title. */
 const TYPE_LABELS: Record<NotificationType, string> = {
-  NEW_ASSIGNMENT: 'Entrega recibida',
+  NEW_ASSIGNMENT: 'Nueva tarea',
   ACTIVITY_PUBLISHED: 'Tarea publicada',
-  ACTIVITY_CHANGED: 'Tarea actualizada',
+  ACTIVITY_CHANGED: 'Tarea modificada',
   ACTIVITY_REMOVED: 'Tarea eliminada',
   SUBMISSION_RECEIVED: 'Entrega recibida',
-  COURSE_CHANGED: 'Curso o asignatura',
-  COURSE_CONTENT_CHANGED: 'Contenido del curso',
-  MEMBERSHIP_CHANGED: 'Matrícula o equipo',
-  FORUM_THREAD: 'Hilo del foro',
-  RESOURCE_CHANGED: 'Biblioteca de recursos',
-  USER_CHANGED: 'Cuenta de usuario',
+  COURSE_CHANGED: 'Novedades de la cohorte',
+  COURSE_CONTENT_CHANGED: 'Contenido de la asignatura',
+  MEMBERSHIP_CHANGED: 'Cambio en tu participación',
+  FORUM_THREAD: 'Foro',
+  RESOURCE_CHANGED: 'Biblioteca',
+  USER_CHANGED: 'Tu cuenta',
   ORGANIZATION_CHANGED: 'Organización',
   GRADE_PUBLISHED: 'Nota publicada',
   FORUM_REPLY: 'Respuesta en el foro',
-  ENROLLMENT: 'Matrícula',
+  ENROLLMENT: 'Nueva matrícula',
   DEADLINE_REMINDER: 'Fecha límite',
-  FRIEND_REQUEST: 'Solicitud de amistad',
-  SYSTEM: 'Aviso',
+  FRIEND_REQUEST: 'Amistad',
+  SYSTEM: 'Aviso del sistema',
 };
 
 const TYPE_ICONS: Record<NotificationType, LucideIcon> = {
@@ -106,28 +108,7 @@ export function notificationDateGroup(iso: string): string {
     left.getDate() === right.getDate();
   if (sameDay(date, today)) return 'Hoy';
   if (sameDay(date, yesterday)) return 'Ayer';
-  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+  return formatLongDate(date);
 }
 
-/**
- * Short, dependency-free relative time in Spanish ("hace 5 min", "ayer", …).
- * Good enough for the notification center; not a full i18n formatter.
- */
-export function formatRelativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-
-  const diffSec = Math.round((Date.now() - then) / 1000);
-  if (diffSec < 45) return 'ahora';
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `hace ${diffMin} min`;
-  const diffHour = Math.round(diffMin / 60);
-  if (diffHour < 24) return `hace ${diffHour} h`;
-  const diffDay = Math.round(diffHour / 24);
-  if (diffDay === 1) return 'ayer';
-  if (diffDay < 7) return `hace ${diffDay} días`;
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: 'numeric',
-    month: 'short',
-  });
-}
+export { formatRelativeTime };

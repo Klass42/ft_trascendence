@@ -105,9 +105,24 @@ describe('AttemptsService', () => {
         findMany: async () => [{ userId: TEACHER }],
       },
       user: {
-        findUnique: async ({ where }: any) => ({ id: where.id, name: 'Alumno de prueba' }),
+        findUnique: async ({ where }: any) => ({
+          id: where.id,
+          name: 'Alumno de prueba',
+          organizationId: 'org-klass-0001',
+        }),
       },
       activity: {
+        findFirst: async ({ where }: any) => {
+          if (
+            where.id !== activity.id ||
+            where.subject?.is?.organizationId !== 'org-klass-0001'
+          ) return null;
+          return {
+            ...activity,
+            subject: { id: COURSE, organizationId: 'org-klass-0001' },
+            questions: [...opts.questions].sort((a, b) => a.order - b.order),
+          };
+        },
         findUnique: async ({ where, include }: any) => {
           if (where.id !== activity.id) return null;
           const base: any = { ...activity };
@@ -275,14 +290,19 @@ describe('AttemptsService', () => {
         analyticsEvents.push({ name, payload }),
     } as any;
 
+    const activitiesService = new ActivitiesService(
+      prisma as PrismaService,
+      accessFromPrisma(prisma as never),
+    );
     const service = new AttemptsService(
       prisma as PrismaService,
-      new ActivitiesService(prisma as PrismaService, accessFromPrisma(prisma as never)),
+      activitiesService,
       notifications,
       events,
     );
     return {
       service,
+      activitiesService,
       attempts,
       answers,
       emitted,
@@ -344,6 +364,31 @@ describe('AttemptsService', () => {
     expect(done.score).toBe(5);
   });
 
+  it('returns the same scaled score in preview as submit for the same responses', async () => {
+    const { service, activitiesService, attempts, answers, emitted, analyticsEvents } = build({
+      questions: [mcq('q1', [0], 0), mcq('q2', [2], 1)],
+      maxScore: 15,
+    });
+    const input = {
+      answers: [
+        { questionId: 'q1', response: { selected: [0] } },
+        { questionId: 'q2', response: { selected: [0] } },
+      ],
+    };
+
+    const preview = await activitiesService.previewGrade('act-1', TEACHER, input);
+    expect(preview.score).toBe(7.5);
+    expect(attempts).toHaveLength(0);
+    expect(answers).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
+    expect(analyticsEvents).toHaveLength(0);
+
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, input);
+    const submitted = await service.submit(started.id, STUDENT);
+    expect(submitted.score).toBe(preview.score);
+  });
+
   it('leaves an attempt SUBMITTED and tells the staff when it has a subjective question', async () => {
     const { service, emitted, analyticsEvents } = build({
       questions: [
@@ -374,6 +419,9 @@ describe('AttemptsService', () => {
       type: NotificationType.SUBMISSION_RECEIVED,
     });
     expect(emitted[0].payload.body).toContain('Alumno de prueba');
+    expect(emitted[0].payload.link).toBe(
+      `/grades?subjectId=${COURSE}&activityId=act-1&attemptId=${started.id}`,
+    );
     expect(analyticsEvents).toEqual([
       {
         name: ANALYTICS_UPDATED,
@@ -443,6 +491,74 @@ describe('AttemptsService', () => {
     expect(graded.answers[0]).not.toHaveProperty('correct');
   });
 
+  it('persists per-question feedback and returns it to the student once graded, even without showSolutions', async () => {
+    const { service, answers } = build({
+      questions: [
+        { id: 'essay-1', kind: ESSAY, content: {}, points: 2, order: 0 },
+        { id: 'essay-2', kind: ESSAY, content: {}, points: 2, order: 1 },
+      ],
+      config: { showSolutions: false },
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.saveAnswers(started.id, STUDENT, {
+      answers: [
+        { questionId: 'essay-1', response: { text: 'uno' } },
+        { questionId: 'essay-2', response: { text: 'dos' } },
+      ],
+    });
+    await service.submit(started.id, STUDENT);
+
+    await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-1', awarded: 1, feedback: '  Revisa la tesis  ' }],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-1')).toMatchObject({
+      awarded: 1,
+      feedback: 'Revisa la tesis',
+    });
+    // Not published yet: the learner sees no per-question comment.
+    const pending = (await service.listMine('act-1', STUDENT))[0] as any;
+    expect(pending.status).toBe(AttemptStatus.SUBMITTED);
+    expect(pending.answers[0]).not.toHaveProperty('feedback');
+
+    // Feedback alone (no points) is accepted and keeps the awarded points.
+    await service.grade(started.id, TEACHER, {
+      answers: [
+        { questionId: 'essay-1', feedback: 'Revisa la tesis y las fuentes' },
+        { questionId: 'essay-2', awarded: 2, feedback: 'Muy bien' },
+      ],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-1')?.awarded).toBe(1);
+
+    const graded = (await service.listMine('act-1', STUDENT))[0] as any;
+    expect(graded.status).toBe(AttemptStatus.GRADED);
+    const byQuestion = new Map(graded.answers.map((a: any) => [a.questionId, a]));
+    expect(byQuestion.get('essay-1')).toHaveProperty('feedback', 'Revisa la tesis y las fuentes');
+    expect(byQuestion.get('essay-2')).toHaveProperty('feedback', 'Muy bien');
+    expect(byQuestion.get('essay-1')).not.toHaveProperty('awarded');
+
+    const mine = (await service.getMine(started.id, STUDENT)) as any;
+    expect(mine.answers.find((a: any) => a.questionId === 'essay-2').feedback).toBe('Muy bien');
+
+    // An empty comment clears it.
+    await service.grade(started.id, TEACHER, {
+      answers: [{ questionId: 'essay-2', feedback: '   ' }],
+    } as unknown as GradeAttemptDto);
+    expect(answers.find((a) => a.questionId === 'essay-2')?.feedback).toBeNull();
+  });
+
+  it('rejects a grade item with neither points nor feedback', async () => {
+    const { service } = build({
+      questions: [{ id: 'essay-1', kind: ESSAY, content: {}, points: 2, order: 0 }],
+    });
+    const started = await service.start('act-1', STUDENT);
+    await service.submit(started.id, STUDENT);
+    await expect(
+      service.grade(started.id, TEACHER, {
+        answers: [{ questionId: 'essay-1' }],
+      } as unknown as GradeAttemptDto),
+    ).rejects.toThrow(/nota o un comentario/);
+  });
+
   it('keeps answer results hidden when showSolutions is false while staff retain them', async () => {
     const { service } = build({
       questions: [mcq('q1', [0])],
@@ -510,6 +626,80 @@ describe('AttemptsService', () => {
 
     const studentAttempts = await service.listMine('act-1', STUDENT);
     expect(studentAttempts[0].answers[0]).not.toHaveProperty('files');
+  });
+
+  it('returns a single own attempt with the learner\'s own upload names, tenant and owner scoped', async () => {
+    const { service, attempts, answers, files } = build({
+      questions: [
+        {
+          id: 'upload-1',
+          kind: QuestionKind.FILE_UPLOAD,
+          content: { maxFiles: 3 },
+          points: 0,
+          order: 0,
+        },
+      ],
+    });
+    attempts.push({
+      id: 'att-upload',
+      activityId: 'act-1',
+      userId: STUDENT,
+      attemptNo: 1,
+      status: AttemptStatus.SUBMITTED,
+    });
+    answers.push({
+      id: 'answer-upload',
+      attemptId: 'att-upload',
+      questionId: 'upload-1',
+      response: { fileIds: ['file-owned', 'file-other-org', 'file-other-user'] },
+      correct: null,
+      awarded: null,
+    });
+    files.push(
+      { id: 'file-owned', organizationId: 'org-klass-0001', uploaderId: STUDENT, originalName: 'informe.pdf' },
+      { id: 'file-other-org', organizationId: 'org-otro', uploaderId: STUDENT, originalName: 'ajeno.pdf' },
+      { id: 'file-other-user', organizationId: 'org-klass-0001', uploaderId: 'someone-else', originalName: 'otro.pdf' },
+    );
+
+    const view = (await service.getMine('att-upload', STUDENT)) as any;
+    expect(view.answers[0].files).toHaveLength(1);
+    expect(view.answers[0].files[0]).toMatchObject({ id: 'file-owned', originalName: 'informe.pdf' });
+    expect(view.activity.questions).toHaveLength(1);
+  });
+
+  it('forbids reading another learner\'s attempt and 404s on a missing one', async () => {
+    const { service, attempts } = build({ questions: [mcq('q1', [0])] });
+    attempts.push({
+      id: 'att-foreign',
+      activityId: 'act-1',
+      userId: 'other-student',
+      attemptNo: 1,
+      status: AttemptStatus.GRADED,
+    });
+    await expect(service.getMine('att-foreign', STUDENT)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.getMine('nope', STUDENT)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('reveals answer keys and verdicts on getMine only for a graded attempt when showSolutions is on', async () => {
+    const hidden = build({ questions: [mcq('q1', [0])], config: { showSolutions: false } });
+    const started = await hidden.service.start('act-1', STUDENT);
+    await hidden.service.saveAnswers(started.id, STUDENT, {
+      answers: [{ questionId: 'q1', response: { selected: [1] } }],
+    });
+    await hidden.service.submit(started.id, STUDENT);
+    const hiddenView = (await hidden.service.getMine(started.id, STUDENT)) as any;
+    expect(hiddenView.answers[0]).not.toHaveProperty('correct');
+    expect(hiddenView.activity.questions[0].content).not.toHaveProperty('correct');
+
+    const shown = build({ questions: [mcq('q1', [0])], config: { showSolutions: true } });
+    const s2 = await shown.service.start('act-1', STUDENT);
+    await shown.service.saveAnswers(s2.id, STUDENT, {
+      answers: [{ questionId: 'q1', response: { selected: [1] } }],
+    });
+    await shown.service.submit(s2.id, STUDENT);
+    const shownView = (await shown.service.getMine(s2.id, STUDENT)) as any;
+    expect(shownView.answers[0]).toMatchObject({ correct: false, awarded: 0 });
+    expect(shownView.activity.questions[0].content.correct).toEqual([0]);
   });
 
   it('does not allow attempt operations after course membership is removed', async () => {
@@ -699,7 +889,7 @@ describe('AttemptsService', () => {
     const gradeNotifications = emitted.filter(
       (notification) => notification.type === NotificationType.GRADE_PUBLISHED,
     );
-    expect(gradeNotifications).toHaveLength(1);
+    expect(gradeNotifications[0]).toMatchObject({ userId: STUDENT, payload: { title: 'Tarea calificada' } });
     expect(gradeNotifications[0]).toMatchObject({ userId: STUDENT });
     expect(analyticsEvents).toHaveLength(2);
     expect(analyticsEvents[1]).toEqual({
@@ -807,6 +997,6 @@ describe('AttemptsService', () => {
       service.grade(started.id, STUDENT, {
         answers: [{ questionId: 'q1', awarded: 5 }],
       } as unknown as GradeAttemptDto),
-    ).rejects.toThrow(/staff/i);
+    ).rejects.toThrow(/profesorado/i);
   });
 });

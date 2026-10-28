@@ -31,11 +31,11 @@ export function RegisterPage() {
       next.organization = 'El código solo puede contener letras minúsculas, números y guiones.';
     }
     if (!email.trim()) {
-      next.email = 'El email es obligatorio';
+      next.email = 'El correo electrónico es obligatorio.';
     } else if (!isValidEmail(email.trim())) {
-      next.email = 'Formato de email inválido';
+      next.email = 'Introduce un correo electrónico válido.';
     } else if (email.trim().length > 254) {
-      next.email = 'El correo no puede superar los 254 caracteres.';
+      next.email = 'El correo electrónico no puede superar los 254 caracteres.';
     }
     if (!password) {
       next.password = 'La contraseña es obligatoria';
@@ -97,7 +97,7 @@ export function RegisterPage() {
         </div>
 
         <Card className={styles.card}>
-          <form onSubmit={handleSubmit} className={styles.form}>
+          <form onSubmit={handleSubmit} noValidate className={styles.form}>
             {errors.form && (
               <div className={styles.error} role="alert">{errors.form}</div>
             )}
@@ -118,7 +118,7 @@ export function RegisterPage() {
 
             <Input
               label="Código de organización"
-              placeholder="mi-centro"
+              placeholder="tu-centro"
               value={organizationSlug}
               maxLength={63}
               onChange={(e) => { setOrganizationSlug(e.target.value.toLowerCase()); setErrors((p) => ({ ...p, organization: undefined })); }}
@@ -129,8 +129,8 @@ export function RegisterPage() {
 
             <Input
               type="email"
-              label="Email"
-              placeholder="tu@correo.es"
+              label="Correo electrónico"
+              placeholder="nombre@ejemplo.es"
               value={email}
               maxLength={254}
               onChange={(e) => { setEmail(e.target.value); setErrors((p) => ({ ...p, email: undefined })); }}

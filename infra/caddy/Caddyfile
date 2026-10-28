@@ -52,6 +52,10 @@ http://:80 {
 https://{$CADDY_DOMAIN}:443 {
 	import common
 	header X-Frame-Options SAMEORIGIN
+	# Only our own origin runs code. Styles and fonts also come from Google Fonts;
+	# lesson videos and images may live on any HTTPS host; blob: covers the
+	# previews of files picked before upload. Grafana keeps its own policy.
+	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self'; frame-src 'self' blob: https://www.youtube-nocookie.com https://player.vimeo.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 
 	handle /health {
 		reverse_proxy backend:3000
@@ -64,11 +68,6 @@ https://{$CADDY_DOMAIN}:443 {
 
 	# Socket.io — reverse_proxy handles the WebSocket upgrade by itself.
 	handle /socket.io* {
-		reverse_proxy backend:3000
-	}
-
-	# Files written by the local storage driver.
-	handle /uploads* {
 		reverse_proxy backend:3000
 	}
 

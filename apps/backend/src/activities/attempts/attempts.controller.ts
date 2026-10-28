@@ -22,6 +22,11 @@ export class AttemptsController {
     return this.attempts.listMine(activityId, user.userId);
   }
 
+  @Get('attempts/:id')
+  getMine(@Param('id') attemptId: string, @CurrentUser() user: AuthUser) {
+    return this.attempts.getMine(attemptId, user.userId);
+  }
+
   @Patch('attempts/:id')
   save(
     @Param('id') attemptId: string,
