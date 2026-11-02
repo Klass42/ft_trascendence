@@ -116,11 +116,15 @@ Módulos tomados de la tabla de [README.md](../README.md#modules). "Seed" = dato
 | Sistema de notificaciones (1) | Campana y `/notifications`. Con `student@demo` aparecen la nota del cuestionario, la tarea nueva y la solicitud de amistad; con `teacher@demo`, "Nueva entrega para corregir". Más se generan al crear/editar contenido, responder en foros o calificar | Notificaciones para Sam, Lucía, Theo y Diego | Listo (para verlas llegar en vivo: el profesor califica la entrega de Sam o publica una tarea) |
 | Dashboard de analíticas avanzadas (2) | `/analytics` con `teacher@demo` o `diego@example.com` (KPIs, entregas en el tiempo, distribución de notas, exportación CSV/PDF, refresco en vivo) | 5 intentos (4 calificados, 1 por calificar) repartidos en los últimos 9 días; números esperados en la sección 2 | Listo. En `/grades` el profesor puede calificar la entrega de Sam y ver cómo cambian los KPI en vivo. Calificarla altera los números de arriba; `make db-seed` los restaura |
 | Subida de ficheros (1) | Alumno: entregar la tarea "Tarea · Ensayo y fichero" adjuntando un PNG/PDF (`/activities`); profesor: adjuntar un fichero en una lección o subir un recurso en `/resources`; foto de perfil en `/profile` | Pregunta de tipo fichero (máx. 3) en la tarea; los intentos del seed no llevan ficheros | **PREPARAR**: el seed no sube ningún fichero; se enseña en directo con un fichero pequeño de prueba: los dos alumnos ya han agotado el único intento del ensayo, así que o bien el profesor sube un fichero a una lección o a `/resources`, o bien crea una tarea nueva con una pregunta de fichero y `student@demo` la entrega |
-| OAuth 2.0 (Google) (1) | Botón "Continuar con Google" en `/login` | Ninguno | **PREPARAR**: requiere `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env` y el URI de redirección registrado en Google (ver README, "Google OAuth setup"); sin `GOOGLE_CLIENT_ID` el botón no se muestra. Guion en la sección 5 |
+| OAuth 2.0 (Google) (1) | Botón "Continuar con Google" en `/login` | Ninguno | **PREPARAR**: requiere `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env` y el URI de redirección registrado en Google (ver README, "Google OAuth setup"); sin `GOOGLE_CLIENT_ID` el botón no se muestra. Guion en la sección 6 |
 | Monitorización Prometheus + Grafana (2) | Grafana en `:4150` (3 dashboards: Platform overview, NestJS backend, Infrastructure); `make smoke` comprueba targets y reglas. Demo de alerta: `docker compose stop backend` → `ServiceProbeFailed` pasa a Pending y luego Firing (~90 s); `docker compose start backend` la resuelve | No usa datos del seed | Listo. Para que los paneles de tráfico no estén vacíos, navegar un poco antes de enseñarlos |
+| Design system propio (1, margen) | `/design` con `admin@demo`: paleta, tipografía y espaciado leídos de las variables CSS en vivo, iconos y los 19 componentes con variantes/estados; enseñar que el resto de pantallas usa los mismos componentes | Ninguno | Listo |
+| Módulo a elección: motor de actividades (2, margen) | `teacher@demo`: crear actividad con varios tipos de bloque, vista previa (`preview/grade`, no escribe nada); `student@demo`: empezar intento, autoguardado, enviar → nota automática con crédito parcial; profesor corrige el ensayo a mano con feedback | Actividades e intentos del seed | Listo |
+| Desactivar miembro (dentro de Organizaciones) | `admin@demo` → `/admin/users` → *Quitar* a un alumno con sesión abierta en otro navegador: se le corta el socket y la sesión; no puede volver a entrar; *Reactivar* lo devuelve con sus notas | Cualquier alumno | Listo (#134/#135) |
+| Seguridad de registro (dentro de Gestión de usuarios) | `/register` con slug `klass` y un e-mail nuevo; repetir con un e-mail existente y con un slug inexistente | Ninguno | Listo: en producción (`make`) las tres respuestas son idénticas («recibirás un enlace para confirmar tu correo») y **no** se entregan tokens hasta verificar el e-mail (#74, #140). Fuera de producción la cuenta se auto-verifica y entra directamente |
 
-Nota: la tabla del README suma 18 puntos; el objetivo del equipo es 14 (ver `AGENTS.md`). Antes de
-la defensa conviene decidir qué módulos se presentan como reclamados.
+Nota: la tabla del README reclama 18 puntos (el subject exige 14) + 3 de margen (design system y
+módulo a elección) por si algún módulo no se valida.
 
 ## 4. Guion mínimo recomendado
 
@@ -142,7 +146,7 @@ la defensa conviene decidir qué módulos se presentan como reclamados.
 - Los usuarios `dev@example.com`, `diego@example.com` y `admin@example.com` (legado de desarrollo)
   conviven con las cuentas `*@demo`; las cuentas `*@demo` solo tienen la actividad descrita en la sección 2.
 
-## 5. Guion OAuth 2.0 (Google) (#136)
+## 6. Guion OAuth 2.0 (Google) (#136)
 
 Preparación (una vez, antes de la defensa):
 
@@ -163,3 +167,23 @@ Demo:
 | 3. Login posterior | Cerrar sesión y repetir el paso 1 o 2 | Entra directamente, reutilizando la vinculación |
 | 4. Errores (opcional) | Slug inexistente, o cuenta Google ya vinculada en otra org | Vuelve a `/login` con un error claro (`unknown_organization` / `wrong_organization`) |
 | 5. Seguridad (explicar) | — | `state` firmado de un solo uso en cookie HttpOnly; secretos solo en `.env`; mismo par JWT que el login con contraseña |
+
+## 7. Ensayo completo y cierre (#140)
+
+Ensayo (en la máquina de la defensa, Chrome, consola de DevTools abierta):
+
+1. `git switch staging && git pull` y comprobar que el CI de `staging` está en verde.
+2. `make re` desde limpio (borra volúmenes; regenera `.env` solo si no existe) y luego
+   `make smoke`: las 12 comprobaciones en verde.
+3. Seguir el guion de la sección 4 módulo a módulo (tabla de la sección 3), con **cero errores
+   en la consola** del navegador. Anotar cualquier error en una issue antes de seguir.
+4. `docker compose stop backend` / `start backend` para la alerta de Grafana.
+5. `make db-seed` al terminar para dejar los datos como al principio.
+
+Cierre `staging → master` (lo hace el equipo, no automáticamente):
+
+1. Todos los PR del plan mergeados en `staging` y CI en verde.
+2. Ensayo anterior completado sin errores.
+3. PR `staging → master`, revisión de al menos un compañero, merge.
+4. En `master`: clon limpio, `make`, `make smoke`.
+
