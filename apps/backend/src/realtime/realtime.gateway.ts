@@ -12,6 +12,12 @@ import type { Notification } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 import { ANALYTICS_UPDATED, AnalyticsUpdatedEvent } from '../analytics/analytics.events';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ORGANIZATION_SUSPENDED,
+  OrganizationSuspendedEvent,
+  USER_DEACTIVATED,
+  UserDeactivatedEvent,
+} from './realtime.events';
 
 // Same origin the HTTP layer allows (see main.ts). In dev the frontend also
 // proxies /socket.io through Vite, so most connections arrive same-origin; this
@@ -23,6 +29,11 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
+/** The Socket.io room all live connections of an organization's members join. */
+function orgRoom(organizationId: string): string {
+  return `org:${organizationId}`;
+}
+
 /**
  * Real-time gateway (Real-time WebSockets module).
  *
@@ -32,6 +43,11 @@ function userRoom(userId: string): string {
  *   on the app event bus and this gateway reacts with `@OnEvent`. No module
  *   imports NotificationsService <-> RealtimeModule either way, so there is no
  *   circular dependency and `emit()` is a safe no-op when nobody is connected.
+ * - Access: on connect the user must still exist and belong to an ACTIVE
+ *   organization (same rule as JwtStrategy). `organization.suspended` and
+ *   `user.deactivated` events (see realtime.events.ts) disconnect live sockets
+ *   at once; members also join `org:<id>`, which lets us cut a whole org
+ *   without a DB query (needed when it was deleted and its users are gone).
  * - Presence: stamps `User.onlineAt` on connect/disconnect (last-seen) AND
  *   broadcasts `presence:update` {userId, online} to the user's accepted
  *   friends on the online↔offline transition (first socket up / last down).
@@ -67,8 +83,16 @@ export class RealtimeGateway
       return;
     }
 
+    const access = await this.authorize(userId);
+    if (!access) {
+      this.logger.warn(`Socket ${client.id} rejected: user gone or organization not active`);
+      client.disconnect(true);
+      return;
+    }
+
     client.data.userId = userId;
     await client.join(userRoom(userId));
+    if (access.organizationId) await client.join(orgRoom(access.organizationId));
     await this.touchOnline(userId);
 
     const wentOnline = this.addConnection(userId);
@@ -202,6 +226,39 @@ export class RealtimeGateway
       }
     } catch (error) {
       this.logger.warn(`Analytics update broadcast failed for ${courseId}: ${String(error)}`);
+    }
+  }
+
+  /** Disconnect every socket of an organization that was suspended, archived or deleted. */
+  @OnEvent(ORGANIZATION_SUSPENDED)
+  handleOrganizationSuspended({ organizationId }: OrganizationSuspendedEvent): void {
+    this.server?.in(orgRoom(organizationId)).disconnectSockets(true);
+  }
+
+  /** Disconnect every socket of a user whose access was revoked (deactivated or deleted). */
+  @OnEvent(USER_DEACTIVATED)
+  handleUserDeactivated({ userId }: UserDeactivatedEvent): void {
+    this.server?.in(userRoom(userId)).disconnectSockets(true);
+  }
+
+  /**
+   * Connect-time access check, mirroring JwtStrategy.validate: the user must
+   * still exist and their organization (if any; platform users have none) must
+   * be ACTIVE. Fails closed: a query error rejects the socket (the client
+   * retries). When #134 adds `User.deactivatedAt`, reject it here too.
+   */
+  private async authorize(userId: string): Promise<{ organizationId: string | null } | null> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true, organization: { select: { status: true } } },
+      });
+      if (!user) return null;
+      if (user.organization && user.organization.status !== 'ACTIVE') return null;
+      return { organizationId: user.organizationId };
+    } catch (err) {
+      this.logger.warn(`access check failed for ${userId}: ${(err as Error).message}`);
+      return null;
     }
   }
 
