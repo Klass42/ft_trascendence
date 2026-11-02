@@ -33,7 +33,7 @@ const STATUS_OPTIONS: { value: ActivityStatus; label: string }[] = [
   { value: 'ARCHIVED', label: 'Archivada' },
 ];
 
-type FieldErrors = Partial<Record<'title' | 'attempts' | 'openAt' | 'dueAt' | 'closeAt', string>>;
+type FieldErrors = Partial<Record<'title' | 'attempts' | 'timeLimit' | 'openAt' | 'dueAt' | 'closeAt', string>>;
 
 export function ActivityForm({
   courseId,
@@ -50,6 +50,9 @@ export function ActivityForm({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [attempts, setAttempts] = useState(String(initial?.attemptsAllowed ?? 1));
+  const [timeLimit, setTimeLimit] = useState(
+    initial?.timeLimitSec ? String(Math.ceil(initial.timeLimitSec / 60)) : '',
+  );
   const [status, setStatus] = useState<ActivityStatus>(initial?.status ?? 'DRAFT');
   const [openAt, setOpenAt] = useState(toDatetimeLocal(initial?.openAt));
   const [dueAt, setDueAt] = useState(toDatetimeLocal(initial?.dueAt));
@@ -85,6 +88,10 @@ export function ActivityForm({
     if (attempts.trim() === '' || !Number.isInteger(att) || att < 0) {
       found.attempts = 'Debe ser un entero ≥ 0 (0 = ilimitados).';
     }
+    const minutes = Number(timeLimit);
+    if (timeLimit.trim() !== '' && (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440)) {
+      found.timeLimit = 'Debe ser un entero entre 1 y 1440 minutos.';
+    }
     if (o && d && o > d) found.dueAt = 'La entrega no puede ser anterior a la apertura.';
     if (d && c && d > c) found.closeAt = 'El cierre no puede ser anterior a la entrega.';
     else if (o && c && o > c) found.closeAt = 'El cierre no puede ser anterior a la apertura.';
@@ -102,6 +109,8 @@ export function ActivityForm({
         title: trimmed,
         description: description.trim() || undefined,
         attemptsAllowed: att,
+        // Empty clears the limit when editing; omitted on create.
+        timeLimitSec: timeLimit.trim() === '' ? (editing ? null : undefined) : minutes * 60,
         status,
         openAt: o,
         dueAt: d,
@@ -176,6 +185,28 @@ export function ActivityForm({
               onChange={(e) => {
                 setAttempts(e.target.value);
                 clearError('attempts');
+              }}
+            />
+          )}
+        </FormField>
+      </div>
+
+      <div style={{ flex: '1 1 120px', maxWidth: 220 }}>
+        <FormField
+          label="Tiempo límite (minutos)"
+          hint="Vacío = sin límite. El servidor cierra el intento al agotarse."
+          error={errors.timeLimit}
+        >
+          {(field) => (
+            <Input
+              {...field}
+              type="number"
+              min={1}
+              max={1440}
+              value={timeLimit}
+              onChange={(e) => {
+                setTimeLimit(e.target.value);
+                clearError('timeLimit');
               }}
             />
           )}

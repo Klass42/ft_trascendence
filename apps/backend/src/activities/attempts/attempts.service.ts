@@ -30,6 +30,15 @@ type AttemptWithAnswers = Prisma.AttemptGetPayload<{
 type ActivityWithQuestions = Activity & { questions: Question[] };
 type ActivityWithSubject = Activity & { subject: { organizationId: string } };
 
+/** Extra time after an attempt's `expiresAt` during which the server still
+ * accepts the client's final autosave + submit. It absorbs network latency and
+ * clock rounding so a learner who submits "at 00:00" does not lose work. Past
+ * it, saving is rejected and the attempt is closed with what was already saved. */
+export const TIME_LIMIT_GRACE_MS = 30_000;
+
+/** Attempts may be closed by retrying a few serialization conflicts. */
+const FINALIZE_MAX_RETRIES = 3;
+
 function responseFileIds(response: unknown): string[] {
   if (!response || typeof response !== 'object' || Array.isArray(response)) {
     return [];
@@ -58,8 +67,12 @@ export class AttemptsService {
     const { activity } = await this.requireStudentActivity(
       activityId,
       actingUserId,
-      true,
+      false,
     );
+    // A timed attempt left open past its deadline is closed first, so it neither
+    // gets "resumed" nor blocks a new attempt — even if the window has closed.
+    await this.closeExpiredInProgress(activity, actingUserId);
+    this.assertOpenWindow(activity);
     const attempt = await this.startOrResumeAttempt(activity, actingUserId);
     return this.studentView(attempt.id, actingUserId);
   }
@@ -72,8 +85,18 @@ export class AttemptsService {
     dto: SaveAnswersDto,
   ) {
     const attempt = await this.loadOwnedAttempt(attemptId, actingUserId);
+    const expiresAt = this.expiryOf(attempt, attempt.activity);
+    // Timed attempts are bounded by their own deadline (already capped by
+    // `closeAt`); untimed ones keep the plain open/close window.
+    if (!expiresAt) this.assertOpenWindow(attempt.activity);
     if (attempt.status !== AttemptStatus.IN_PROGRESS) {
       throw new BadRequestException('El intento ya fue enviado');
+    }
+    if (expiresAt && this.isPastGrace(expiresAt)) {
+      await this.finalizeAndNotify(attempt.id, expiresAt);
+      throw new BadRequestException(
+        'Se agotó el tiempo del intento; se ha enviado con las respuestas ya guardadas.',
+      );
     }
 
     const questions = new Map(
@@ -117,93 +140,24 @@ export class AttemptsService {
     return this.studentView(attemptId, actingUserId);
   }
 
-  /** Finalise an attempt: auto-grade every objective question, compute the
-   * scaled score, and either mark it GRADED (fully objective → notify) or leave
-   * it SUBMITTED awaiting manual grading (has subjective questions). */
+  /** Submit an attempt (see `finalizeAttempt`). With a time limit the request
+   * is accepted until `expiresAt` + grace; later, it still finalises the attempt
+   * with the answers saved before the deadline. */
   async submit(attemptId: string, actingUserId: string) {
     const attempt = await this.loadOwnedAttempt(attemptId, actingUserId);
+    const expiresAt = this.expiryOf(attempt, attempt.activity);
+    if (!expiresAt) this.assertOpenWindow(attempt.activity);
     if (attempt.status !== AttemptStatus.IN_PROGRESS) {
       throw new BadRequestException('El intento ya fue enviado');
     }
 
-    const { activity } = attempt;
-    const answersByQ = new Map(attempt.answers.map((a) => [a.questionId, a]));
-    const grade = gradeResponses(
-      activity.questions,
-      attempt.answers.map((answer) => ({
-        questionId: answer.questionId,
-        response: answer.response,
-      })),
-      activity.maxScore,
-    );
-    const gradesByQuestion = new Map(grade.results.map((result) => [result.questionId, result]));
-    const answerUpdates: Prisma.PrismaPromise<unknown>[] = [];
-
-    for (const q of activity.questions) {
-      const answer = answersByQ.get(q.id);
-      const result = gradesByQuestion.get(q.id);
-
-      if (result?.autoGradable) {
-        if (answer) {
-          answerUpdates.push(
-            this.prisma.answer.update({
-              where: { id: answer.id },
-              data: {
-                correct: result.correct ?? false,
-                awarded: result.awarded ?? 0,
-              },
-            }),
-          );
-        } else {
-          // No saved answer for an objective question → 0, recorded so the
-          // student's result is complete.
-          answerUpdates.push(
-            this.prisma.answer.create({
-              data: {
-                attemptId,
-                questionId: q.id,
-                response: {} as Prisma.InputJsonValue,
-                correct: false,
-                awarded: 0,
-              },
-            }),
-          );
-        }
-      } else {
-        // Manual work remains pending for staff, exactly as before.
-      }
-    }
-
-    const now = new Date();
-
-    const attemptData: Prisma.AttemptUpdateInput = grade.hasManual
-      ? { status: AttemptStatus.SUBMITTED, submittedAt: now }
-      : {
-          status: AttemptStatus.GRADED,
-          submittedAt: now,
-          gradedAt: now,
-          score: grade.score,
-        };
-
-    await this.prisma.$transaction([
-      ...answerUpdates,
-      this.prisma.attempt.update({ where: { id: attemptId }, data: attemptData }),
-    ]);
-    this.events.emit(ANALYTICS_UPDATED, {
-      courseId: activity.subjectId,
-      organizationId: activity.subject.organizationId,
-    });
-
-    if (!grade.hasManual) {
-      await this.notifyGraded(
-        actingUserId,
-        activity,
-        grade.score,
-        attempt.attemptNo,
-      );
-    } else {
-      await this.notifySubmitted(actingUserId, activity, attemptId);
-    }
+    // A late request still finalises the attempt (the learner does not lose the
+    // work already saved); `submit` carries no payload, so nothing sent after
+    // the deadline can alter the answers. Past the grace period the submission
+    // is stamped at the deadline instead of "now".
+    const submittedAt =
+      expiresAt && this.isPastGrace(expiresAt) ? expiresAt : new Date();
+    await this.finalizeAndNotify(attemptId, submittedAt);
     return this.studentView(attemptId, actingUserId);
   }
 
@@ -222,6 +176,7 @@ export class AttemptsService {
       actingUserId,
       false,
     );
+    await this.closeExpiredInProgress(activity, actingUserId);
     const attempts = await this.prisma.attempt.findMany({
       where: { activityId, userId: actingUserId },
       orderBy: { attemptNo: 'asc' },
@@ -236,11 +191,14 @@ export class AttemptsService {
 
   /** Every attempt for an activity (course staff only), with student + answers. */
   async listForActivity(activityId: string, actingUserId: string) {
-    const { subject } = await this.activities.requireActivity(
+    const { activity, subject } = await this.activities.requireActivity(
       activityId,
       actingUserId,
       true,
     );
+    // Abandoned timed attempts would otherwise stay "in progress" (and
+    // ungradable) forever if the learner never comes back.
+    await this.closeExpiredInProgress(activity);
     const attempts = await this.prisma.attempt.findMany({
       where: {
         activityId,
@@ -424,30 +382,46 @@ export class AttemptsService {
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
-    await this.requireStudentActivity(attempt.activityId, actingUserId, true);
+    // The open/close window is checked by the callers: timed attempts are
+    // governed by their own deadline instead (see `expiryOf`).
+    await this.requireStudentActivity(attempt.activityId, actingUserId, false);
     return attempt;
   }
 
   /** Attempt + explicit student projection; answer results are only revealed
    * when the attempt is graded and the activity allows showing solutions. */
   private async studentView(attemptId: string, actingUserId: string) {
-    const attempt = await this.prisma.attempt.findUnique({
-      where: { id: attemptId },
-      include: {
-        answers: true,
-        activity: {
-          include: {
-            subject: { select: { organizationId: true } },
-            questions: { orderBy: { order: 'asc' } },
+    const load = () =>
+      this.prisma.attempt.findUnique({
+        where: { id: attemptId },
+        include: {
+          answers: true,
+          activity: {
+            include: {
+              subject: { select: { organizationId: true } },
+              questions: { orderBy: { order: 'asc' } },
+            },
           },
         },
-      },
-    });
+      });
+    let attempt = await load();
     if (!attempt) throw new NotFoundException('Intento no encontrado.');
     if (attempt.userId !== actingUserId) {
       throw new ForbiddenException('No es tu intento');
     }
     await this.requireStudentActivity(attempt.activityId, actingUserId, false);
+
+    // Reading a timed attempt whose deadline passed closes it first.
+    const expiresAt = this.expiryOf(attempt, attempt.activity);
+    if (
+      attempt.status === AttemptStatus.IN_PROGRESS &&
+      expiresAt &&
+      this.isPastGrace(expiresAt)
+    ) {
+      await this.finalizeAndNotify(attempt.id, expiresAt);
+      attempt = await load();
+      if (!attempt) throw new NotFoundException('Intento no encontrado.');
+    }
 
     const projected = this.projectStudentAttempt(
       attempt,
@@ -503,6 +477,11 @@ export class AttemptsService {
     const reveal =
       cfg.showSolutions === true && attempt.status === AttemptStatus.GRADED;
 
+    const expiresAt =
+      attempt.status === AttemptStatus.IN_PROGRESS
+        ? this.expiryOf(attempt, activity)
+        : null;
+
     const studentAttempt = {
       id: attempt.id,
       activityId: attempt.activityId,
@@ -511,6 +490,10 @@ export class AttemptsService {
       status: attempt.status,
       startedAt: attempt.startedAt,
       submittedAt: attempt.submittedAt,
+      // Server-side deadline of a timed, in-progress attempt (null otherwise).
+      // `serverNow` lets the client correct for its own clock offset.
+      expiresAt,
+      ...(expiresAt && { serverNow: new Date() }),
       score: attempt.status === AttemptStatus.GRADED ? attempt.score : null,
       gradedAt: attempt.gradedAt,
       // The teacher's comment is shown as soon as the attempt is graded; only
@@ -600,6 +583,165 @@ export class AttemptsService {
     if (activity.closeAt && now > activity.closeAt) {
       throw new BadRequestException('La tarea está cerrada.');
     }
+  }
+
+  // ─── Time limit ───────────────────────────────────────────────────────────
+
+  /** Server deadline of an attempt: `startedAt + timeLimitSec`, capped by the
+   * activity's `closeAt`. `null` when the activity has no time limit (those keep
+   * the plain open/close window check). */
+  private expiryOf(
+    attempt: { startedAt: Date },
+    activity: Pick<Activity, 'timeLimitSec' | 'closeAt'>,
+  ): Date | null {
+    if (!activity.timeLimitSec) return null;
+    const byLimit = attempt.startedAt.getTime() + activity.timeLimitSec * 1000;
+    const closeAt = activity.closeAt?.getTime();
+    return new Date(closeAt === undefined ? byLimit : Math.min(byLimit, closeAt));
+  }
+
+  private isPastGrace(expiresAt: Date): boolean {
+    return Date.now() > expiresAt.getTime() + TIME_LIMIT_GRACE_MS;
+  }
+
+  /** Close (auto-submit with the saved answers) every IN_PROGRESS attempt of
+   * the activity whose deadline + grace passed; scoped to one learner when
+   * `userId` is given. A no-op for untimed activities. */
+  private async closeExpiredInProgress(activity: Activity, userId?: string) {
+    if (!activity.timeLimitSec) return;
+    const open = await this.prisma.attempt.findMany({
+      where: {
+        activityId: activity.id,
+        status: AttemptStatus.IN_PROGRESS,
+        ...(userId && { userId }),
+      },
+    });
+    for (const attempt of open) {
+      if (attempt.status !== AttemptStatus.IN_PROGRESS) continue;
+      const expiresAt = this.expiryOf(attempt, activity);
+      if (expiresAt && this.isPastGrace(expiresAt)) {
+        await this.finalizeAndNotify(attempt.id, expiresAt);
+      }
+    }
+  }
+
+  /** Finalise an attempt: auto-grade every objective question, compute the
+   * scaled score, and either mark it GRADED (fully objective → notify) or leave
+   * it SUBMITTED awaiting manual grading (has subjective questions). Shared by
+   * the learner's submit and the lazy close of expired attempts. */
+  private async finalizeAndNotify(attemptId: string, submittedAt: Date) {
+    const done = await this.finalizeAttempt(attemptId, submittedAt);
+    if (!done) return; // already closed by a concurrent request
+    const { activity, attempt, grade } = done;
+    this.events.emit(ANALYTICS_UPDATED, {
+      courseId: activity.subjectId,
+      organizationId: activity.subject.organizationId,
+    });
+    if (!grade.hasManual) {
+      await this.notifyGraded(
+        attempt.userId,
+        activity,
+        grade.score,
+        attempt.attemptNo,
+      );
+    } else {
+      await this.notifySubmitted(attempt.userId, activity, attemptId);
+    }
+  }
+
+  /** Grades from the answers stored *inside* the transaction, so a save that
+   * raced with the close is either included or rejected, never half-counted.
+   * Returns null if the attempt was no longer IN_PROGRESS. */
+  private async finalizeAttempt(attemptId: string, submittedAt: Date) {
+    for (let retry = 0; retry <= FINALIZE_MAX_RETRIES; retry += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const attempt = await tx.attempt.findUnique({
+              where: { id: attemptId },
+              include: {
+                answers: true,
+                activity: {
+                  include: {
+                    subject: { select: { organizationId: true } },
+                    questions: { orderBy: { order: 'asc' } },
+                  },
+                },
+              },
+            });
+            if (!attempt || attempt.status !== AttemptStatus.IN_PROGRESS) {
+              return null;
+            }
+
+            const { activity } = attempt;
+            const answersByQ = new Map(
+              attempt.answers.map((a) => [a.questionId, a]),
+            );
+            const grade = gradeResponses(
+              activity.questions,
+              attempt.answers.map((answer) => ({
+                questionId: answer.questionId,
+                response: answer.response,
+              })),
+              activity.maxScore,
+            );
+            const gradesByQuestion = new Map(
+              grade.results.map((result) => [result.questionId, result]),
+            );
+
+            for (const q of activity.questions) {
+              const answer = answersByQ.get(q.id);
+              const result = gradesByQuestion.get(q.id);
+              // Manual work remains pending for staff.
+              if (!result?.autoGradable) continue;
+              if (answer) {
+                await tx.answer.update({
+                  where: { id: answer.id },
+                  data: {
+                    correct: result.correct ?? false,
+                    awarded: result.awarded ?? 0,
+                  },
+                });
+              } else {
+                // No saved answer for an objective question → 0, recorded so
+                // the student's result is complete.
+                await tx.answer.create({
+                  data: {
+                    attemptId,
+                    questionId: q.id,
+                    response: {} as Prisma.InputJsonValue,
+                    correct: false,
+                    awarded: 0,
+                  },
+                });
+              }
+            }
+
+            await tx.attempt.update({
+              where: { id: attemptId },
+              data: grade.hasManual
+                ? { status: AttemptStatus.SUBMITTED, submittedAt }
+                : {
+                    status: AttemptStatus.GRADED,
+                    submittedAt,
+                    gradedAt: new Date(),
+                    score: grade.score,
+                  },
+            });
+            return { attempt, activity, grade };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (!this.isStartConflict(error)) throw error;
+        if (retry === FINALIZE_MAX_RETRIES) {
+          throw new ConflictException(
+            'No se pudo cerrar el intento de forma concurrente',
+          );
+        }
+      }
+    }
+    throw new ConflictException('No se pudo cerrar el intento');
   }
 
   private async startOrResumeAttempt(activity: Activity, actingUserId: string) {

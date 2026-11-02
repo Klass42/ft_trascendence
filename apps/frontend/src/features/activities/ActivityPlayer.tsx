@@ -82,6 +82,11 @@ export function ActivityPlayer({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [resultNotice, setResultNotice] = useState<string | null>(null);
+  // Seconds left according to the *server's* deadline (null = untimed attempt).
+  const [remainingSec, setRemainingSec] = useState<number | null>(null);
+  // serverNow - Date.now() when the attempt arrived: corrects client clock skew.
+  const clockOffsetRef = useRef(0);
+  const expiredHandledRef = useRef<string | null>(null);
 
   const latestAttempt = useMemo(
     () => attempts?.[attempts.length - 1] ?? null,
@@ -104,6 +109,7 @@ export function ActivityPlayer({
     const initial: ResponseMap = {};
     for (const answer of attempt.answers ?? []) initial[answer.questionId] = answer.response;
     setAllResponses(initial);
+    clockOffsetRef.current = attempt.serverNow ? Date.parse(attempt.serverNow) - Date.now() : 0;
     setActiveAttempt(attempt);
     setSaveState('idle');
   }, [setAllResponses]);
@@ -159,24 +165,32 @@ export function ActivityPlayer({
     setSaveState('idle');
   }
 
-  async function submitAttempt() {
+  async function submitAttempt(auto = false) {
     if (!activeAttempt) return;
     setIsSubmitting(true);
     try {
-      await saveCurrent(activeAttempt);
+      try {
+        await saveCurrent(activeAttempt);
+      } catch (err) {
+        // On expiry we still try to submit what the server already has.
+        if (!auto) throw err;
+      }
       const completed = await submit(activeAttempt.id);
       setActiveAttempt(null);
       setAllResponses({});
       refetch();
       onAttemptChanged?.();
       setReviewId(completed.id);
+      if (auto) {
+        toast({ variant: 'warning', message: 'Se agotó el tiempo: tu tarea se ha enviado automáticamente.' });
+      }
       if (completed.status === 'GRADED') {
         // The grading notification already raises a toast; show the result in
         // the page instead of a second one.
         setResultNotice(`Tarea corregida: ${completed.score ?? 0}/${completed.activity?.maxScore ?? activity?.maxScore ?? 0}`);
       } else {
         setResultNotice(null);
-        toast({ variant: 'success', message: 'Tarea enviada. Está pendiente de corrección.' });
+        if (!auto) toast({ variant: 'success', message: 'Tarea enviada. Está pendiente de corrección.' });
       }
     } catch (err) {
       toast({ variant: 'error', message: err instanceof Error ? err.message : 'No se pudo enviar la tarea.' });
@@ -185,6 +199,31 @@ export function ActivityPlayer({
       setConfirmOpen(false);
     }
   }
+
+  // Countdown against the server deadline; auto-submits once it reaches zero.
+  const submitRef = useRef(submitAttempt);
+  submitRef.current = submitAttempt;
+  const expiresAtMs = activeAttempt?.status === 'IN_PROGRESS' && activeAttempt.expiresAt
+    ? Date.parse(activeAttempt.expiresAt)
+    : null;
+  const activeAttemptId = activeAttempt?.id ?? null;
+  useEffect(() => {
+    if (expiresAtMs === null) {
+      setRemainingSec(null);
+      return;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((expiresAtMs - (Date.now() + clockOffsetRef.current)) / 1000));
+      setRemainingSec(left);
+      if (left === 0 && expiredHandledRef.current !== activeAttemptId) {
+        expiredHandledRef.current = activeAttemptId;
+        void submitRef.current(true);
+      }
+    };
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [expiresAtMs, activeAttemptId]);
 
   if (!isPreview && (activityLoading || attemptsLoading)) return <Spinner size="md" label="Cargando tarea…" />;
   if (!activity || (!isPreview && (activityError || attemptsError))) {
@@ -239,7 +278,7 @@ export function ActivityPlayer({
           {activity.openAt ? `Abre ${formatDateTime(activity.openAt)} · ` : ''}
           {activity.dueAt ? `Entrega ${formatDateTime(activity.dueAt)}` : 'Sin fecha límite'}
           {activity.closeAt ? ` · Cierra ${formatDateTime(activity.closeAt)}` : ''}
-          {activity.timeLimitSec ? ` · Tiempo recomendado: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
+          {activity.timeLimitSec ? ` · Tiempo límite: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
         </p>
         {activity.description && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{activity.description}</p>}
 
@@ -276,6 +315,11 @@ export function ActivityPlayer({
             {attemptsRemaining !== null && !exhausted && (
               <Badge variant="neutral">{attemptsRemaining === 0 ? 'Último intento en curso' : attemptsRemainingLabel(attemptsRemaining)}</Badge>
             )}
+            {remainingSec !== null && (
+              <span role="timer" aria-label="Tiempo restante">
+                <Badge variant={remainingSec <= 60 ? 'error' : 'warning'}>Tiempo restante: {formatCountdown(remainingSec)}</Badge>
+              </span>
+            )}
           </div>
         </div>
         {activeAttempt?.status === 'IN_PROGRESS' && (
@@ -289,7 +333,7 @@ export function ActivityPlayer({
         {activity.openAt ? `Abre ${formatDateTime(activity.openAt)} · ` : ''}
         {activity.dueAt ? `Entrega ${formatDateTime(activity.dueAt)}` : 'Sin fecha límite'}
         {activity.closeAt ? ` · Cierra ${formatDateTime(activity.closeAt)}` : ''}
-        {activity.timeLimitSec ? ` · Tiempo recomendado: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
+        {activity.timeLimitSec ? ` · Tiempo límite: ${Math.ceil(activity.timeLimitSec / 60)} min` : ''}
       </p>
       {activity.description && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{activity.description}</p>}
 
@@ -332,11 +376,20 @@ export function ActivityPlayer({
         confirmLabel="Sí, enviar"
         cancelLabel="Seguir editando"
         loading={isSubmitting}
-        onConfirm={() => void submitAttempt()}
+        onConfirm={() => void submitAttempt(false)}
         onCancel={() => { if (!isSubmitting) setConfirmOpen(false); }}
       />
     </section>
   );
+}
+
+/** mm:ss, or h:mm:ss from one hour up. */
+function formatCountdown(totalSec: number): string {
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
 }
 
 function AttemptForm({ activity, responses, onChange, onSave, onSubmit, saving, submitting, preview = false, previewGrade }: {
