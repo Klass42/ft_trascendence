@@ -386,6 +386,24 @@ org settings, invitations, member list and role changes; platform back-office cr
 orgs. Frontend: `/org` settings and members, plus the platform admin shell. Invitations accept into
 the right tenant without sharing passwords in chat.
 
+*How organizations are managed (demo path):*
+- **Create / edit / delete (platform SUPERADMIN, `/platform`).** Create an organization with its
+  first admin's e-mail (an invitation link is returned). The organization page shows usage against
+  plan limits (active users, cohorts, storage), the member list, and lets you edit name, logo,
+  colour, time zone, default language, plan and limits. Suspend cuts every session and live socket
+  (`organization.suspended`); delete removes the organization and its files.
+- **Add users (org ADMIN).** Invite by e-mail (`/admin/users/invite`), bulk CSV import
+  (`/admin/users/import`), or create the account directly (`/admin/users/new`).
+- **Remove users = deactivate.** *Quitar* in `/admin/users` or `/org/members` calls
+  `DELETE /api/organizations/:id/members/:userId`: it sets `User.deactivatedAt`, revokes sessions,
+  disconnects sockets (`user.deactivated`), and removes cohort enrolments and subject staff seats.
+  Submissions, grades and forum posts are kept; the person cannot sign in (password or Google)
+  until an admin clicks *Reactivar* (`POST .../members/:userId/reactivate`, which re-checks the
+  plan's user limit). Deactivated users do not count against `maxUsers`. Both lists filter by
+  account state (active / deactivated).
+- **Delete permanently (GDPR).** *Eliminar cuenta* on the user page deletes the account and its
+  history; it is a separate action with an irreversible-action warning.
+
 **OAuth 2.0 authentication (Google) (Minor).** *Justification:* students already have Google
 accounts; forcing a second password raises drop-off. *Implementation:* Passport Google strategy
 (`apps/backend/src/auth/google.strategy.ts`), start at `/api/auth/google`, callback with a signed
