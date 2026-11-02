@@ -103,6 +103,9 @@ const ResetPasswordPage = lazy(() =>
 const AdminUserEditPage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
 );
+const DesignSystemPage = lazy(() =>
+  import('@/features/design').then((m) => ({ default: m.DesignSystemPage }))
+);
 const OrgSettingsPage = lazy(() =>
   import('@/features/org').then((m) => ({ default: m.OrgSettingsPage }))
 );
@@ -366,6 +369,16 @@ const routes: RouteObject[] = [
           <Suspense fallback={<PageLoader />}>
             <FriendsPage />
           </Suspense>
+        ),
+      },
+      {
+        path: '/design',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <Suspense fallback={<PageLoader />}>
+              <DesignSystemPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {

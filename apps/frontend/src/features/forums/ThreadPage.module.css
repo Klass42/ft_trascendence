@@ -39,8 +39,8 @@
   vertical-align: middle;
   font-size: 11px;
   font-weight: 700;
-  color: #92400e;
-  background: #fdf0dc;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-muted);
   border-radius: 20px;
 }
 

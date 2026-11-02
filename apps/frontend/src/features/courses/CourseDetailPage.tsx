@@ -26,10 +26,8 @@ import { RosterPage } from './RosterPage';
 import { CourseResourcesTab } from '@/features/resources';
 import styles from './CourseDetailPage.module.css';
 
-const COURSE_COLORS = [
-  '#2563eb', '#0f766e', '#d97706', '#7c3aed',
-  '#dc2626', '#0891b2', '#4f46e5', '#db2777',
-];
+// Categorical palette lives in tokens.css (--color-course-1..8).
+const COURSE_COLORS = Array.from({ length: 8 }, (_, i) => `var(--color-course-${i + 1})`);
 
 function hashToColor(title: string): string {
   let hash = 0;
@@ -153,9 +151,9 @@ export function CourseDetailPage() {
             <button
               onClick={() => navigate(courseId ? `/courses/${courseId}` : '/courses')}
               style={{
-                background: 'rgba(0,0,0,.22)',
+                background: 'var(--color-scrim)',
                 border: 'none',
-                color: '#fff',
+                color: 'var(--color-text-inverse)',
                 fontSize: 12.5,
                 fontWeight: 600,
                 padding: '6px 12px',
@@ -210,7 +208,7 @@ export function CourseDetailPage() {
           <div style={{ marginTop: 8 }}>
             <span style={{
               fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-              background: 'rgba(0,0,0,.22)', padding: '3px 10px', borderRadius: 6,
+              background: 'var(--color-scrim)', padding: '3px 10px', borderRadius: 6,
             }}>
               {course.status === 'DRAFT' ? 'Borrador' : 'Archivada'}
             </span>
@@ -241,7 +239,7 @@ export function CourseDetailPage() {
                 style={{
                   width: `${pct}%`,
                   height: '100%',
-                  background: '#fff',
+                  background: 'var(--color-bg-secondary)',
                 }}
               />
             </div>

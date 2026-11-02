@@ -60,7 +60,7 @@ export function ResourceCard({ resource, showStatus = false, required = false, a
               {resourceTypeLabel(resource.type)}
             </span>
             {showStatus && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{resourceStatusLabel(resource.status)}</span>}
-            {required && <span style={{ fontSize: 11, color: '#b45309', fontWeight: 700 }}>Obligatorio</span>}
+            {required && <span style={{ fontSize: 11, color: 'var(--color-warning)', fontWeight: 700 }}>Obligatorio</span>}
           </div>
           <h3 style={{ margin: '5px 0 4px', fontSize: 16 }}>{resource.title}</h3>
           {resource.authors.length > 0 && <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{resource.authors.join(', ')}</div>}
