@@ -309,7 +309,7 @@ We claim **18 points** of modules (the subject requires **14**) plus **3 margin 
 | Advanced permissions / RBAC | Major | 2 | Jorge | `GlobalRole` + `PlatformRole`, guards, tenant-scoped queries — see below |
 | Organization system | Major | 2 | Jorge | orgs, invitations, members, platform back-office — see below |
 | Notification system | Minor | 1 | David | Persisted, real-time notifications for the create/update/delete actions of tasks, content, subjects, enrolments, forum, library and users (see below) |
-| Advanced analytics dashboard | Major | 2 | David | Interactive line/bar charts, live refresh, date range filter, CSV and PDF export (see below) |
+| Advanced analytics dashboard | Major | 2 | David | Interactive line, bar and donut charts, live refresh, filters (date range, activity type, subject), CSV and real PDF export (see below) |
 | File upload | Minor | 1 | Aloiki | `files` module with a storage driver (S3/Garage or local disk), size limits (10 MB, avatars 2 MB), MIME + magic-bytes validation, org-scoped downloads; used by the library (folders, resources), lessons, tasks and avatars |
 | OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | Passport Google strategy, link-by-email, signed `state` — see below |
 | Custom-made design system | Minor | 1 (margin, not in the 18 total) | Aloiki | 19 reusable components in `apps/frontend/src/components/ui`, design tokens in `tokens.css` (palette, Hanken Grotesk scale, spacing, radius, shadows), `lucide-react` icons; live showcase at `/design` (admin) — see below |
@@ -338,12 +338,22 @@ mark-all-read.
 **Advanced analytics dashboard (Major).** *Justification:* teachers need to see how a course is
 going without opening every attempt. *Implementation:* `apps/backend/src/analytics` aggregates
 attempts with `groupBy`/`aggregate` (no N+1), always filtered by organization and gated to the
-staff of the subject; grades use each student's best graded attempt normalised to the activity's
-maximum score. The frontend draws hand-made SVG line and bar charts with tooltips (we avoided a
-chart library that still depends on `findDOMNode`, removed in React 19), a date-range filter
-(maximum 366 days), CSV export that honours the selected range and a print stylesheet for PDF.
-When a student submits or a teacher grades an attempt, the backend emits an event and the open
-dashboard refreshes by itself.
+staff of the subject; delivery and grades are counted per (student, activity) pair with the same
+definition as the gradebook (best graded attempt normalised to the activity's maximum score,
+students = cohort members who are not staff of the subject). *Charts:* hand-made SVG (we avoided
+a chart library that still depends on `findDOMNode`, removed in React 19), all with tooltips,
+keyboard focus and accessible labels: a line chart (submissions per day), a bar chart (grade
+histogram) and a donut ("Estado de entregas": graded / awaiting grading / not delivered).
+*Filters:* one shared bar drives the KPIs, the three charts and both exports: subject, date range
+(maximum 366 days, validated in the DTO and in the UI) and activity type (quiz, listening,
+speaking). With a range, an attempt counts when it was submitted inside it, lesson completions and
+forum posts count by their own date; with no range the figures cover the whole subject and match
+the gradebook. *Live refresh:* when a student submits or a teacher grades an attempt, the backend
+emits `analytics:update` and the open dashboard refetches by itself. *Export:* "Exportar CSV"
+(server side, with the filters in the first rows) and "Descargar PDF", generated in the browser
+with `jspdf` + `svg2pdf.js` (MIT, bundled and loaded on demand, so no CDN and nothing that the
+`script-src 'self'` policy would block): title, subject, filters, KPIs and the three charts as
+vector graphics.
 
 **Monitoring system (Major).** *Justification:* the stack has 12 containers; without metrics and
 alerts a failing service is found by users, not by the team. *Implementation:* the NestJS backend

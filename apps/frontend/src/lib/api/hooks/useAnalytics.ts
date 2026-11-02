@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../client';
 import { useAuth } from '../auth-context';
 import type {
+  AnalyticsFilters,
   AnalyticsOverviewDTO,
   GradeDistributionDTO,
   SubmissionsOverTimeDTO,
@@ -66,40 +67,52 @@ function useAnalyticsResource<T>(
   return { data, isLoading, error, refetch };
 }
 
-/** Course KPI headline (students, submissions, grades, forum activity). */
-export function useAnalyticsOverview(courseId: string | null) {
+/** `?from=…&to=…&type=…` for the filters that are set (empty string if none). */
+function filtersQuery({ from, to, type }: AnalyticsFilters): string {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (type) params.set('type', type);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+function analyticsPath(
+  courseId: string | null,
+  resource: string,
+  filters: AnalyticsFilters,
+): string | null {
+  return courseId ? `/subjects/${courseId}/analytics/${resource}${filtersQuery(filters)}` : null;
+}
+
+/**
+ * Course KPI headline (students, submissions, grades, forum activity) under
+ * the same range / type filters as the charts. The query string is rebuilt
+ * whenever a filter changes, which re-triggers the fetch.
+ */
+export function useAnalyticsOverview(courseId: string | null, filters: AnalyticsFilters = {}) {
   return useAnalyticsResource<AnalyticsOverviewDTO>(
     courseId,
-    courseId ? `/subjects/${courseId}/analytics/overview` : null,
+    analyticsPath(courseId, 'overview', filters),
   );
 }
 
 /**
  * Daily submission counts over `[from, to]` (ISO dates, both optional — the
- * backend defaults to the last 30 days). The query string is rebuilt whenever
- * the range changes, which re-triggers the fetch.
+ * backend defaults to the last 30 days).
  */
-export function useSubmissionsOverTime(
-  courseId: string | null,
-  from?: string,
-  to?: string,
-) {
-  let path: string | null = null;
-  if (courseId) {
-    const params = new URLSearchParams();
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
-    const qs = params.toString();
-    path = `/subjects/${courseId}/analytics/submissions-over-time${qs ? `?${qs}` : ''}`;
-  }
-  return useAnalyticsResource<SubmissionsOverTimeDTO>(courseId, path);
+export function useSubmissionsOverTime(courseId: string | null, filters: AnalyticsFilters = {}) {
+  return useAnalyticsResource<SubmissionsOverTimeDTO>(
+    courseId,
+    analyticsPath(courseId, 'submissions-over-time', filters),
+  );
 }
 
 /** Normalised histogram of graded scores (ten 10-point bands). */
-export function useGradeDistribution(courseId: string | null) {
+export function useGradeDistribution(courseId: string | null, filters: AnalyticsFilters = {}) {
   return useAnalyticsResource<GradeDistributionDTO>(
     courseId,
-    courseId ? `/subjects/${courseId}/analytics/grade-distribution` : null,
+    analyticsPath(courseId, 'grade-distribution', filters),
   );
 }
 
@@ -111,16 +124,11 @@ export function useGradeDistribution(courseId: string | null) {
  */
 export async function downloadAnalyticsCsv(
   courseId: string,
-  from?: string,
-  to?: string,
+  filters: AnalyticsFilters = {},
   filename = `analytics-${courseId}.csv`,
 ): Promise<void> {
-  const params = new URLSearchParams();
-  if (from) params.set('from', from);
-  if (to) params.set('to', to);
-  const query = params.toString();
   const csv = await apiClient.get<string>(
-    `/subjects/${courseId}/analytics/export.csv${query ? `?${query}` : ''}`,
+    `/subjects/${courseId}/analytics/export.csv${filtersQuery(filters)}`,
   );
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);

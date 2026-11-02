@@ -1,5 +1,5 @@
-import { ForbiddenException } from '@nestjs/common';
-import { AttemptStatus, PublicationStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ActivityType, AttemptStatus, PublicationStatus } from '@prisma/client';
 import { accessFromPrisma } from '../test/access-from-prisma';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AssignmentsService } from '../assignments/assignments.service';
@@ -16,10 +16,10 @@ describe('AnalyticsService', () => {
   const STUDENT = 'user-lucia-001';
   const OTHER_STUDENT = 'user-sam-001';
   const activities = [
-    { id: 'activity-1', maxScore: 100, status: PublicationStatus.PUBLISHED },
-    { id: 'activity-2', maxScore: 10, status: PublicationStatus.PUBLISHED },
-    { id: 'archived-1', maxScore: 20, status: PublicationStatus.ARCHIVED },
-    { id: 'draft-1', maxScore: 100, status: PublicationStatus.DRAFT },
+    { id: 'activity-1', maxScore: 100, status: PublicationStatus.PUBLISHED, type: ActivityType.QUIZ },
+    { id: 'activity-2', maxScore: 10, status: PublicationStatus.PUBLISHED, type: ActivityType.SPEAKING },
+    { id: 'archived-1', maxScore: 20, status: PublicationStatus.ARCHIVED, type: ActivityType.QUIZ },
+    { id: 'draft-1', maxScore: 100, status: PublicationStatus.DRAFT, type: ActivityType.QUIZ },
   ];
   // Cohort members: two students plus a teacher and an admin who also hold a
   // membership row. Only the teacher is SubjectStaff of the subject.
@@ -103,9 +103,18 @@ describe('AnalyticsService', () => {
       attempts.filter((attempt) =>
         where.activityId.in.includes(attempt.activityId) &&
         where.userId.in.includes(attempt.userId) &&
-        where.status.in.includes(attempt.status),
+        where.status.in.includes(attempt.status) &&
+        // Optional submittedAt window (the range filter).
+        (!where.submittedAt || (
+          attempt.submittedAt != null &&
+          (!where.submittedAt.gte || attempt.submittedAt >= where.submittedAt.gte) &&
+          (!where.submittedAt.lte || attempt.submittedAt <= where.submittedAt.lte)
+        )),
       ),
     );
+    const lessonCompletionCount = jest.fn(async () => 3);
+    const forumThreadCount = jest.fn(async () => 1);
+    const forumPostCount = jest.fn(async () => 2);
     const prisma: any = {
       course: {
         findUnique: async ({ where }: any) => where.id === SUBJECT_ID
@@ -129,6 +138,7 @@ describe('AnalyticsService', () => {
       activity: {
         findMany: async ({ where }: any) => activities.filter((activity) =>
           where.status.in.includes(activity.status) &&
+          (!where.type || where.type === activity.type) &&
           where.subjectId === SUBJECT_ID &&
           where.subject.organizationId === ORG_ID,
         ),
@@ -149,15 +159,18 @@ describe('AnalyticsService', () => {
           })),
       },
       lesson: { count: async () => 4 },
-      lessonCompletion: { count: async () => 3 },
-      forumThread: { count: async () => 1 },
-      forumPost: { count: async () => 2 },
+      lessonCompletion: { count: lessonCompletionCount },
+      forumThread: { count: forumThreadCount },
+      forumPost: { count: forumPostCount },
     };
     return {
       prisma: prisma as PrismaService,
       access: accessFromPrisma(prisma),
       groupBy,
       attemptFindMany,
+      lessonCompletionCount,
+      forumThreadCount,
+      forumPostCount,
     };
   }
 
@@ -275,8 +288,7 @@ describe('AnalyticsService', () => {
     const result = await new AnalyticsService(prisma, access).getSubmissionsOverTime(
       SUBJECT_ID,
       TEACHER,
-      '2025-06-02',
-      '2025-06-04',
+      { from: '2025-06-02', to: '2025-06-04' },
     );
 
     // Staff and draft attempts are excluded from the series too.
@@ -303,16 +315,222 @@ describe('AnalyticsService', () => {
     const result = await new AnalyticsService(prisma, access).getExportCsv(
       SUBJECT_ID,
       TEACHER,
-      '2025-06-03',
-      '2025-06-03',
+      { from: '2025-06-03', to: '2025-06-03' },
     );
 
     expect(result.csv).toContain("Resumen,Asignatura,'=2+3");
+    expect(result.csv).toContain('Filtros,Rango,2025-06-03 / 2025-06-03');
+    expect(result.csv).toContain('Filtros,Tipo de actividad,Todos');
     expect(result.csv).toContain('Entregas por día,2025-06-03,3');
-    expect(result.csv).toContain('Resumen,Entregas,4/6');
-    expect(result.csv).toContain('Resumen,Notas calificadas,3');
-    expect(result.csv).toContain('Resumen,Nota media (%),63.3');
+    // The KPIs follow the range too: Sam/activity-2, Lucía/activity-2 and Lucía/archived.
+    expect(result.csv).toContain('Resumen,Entregas,3/6');
+    expect(result.csv).toContain('Resumen,Notas calificadas,2');
+    expect(result.csv).toContain('Resumen,Entregas por calificar,1');
+    expect(result.csv).toContain('Resumen,Sin entregar,3');
+    expect(result.csv).toContain('Resumen,Nota media (%),50');
+    expect(result.csv).toContain('50-60 %,2');
     expect(result.csv).not.toContain('Entregas por día,2025-06-01');
+  });
+
+  it('applies the activity type to the CSV and labels it', async () => {
+    const { prisma, access } = build();
+    const result = await new AnalyticsService(prisma, access).getExportCsv(
+      SUBJECT_ID,
+      TEACHER,
+      { type: ActivityType.SPEAKING, from: '2025-06-01', to: '2025-06-30' },
+    );
+
+    expect(result.csv).toContain('Filtros,Tipo de actividad,Expresión oral');
+    expect(result.csv).toContain('Resumen,Tareas,1');
+    expect(result.csv).toContain('Resumen,Entregas,2/2');
+    expect(result.csv).toContain('Entregas por día,2025-06-03,2');
+  });
+
+  describe('date range on KPIs and grade distribution', () => {
+    it('counts only attempts submitted inside the range, per (student, task) pair', async () => {
+      const { prisma, access, attemptFindMany } = build();
+      const service = new AnalyticsService(prisma, access);
+
+      // 2 June: only Lucía's second graded attempt on activity-1 (90%).
+      const overview = await service.getOverview(SUBJECT_ID, TEACHER, {
+        from: '2025-06-02',
+        to: '2025-06-02',
+      });
+
+      expect(overview.filters).toEqual({ from: '2025-06-02', to: '2025-06-02', type: null });
+      // Expected pairs do not depend on the range; delivered ones do.
+      expect(overview.students).toBe(2);
+      expect(overview.assignments).toBe(3);
+      expect(overview.submissions).toEqual({
+        total: 1,
+        expected: 6,
+        graded: 1,
+        pending: 0,
+        rate: 1 / 6,
+      });
+      expect(overview.averageGrade).toBe(90);
+      expect(attemptFindMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          submittedAt: {
+            gte: new Date('2025-06-02T00:00:00.000Z'),
+            lte: new Date('2025-06-02T23:59:59.999Z'),
+          },
+        }),
+      }));
+    });
+
+    it('picks the best graded attempt among those inside the range', async () => {
+      const { prisma, access } = build();
+      // Range covers only a1 (80%) of Lucía's two graded attempts on activity-1.
+      const overview = await new AnalyticsService(prisma, access).getOverview(
+        SUBJECT_ID,
+        TEACHER,
+        { from: '2025-06-01', to: '2025-06-01' },
+      );
+      expect(overview.submissions).toMatchObject({ total: 1, graded: 1, pending: 0 });
+      expect(overview.averageGrade).toBe(80);
+    });
+
+    it('gives an empty range zero delivery and no average', async () => {
+      const { prisma, access } = build();
+      const overview = await new AnalyticsService(prisma, access).getOverview(
+        SUBJECT_ID,
+        TEACHER,
+        { from: '2024-01-01', to: '2024-01-31' },
+      );
+      expect(overview.submissions).toEqual({
+        total: 0, expected: 6, graded: 0, pending: 0, rate: 0,
+      });
+      expect(overview.averageGrade).toBeNull();
+    });
+
+    it('keeps the grade distribution equal to the graded pairs of the same range', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+      const filters = { from: '2025-06-03', to: '2025-06-03' };
+
+      const distribution = await service.getGradeDistribution(SUBJECT_ID, TEACHER, filters);
+      const overview = await service.getOverview(SUBJECT_ID, TEACHER, filters);
+
+      // Sam's 5/10 and Lucía's archived 10/20; her 90% attempt is outside the range.
+      expect(distribution.total).toBe(2);
+      expect(distribution.total).toBe(overview.submissions.graded);
+      expect(distribution.buckets[5]).toMatchObject({ label: '50-60', count: 2 });
+      expect(distribution.buckets[9].count).toBe(0);
+    });
+
+    it('treats a lone bound as open-ended', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+
+      const since = await service.getOverview(SUBJECT_ID, TEACHER, { from: '2025-06-03' });
+      expect(since.filters).toEqual({ from: '2025-06-03', to: null, type: null });
+      expect(since.submissions.total).toBe(3);
+
+      const until = await service.getOverview(SUBJECT_ID, TEACHER, { to: '2025-06-01' });
+      expect(until.filters).toEqual({ from: null, to: '2025-06-01', type: null });
+      expect(until.submissions.total).toBe(1);
+    });
+
+    it('applies the range to lesson completions and forum activity', async () => {
+      const { prisma, access, lessonCompletionCount, forumThreadCount, forumPostCount } =
+        build();
+      await new AnalyticsService(prisma, access).getOverview(SUBJECT_ID, TEACHER, {
+        from: '2025-06-01',
+        to: '2025-06-30',
+      });
+      const window = {
+        gte: new Date('2025-06-01T00:00:00.000Z'),
+        lte: new Date('2025-06-30T23:59:59.999Z'),
+      };
+      expect(lessonCompletionCount).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ completedAt: window }) }),
+      );
+      expect(forumThreadCount).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ createdAt: window }) }),
+      );
+      expect(forumPostCount).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ createdAt: window }) }),
+      );
+    });
+
+    it('does not filter lessons or forum when no range is set', async () => {
+      const { prisma, access, lessonCompletionCount, forumPostCount } = build();
+      await new AnalyticsService(prisma, access).getOverview(SUBJECT_ID, TEACHER);
+      expect((lessonCompletionCount.mock.calls[0] as any)[0].where.completedAt).toBeUndefined();
+      expect((forumPostCount.mock.calls[0] as any)[0].where.createdAt).toBeUndefined();
+    });
+
+    it('rejects a reversed or over-long range on the aggregates', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+      await expect(
+        service.getOverview(SUBJECT_ID, TEACHER, { from: '2025-06-02', to: '2025-06-01' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.getGradeDistribution(SUBJECT_ID, TEACHER, { from: '2024-01-01', to: '2025-06-01' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('activity type filter', () => {
+    it('limits KPIs to the activities of that type', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+
+      // Only activity-2 is SPEAKING: Sam graded (50%) and Lucía pending.
+      const speaking = await service.getOverview(SUBJECT_ID, TEACHER, {
+        type: ActivityType.SPEAKING,
+      });
+      expect(speaking.filters.type).toBe('SPEAKING');
+      expect(speaking.assignments).toBe(1);
+      expect(speaking.submissions).toEqual({
+        total: 2, expected: 2, graded: 1, pending: 1, rate: 1,
+      });
+      expect(speaking.averageGrade).toBe(50);
+
+      // Quizzes: activity-1 + archived-1 (drafts never count).
+      const quiz = await service.getOverview(SUBJECT_ID, TEACHER, { type: ActivityType.QUIZ });
+      expect(quiz.assignments).toBe(2);
+      expect(quiz.submissions).toMatchObject({ total: 2, expected: 4, graded: 2 });
+      expect(quiz.averageGrade).toBe(70);
+    });
+
+    it('is a no-op for a type with no activities', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+      const listening = await service.getOverview(SUBJECT_ID, TEACHER, {
+        type: ActivityType.LISTENING,
+      });
+      expect(listening.assignments).toBe(0);
+      expect(listening.submissions).toEqual({
+        total: 0, expected: 0, graded: 0, pending: 0, rate: 0,
+      });
+      const distribution = await service.getGradeDistribution(SUBJECT_ID, TEACHER, {
+        type: ActivityType.LISTENING,
+      });
+      expect(distribution.total).toBe(0);
+    });
+
+    it('filters the grade distribution and the daily series', async () => {
+      const { prisma, access } = build();
+      const service = new AnalyticsService(prisma, access);
+      const filters = { type: ActivityType.QUIZ, from: '2025-06-01', to: '2025-06-03' };
+
+      const distribution = await service.getGradeDistribution(SUBJECT_ID, TEACHER, filters);
+      expect(distribution.total).toBe(2);
+      expect(distribution.buckets[9]).toMatchObject({ count: 1 });
+      expect(distribution.buckets[5]).toMatchObject({ count: 1 });
+
+      const series = await service.getSubmissionsOverTime(SUBJECT_ID, TEACHER, filters);
+      // a1, a2 (activity-1) and a5 (archived-1); the SPEAKING attempts are out.
+      expect(series.total).toBe(3);
+      expect(series.series).toEqual([
+        { date: '2025-06-01', count: 1 },
+        { date: '2025-06-02', count: 1 },
+        { date: '2025-06-03', count: 1 },
+      ]);
+    });
   });
 
   it('blocks students and users without subject membership', async () => {

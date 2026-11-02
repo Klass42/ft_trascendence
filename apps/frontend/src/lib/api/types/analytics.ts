@@ -8,14 +8,28 @@
 // Overview / KPIs
 // =============================================================================
 
+/** Activity type accepted by the `type` filter (same values as the backend enum). */
+export type AnalyticsActivityType = 'QUIZ' | 'LISTENING' | 'SPEAKING';
+
+/** Filters shared by every analytics endpoint; empty values mean "no filter". */
+export interface AnalyticsFilters {
+  /** Inclusive UTC day, `YYYY-MM-DD`. */
+  from?: string;
+  /** Inclusive UTC day, `YYYY-MM-DD`. */
+  to?: string;
+  type?: AnalyticsActivityType;
+}
+
 export interface AnalyticsOverviewDTO {
   course: { id: string; title: string };
+  /** Filters the backend actually applied (null = not filtered). */
+  filters: { from: string | null; to: string | null; type: AnalyticsActivityType | null };
   students: number;
   /** Gradable (non-draft) activities; retained under its legacy API key. */
   assignments: number;
   lessons: number;
   submissions: {
-    /** (student, activity) pairs with a SUBMITTED or GRADED attempt. */
+    /** (student, activity) pairs with a SUBMITTED or GRADED attempt (inside the range, if any). */
     total: number;
     /** students × gradable activities. */
     expected: number;

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AttemptStatus } from '@prisma/client';
+import { ActivityType, AttemptStatus } from '@prisma/client';
 import { CourseAccessService } from '../courses/course-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { escapeCsvField } from '../common/csv-field';
@@ -14,6 +14,29 @@ const SUBMITTED_STATUSES = [AttemptStatus.SUBMITTED, AttemptStatus.GRADED];
 const GRADE_BUCKETS = 10;
 const DEFAULT_RANGE_DAYS = 30;
 const DAY_MS = 86_400_000;
+
+const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  QUIZ: 'Cuestionario',
+  LISTENING: 'Comprensión auditiva',
+  SPEAKING: 'Expresión oral',
+};
+
+/**
+ * Filters every aggregate honours (same names as the query string).
+ * - `from`/`to`: only attempts SUBMITTED inside the inclusive UTC-day range
+ *   count; lesson completions and forum threads/posts are counted by their own
+ *   date. Without a range the figures cover the whole subject (and match the
+ *   gradebook). The 366-day cap applies when both bounds are given.
+ * - `type`: only activities of that type count (lessons and forum are not
+ *   activities, so they ignore it).
+ */
+export interface AnalyticsFilters {
+  from?: string;
+  to?: string;
+  type?: ActivityType;
+}
+
+type DateWindow = { gte?: Date; lte?: Date };
 
 @Injectable()
 export class AnalyticsService {
@@ -30,13 +53,20 @@ export class AnalyticsService {
   /**
    * Course KPIs, scoped to the subject's organization and staff gate. Delivery
    * and grades are counted per (student, gradable activity) pair with the same
-   * rules as the gradebook (see `activities/gradable-activities.ts`).
+   * rules as the gradebook (see `activities/gradable-activities.ts`); with a
+   * range, a pair counts when it has an attempt submitted inside it, and its
+   * grade is the best graded attempt among those.
    */
-  async getOverview(subjectId: string, actingUserId: string) {
+  async getOverview(
+    subjectId: string,
+    actingUserId: string,
+    filters: AnalyticsFilters = {},
+  ) {
     const subject = await this.requireStaff(subjectId, actingUserId);
+    const window = optionalWindow(filters.from, filters.to);
     const [results, lessonCount, completionCount, threadCount, postCount] =
       await Promise.all([
-        this.subjectResults(subject),
+        this.subjectResults(subject, filters.type, window),
         this.prisma.lesson.count({
           where: {
             section: {
@@ -47,6 +77,7 @@ export class AnalyticsService {
         }),
         this.prisma.lessonCompletion.count({
           where: {
+            ...(window && { completedAt: window }),
             lesson: {
               section: {
                 subjectId,
@@ -56,10 +87,15 @@ export class AnalyticsService {
           },
         }),
         this.prisma.forumThread.count({
-          where: { subjectId, subject: { organizationId: subject.organizationId } },
+          where: {
+            subjectId,
+            subject: { organizationId: subject.organizationId },
+            ...(window && { createdAt: window }),
+          },
         }),
         this.prisma.forumPost.count({
           where: {
+            ...(window && { createdAt: window }),
             thread: {
               subjectId,
               subject: { organizationId: subject.organizationId },
@@ -76,6 +112,11 @@ export class AnalyticsService {
 
     return {
       course: { id: subject.id, title: subject.title },
+      filters: {
+        from: window?.gte ? dayKey(window.gte) : null,
+        to: window?.lte ? dayKey(window.lte) : null,
+        type: filters.type ?? null,
+      },
       students: studentIds.length,
       // Keep the existing response key consumed by the analytics frontend.
       assignments: activities.length,
@@ -103,13 +144,12 @@ export class AnalyticsService {
   async getSubmissionsOverTime(
     subjectId: string,
     actingUserId: string,
-    from?: string,
-    to?: string,
+    filters: AnalyticsFilters = {},
   ) {
     const subject = await this.requireStaff(subjectId, actingUserId);
-    const { start, end } = resolveRange(from, to);
+    const { start, end } = resolveRange(filters.from, filters.to);
     const [activities, studentIds] = await Promise.all([
-      this.gradableActivities(subject),
+      this.gradableActivities(subject, filters.type),
       this.studentIds(subject),
     ]);
     const submittedGroups = activities.length && studentIds.length
@@ -151,9 +191,17 @@ export class AnalyticsService {
   }
 
   /** Grade histogram of the same per-(student, activity) grades behind the average. */
-  async getGradeDistribution(subjectId: string, actingUserId: string) {
+  async getGradeDistribution(
+    subjectId: string,
+    actingUserId: string,
+    filters: AnalyticsFilters = {},
+  ) {
     const subject = await this.requireStaff(subjectId, actingUserId);
-    const { summary } = await this.subjectResults(subject);
+    const { summary } = await this.subjectResults(
+      subject,
+      filters.type,
+      optionalWindow(filters.from, filters.to),
+    );
     const percents = summary.percents;
 
     const buckets = Array.from({ length: GRADE_BUCKETS }, (_, index) => ({
@@ -170,21 +218,23 @@ export class AnalyticsService {
     return { total: percents.length, buckets };
   }
 
-  /** Export the current overview, full grade histogram, and selected time range. */
+  /** Export the overview, grade histogram and daily series under the same filters as the dashboard. */
   async getExportCsv(
     subjectId: string,
     actingUserId: string,
-    from?: string,
-    to?: string,
+    filters: AnalyticsFilters = {},
   ) {
     const [overview, distribution, overTime] = await Promise.all([
-      this.getOverview(subjectId, actingUserId),
-      this.getGradeDistribution(subjectId, actingUserId),
-      this.getSubmissionsOverTime(subjectId, actingUserId, from, to),
+      this.getOverview(subjectId, actingUserId, filters),
+      this.getGradeDistribution(subjectId, actingUserId, filters),
+      this.getSubmissionsOverTime(subjectId, actingUserId, filters),
     ]);
+    const { from, to, type } = overview.filters;
 
     const rows: string[][] = [
       ['Sección', 'Métrica', 'Valor'],
+      ['Filtros', 'Rango', from || to ? `${from ?? '…'} / ${to ?? '…'}` : 'Toda la asignatura'],
+      ['Filtros', 'Tipo de actividad', type ? ACTIVITY_TYPE_LABELS[type] : 'Todos'],
       ['Resumen', 'Asignatura', overview.course.title],
       ['Resumen', 'Alumnos', String(overview.students)],
       ['Resumen', 'Tareas', String(overview.assignments)],
@@ -192,6 +242,12 @@ export class AnalyticsService {
       ['Resumen', 'Entregas', `${overview.submissions.total}/${overview.submissions.expected}`],
       ['Resumen', 'Tasa de entrega (%)', String(pct(overview.submissions.rate))],
       ['Resumen', 'Notas calificadas', String(overview.submissions.graded)],
+      ['Resumen', 'Entregas por calificar', String(overview.submissions.pending)],
+      [
+        'Resumen',
+        'Sin entregar',
+        String(overview.submissions.expected - overview.submissions.total),
+      ],
       ['Resumen', 'Nota media (%)', overview.averageGrade == null ? '' : String(overview.averageGrade)],
       ['Resumen', 'Finalización de lecciones (%)', String(pct(overview.lessonsCompletion.rate))],
       ['Resumen', 'Hilos de foro', String(overview.forum.threads)],
@@ -211,9 +267,12 @@ export class AnalyticsService {
     };
   }
 
-  private gradableActivities(subject: SubjectScope) {
+  private gradableActivities(subject: SubjectScope, type?: ActivityType) {
     return this.prisma.activity.findMany({
-      where: gradableActivitiesWhere(subject.id, subject.organizationId),
+      where: {
+        ...gradableActivitiesWhere(subject.id, subject.organizationId),
+        ...(type && { type }),
+      },
       select: { id: true, maxScore: true },
     });
   }
@@ -227,9 +286,13 @@ export class AnalyticsService {
   }
 
   /** Gradable activities, students and their delivery/grade summary for a subject. */
-  private async subjectResults(subject: SubjectScope) {
+  private async subjectResults(
+    subject: SubjectScope,
+    type?: ActivityType,
+    window?: DateWindow,
+  ) {
     const [activities, studentIds] = await Promise.all([
-      this.gradableActivities(subject),
+      this.gradableActivities(subject, type),
       this.studentIds(subject),
     ]);
     const attempts = activities.length && studentIds.length
@@ -238,6 +301,7 @@ export class AnalyticsService {
             activityId: { in: activities.map((activity) => activity.id) },
             userId: { in: studentIds },
             status: { in: SUBMITTED_STATUSES },
+            ...(window && { submittedAt: window }),
             activity: {
               subjectId: subject.id,
               subject: { organizationId: subject.organizationId },
@@ -306,4 +370,24 @@ function resolveRange(from?: string, to?: string): { start: Date; end: Date } {
     start: startOfDay(start),
     end: new Date(`${dayKey(end)}T23:59:59.999Z`),
   };
+}
+
+/**
+ * Window for the KPI/histogram aggregates: undefined with no bounds (whole
+ * subject), otherwise inclusive UTC days. Both bounds go through the same
+ * validation as the time series (366-day cap); a lone bound is open-ended.
+ */
+function optionalWindow(from?: string, to?: string): DateWindow | undefined {
+  if (!from && !to) return undefined;
+  if (from && to) {
+    const { start, end } = resolveRange(from, to);
+    return { gte: start, lte: end };
+  }
+  const bound = new Date((from ?? to) as string);
+  if (!Number.isFinite(bound.getTime())) {
+    throw new BadRequestException('Las fechas del rango no son válidas.');
+  }
+  return from
+    ? { gte: startOfDay(bound) }
+    : { lte: new Date(`${dayKey(bound)}T23:59:59.999Z`) };
 }

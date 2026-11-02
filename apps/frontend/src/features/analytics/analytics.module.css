@@ -124,12 +124,32 @@
   color: var(--color-text-primary);
 }
 
-.rangeControls {
-  margin-left: auto;
+.filters {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 14px;
   flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: 13px;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reportTitle {
+  margin-bottom: 8px;
+}
+
+.filterSummary {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
 .dateInput {
@@ -147,10 +167,14 @@
   color: var(--color-text-muted);
 }
 
-.rangeNote {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin: 0 0 12px;
+.filterSelect {
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: inherit;
 }
 
 /* ===== Chart primitives ===== */
@@ -257,35 +281,106 @@
   color: var(--color-text-muted);
 }
 
-/* ===== Print (Export PDF via the browser) =====
- * Scoped to a body class we toggle only while printing this dashboard, so a
- * normal Ctrl+P elsewhere is unaffected. Everything is hidden, then just the
- * print area is revealed and pinned to the top-left of the page. */
-@media print {
-  :global(body.analytics-printing) * {
-    visibility: hidden !important;
-  }
+/* ===== Delivery-status donut ===== */
 
-  :global(body.analytics-printing) .printArea,
-  :global(body.analytics-printing) .printArea * {
-    visibility: visible !important;
-  }
+.donutLayout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
 
-  :global(body.analytics-printing) .printArea {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0;
-    max-width: none;
-  }
+.donutWrap {
+  position: relative;
+  width: 240px;
+  max-width: 100%;
+}
 
-  .noPrint {
-    display: none !important;
-  }
+.donut {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 
-  .card,
-  .kpi {
-    break-inside: avoid;
-  }
+.slice {
+  stroke: var(--color-bg-secondary);
+  stroke-width: 2;
+  cursor: pointer;
+  outline: none;
+  transition: opacity var(--transition-fast);
+}
+
+.slice:focus-visible {
+  stroke: var(--color-text-primary);
+  stroke-width: 3;
+}
+
+.sliceActive {
+  opacity: 0.82;
+}
+
+.sliceGraded,
+.swatchGraded {
+  fill: var(--color-success);
+  background: var(--color-success);
+}
+
+.slicePending,
+.swatchPending {
+  fill: var(--color-warning);
+  background: var(--color-warning);
+}
+
+.sliceUndelivered,
+.swatchUndelivered {
+  fill: var(--color-text-muted);
+  background: var(--color-text-muted);
+}
+
+.donutTotal {
+  fill: var(--color-text-primary);
+  font-size: 30px;
+  font-weight: 800;
+  font-family: var(--font-sans);
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.legendItemActive {
+  background: var(--color-bg-tertiary);
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.legendLabel {
+  flex: 1;
+}
+
+.legendValue {
+  font-weight: 700;
+  color: var(--color-text-primary);
 }

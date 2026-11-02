@@ -6,9 +6,15 @@ interface Props {
   overview: AnalyticsOverviewDTO;
 }
 
-/** The row of headline KPI tiles derived from the overview response. */
-export function KpiTiles({ overview }: Props) {
-  const tiles: Array<{ label: string; value: string; hint?: string }> = [
+export interface KpiTile {
+  label: string;
+  value: string;
+  hint?: string;
+}
+
+/** The headline KPI tiles derived from the overview response (also used by the PDF). */
+export function buildKpiTiles(overview: AnalyticsOverviewDTO): KpiTile[] {
+  return [
     {
       label: 'Alumnos',
       value: String(overview.students),
@@ -42,10 +48,13 @@ export function KpiTiles({ overview }: Props) {
       hint: plural(overview.forum.threads, 'hilo', 'hilos'),
     },
   ];
+}
 
+/** The row of headline KPI tiles. */
+export function KpiTiles({ overview }: Props) {
   return (
     <div className={styles.kpiRow}>
-      {tiles.map((t) => (
+      {buildKpiTiles(overview).map((t) => (
         <div key={t.label} className={styles.kpi}>
           <p className={styles.kpiLabel}>{t.label}</p>
           <div className={styles.kpiValue}>{t.value}</div>
