@@ -11,6 +11,8 @@ import type { PrismaClientKnownRequestError } from '@prisma/client/runtime/libra
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { USER_DEACTIVATED } from '../realtime/realtime.events';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, Prisma } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
@@ -48,6 +50,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly files?: FilesService,
+    @Optional() private readonly events?: EventEmitter2,
   ) {}
 
   async findAll(organizationId: string) {
@@ -138,6 +141,7 @@ export class UsersService {
     if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
     if (id === callerUserId) throw new BadRequestException('No puedes eliminar tu propia cuenta.');
     await this.prisma.user.delete({ where: { id } });
+    this.events?.emit(USER_DEACTIVATED, { userId: id });
     await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'USER_DELETED', organizationId, metadata: { userId: id } } });
     await this.notifications?.emitMany(
       async () => {
@@ -206,6 +210,7 @@ export class UsersService {
       }
     }
     await this.prisma.user.delete({ where: { id: userId } });
+    this.events?.emit(USER_DEACTIVATED, { userId });
     if (user.organizationId) {
       await this.prisma.auditLog.create({
         data: { actorId: null, action: 'USER_SELF_DELETED', organizationId: user.organizationId, metadata: { userId } },
