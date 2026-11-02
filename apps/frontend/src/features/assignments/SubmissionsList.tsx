@@ -69,7 +69,7 @@ export function SubmissionsList({ assignment }: SubmissionsListProps) {
                 {chip.label}
               </span>
               {s.status === 'GRADED' && s.score != null && (
-                <span style={{ fontSize: 15, fontWeight: 800, color: '#0f766e' }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-success)' }}>
                   {s.score} / {assignment.maxScore}
                 </span>
               )}

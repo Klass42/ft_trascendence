@@ -11,6 +11,8 @@ import type { PrismaClientKnownRequestError } from '@prisma/client/runtime/libra
 import * as argon2 from 'argon2';
 import { PrismaService } from '@/prisma/prisma.service';
 import { FilesService } from '../files/files.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { USER_DEACTIVATED } from '../realtime/realtime.events';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, Prisma } from '@prisma/client';
 import type { AuthUser } from '@/common/auth';
@@ -48,6 +50,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly files?: FilesService,
+    @Optional() private readonly events?: EventEmitter2,
   ) {}
 
   async findAll(organizationId: string) {
@@ -148,6 +151,7 @@ export class UsersService {
     if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
     if (id === callerUserId) throw new BadRequestException('No puedes eliminar tu propia cuenta.');
     await this.prisma.user.delete({ where: { id } });
+    this.events?.emit(USER_DEACTIVATED, { userId: id });
     await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'USER_DELETED', organizationId, metadata: { userId: id } } });
     await this.notifications?.emitMany(
       async () => {
@@ -227,6 +231,7 @@ export class UsersService {
       }
     }
     await this.prisma.user.delete({ where: { id: userId } });
+    this.events?.emit(USER_DEACTIVATED, { userId });
     if (user.organizationId) {
       await this.prisma.auditLog.create({
         data: { actorId: null, action: 'USER_SELF_DELETED', organizationId: user.organizationId, metadata: { userId } },
@@ -357,6 +362,74 @@ export class UsersService {
       select: selectPublicProfile,
       orderBy: { name: 'asc' },
     });
+  }
+
+  /**
+   * Public profile of another member of the caller's organization (#137).
+   * Only public fields; email is exposed to staff viewers only. Blocked pairs
+   * are reported as not found in both directions (a block is never revealed).
+   */
+  async getPublicProfile(targetId: string, callerId: string, organizationId: string, callerRole: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: targetId, organizationId },
+      select: {
+        id: true, name: true, avatarUrl: true, role: true, bio: true, email: true, createdAt: true,
+      },
+    });
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+
+    let relation: FriendRelation = 'NONE';
+    let friendshipId: string | null = null;
+    let sharedCourses: { id: string; name: string }[] = [];
+    if (targetId !== callerId) {
+      const [friendship, callerMemberships] = await Promise.all([
+        this.prisma.friendship.findFirst({
+          where: {
+            OR: [
+              { requesterId: callerId, addresseeId: targetId },
+              { requesterId: targetId, addresseeId: callerId },
+            ],
+            requester: { is: { organizationId } },
+            addressee: { is: { organizationId } },
+          },
+          select: { id: true, requesterId: true, status: true },
+        }),
+        this.prisma.courseMembership.findMany({
+          where: { userId: callerId, course: { organizationId } },
+          select: { courseId: true },
+        }),
+      ]);
+      if (friendship?.status === 'BLOCKED') throw new NotFoundException('Usuario no encontrado.');
+      if (friendship) {
+        friendshipId = friendship.id;
+        relation = friendship.status === 'ACCEPTED'
+          ? 'FRIEND'
+          : friendship.requesterId === callerId ? 'PENDING_SENT' : 'PENDING_RECEIVED';
+      }
+      if (callerMemberships.length > 0) {
+        const shared = await this.prisma.courseMembership.findMany({
+          where: {
+            userId: targetId,
+            courseId: { in: callerMemberships.map((membership) => membership.courseId) },
+            course: { organizationId },
+          },
+          select: { course: { select: { id: true, name: true } } },
+          take: 10,
+        });
+        sharedCourses = shared.map((membership) => membership.course).sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
+
+    const { email, createdAt, ...publicFields } = target;
+    const canSeeEmail = callerRole === 'ADMIN' || (callerRole === 'TEACHER' && target.role !== 'ADMIN');
+    return {
+      ...publicFields,
+      ...(canSeeEmail ? { email } : {}),
+      memberSince: createdAt,
+      sharedCourses,
+      relation,
+      friendshipId,
+    };
   }
 
   async uploadAvatar(user: AuthUser, file: Express.Multer.File) {

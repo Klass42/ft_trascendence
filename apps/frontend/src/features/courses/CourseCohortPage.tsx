@@ -18,6 +18,7 @@ import {
   Textarea,
   useToast,
 } from '@/components/ui';
+import { UserLink } from '@/features/profile/UserLink';
 import { CohortEditModal } from './CohortEditModal';
 import { CourseActionsMenu } from './CourseActionsMenu';
 import styles from './CourseCohortPage.module.css';
@@ -453,7 +454,7 @@ export function CourseCohortPage() {
             <ul className={styles.subjectList} aria-label="Matriculados">
               {members.map((member) => (
                 <li className={styles.subjectRow} key={member.userId}>
-                  <span className={styles.subjectTitle}>{userLabel(member.userId)}</span>
+                  <span className={styles.subjectTitle}><UserLink userId={member.userId}>{userLabel(member.userId)}</UserLink></span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -478,7 +479,7 @@ export function CourseCohortPage() {
                 const subjectTitle = subjects.find((subject) => subject.id === row.subjectId)?.title ?? '';
                 return (
                   <li className={styles.subjectRow} key={`${row.subjectId}:${row.userId}`}>
-                    <span className={styles.subjectTitle}>{userLabel(row.userId)}</span>
+                    <span className={styles.subjectTitle}><UserLink userId={row.userId}>{userLabel(row.userId)}</UserLink></span>
                     <Badge variant="info">{row.role === 'TEACHER' ? 'Profesor' : 'Asistente'} · {subjectTitle}</Badge>
                     <Button
                       variant="ghost"

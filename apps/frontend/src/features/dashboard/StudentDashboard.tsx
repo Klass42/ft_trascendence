@@ -10,10 +10,8 @@ import type { MyProgressItem } from '@/lib/api';
 import { DashboardHeader } from './DashboardHeader';
 import styles from './StudentDashboard.module.css';
 
-const COURSE_COLORS = [
-  '#2563eb', '#0f766e', '#d97706', '#7c3aed',
-  '#dc2626', '#0891b2', '#4f46e5', '#db2777',
-];
+// Categorical palette lives in tokens.css (--color-course-1..8).
+const COURSE_COLORS = Array.from({ length: 8 }, (_, i) => `var(--color-course-${i + 1})`);
 
 function hashToColor(title: string): string {
   let hash = 0;

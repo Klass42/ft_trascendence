@@ -135,7 +135,7 @@ export function TeacherDashboard() {
             onClick={refetch}
             style={{
               background: 'var(--color-accent-primary)',
-              color: '#fff',
+              color: 'var(--color-text-inverse)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               padding: '8px 14px',

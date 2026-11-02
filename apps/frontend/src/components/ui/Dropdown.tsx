@@ -13,11 +13,14 @@
  *   ]} />
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import styles from './Dropdown.module.css';
 
 export interface DropdownItem {
   label: ReactNode;
   onClick?: () => void;
+  /** In-app route: renders a real link (menuitem) instead of a button. */
+  to?: string;
   icon?: ReactNode;
   danger?: boolean;
   disabled?: boolean;
@@ -65,26 +68,50 @@ export function Dropdown({ trigger, triggerLabel, items, align = 'right' }: Drop
       </button>
       {open && (
         <div className={[styles.menu, styles[align]].join(' ')} role="menu">
-          {items.map((item, i) => (
-            <button
-              key={i}
-              type="button"
-              role="menuitem"
-              className={[styles.item, item.danger && styles.danger].filter(Boolean).join(' ')}
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false);
-                item.onClick?.();
-              }}
-            >
-              {item.icon && (
-                <span className={styles.icon} aria-hidden="true">
-                  {item.icon}
-                </span>
-              )}
-              {item.label}
-            </button>
-          ))}
+          {items.map((item, i) => {
+            const className = [styles.item, item.danger && styles.danger].filter(Boolean).join(' ');
+            const content = (
+              <>
+                {item.icon && (
+                  <span className={styles.icon} aria-hidden="true">
+                    {item.icon}
+                  </span>
+                )}
+                {item.label}
+              </>
+            );
+            if (item.to && !item.disabled) {
+              return (
+                <Link
+                  key={i}
+                  to={item.to}
+                  role="menuitem"
+                  className={className}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onClick?.();
+                  }}
+                >
+                  {content}
+                </Link>
+              );
+            }
+            return (
+              <button
+                key={i}
+                type="button"
+                role="menuitem"
+                className={className}
+                disabled={item.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  item.onClick?.();
+                }}
+              >
+                {content}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

@@ -341,6 +341,75 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getPublicProfile', () => {
+    const target = {
+      id: 'user-student-0001', name: 'Sam', avatarUrl: null, role: 'STUDENT', bio: 'Hola',
+      email: 'student@demo', createdAt: new Date('2026-01-02T00:00:00Z'),
+    };
+
+    beforeEach(() => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(target);
+      (prisma.friendship.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.courseMembership.findMany as jest.Mock).mockResolvedValue([]);
+    });
+
+    it('scopes the lookup to the organization and 404s for unknown or foreign users', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+      await expect(service.getPublicProfile('user-x', ADMIN_ID, OTHER_ORG, 'STUDENT')).rejects.toThrow(NotFoundException);
+      expect((prisma.user.findFirst as jest.Mock).mock.calls[0][0].where).toEqual({ id: 'user-x', organizationId: OTHER_ORG });
+    });
+
+    it('returns public fields only and hides the email from students', async () => {
+      const r = await service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT');
+      expect(r).toEqual({
+        id: target.id, name: 'Sam', avatarUrl: null, role: 'STUDENT', bio: 'Hola',
+        memberSince: target.createdAt, sharedCourses: [], relation: 'NONE', friendshipId: null,
+      });
+      expect(r).not.toHaveProperty('email');
+      expect(r).not.toHaveProperty('onlineAt');
+    });
+
+    it('shows the email to admins and to teachers (except for admin targets)', async () => {
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'ADMIN')).resolves.toHaveProperty('email', 'student@demo');
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'TEACHER')).resolves.toHaveProperty('email', 'student@demo');
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...target, role: 'ADMIN' });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'TEACHER')).resolves.not.toHaveProperty('email');
+    });
+
+    it('reports the friendship relation from the caller point of view', async () => {
+      (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'f1', requesterId: ADMIN_ID, status: 'PENDING' });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT'))
+        .resolves.toMatchObject({ relation: 'PENDING_SENT', friendshipId: 'f1' });
+      (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'f1', requesterId: target.id, status: 'PENDING' });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT'))
+        .resolves.toMatchObject({ relation: 'PENDING_RECEIVED' });
+      (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'f1', requesterId: target.id, status: 'ACCEPTED' });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT'))
+        .resolves.toMatchObject({ relation: 'FRIEND' });
+    });
+
+    it('hides blocked pairs behind a 404', async () => {
+      (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'f1', requesterId: target.id, status: 'BLOCKED' });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT')).rejects.toThrow(NotFoundException);
+    });
+
+    it('lists cohorts shared with the caller, scoped by organization', async () => {
+      (prisma.courseMembership.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ courseId: 'c1' }, { courseId: 'c2' }])
+        .mockResolvedValueOnce([{ course: { id: 'c2', name: 'Beta' } }, { course: { id: 'c1', name: 'Alfa' } }]);
+      const r = await service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT');
+      expect(r.sharedCourses).toEqual([{ id: 'c1', name: 'Alfa' }, { id: 'c2', name: 'Beta' }]);
+      const where = (prisma.courseMembership.findMany as jest.Mock).mock.calls[1][0].where;
+      expect(where).toEqual({ userId: target.id, courseId: { in: ['c1', 'c2'] }, course: { organizationId: ORG_ID } });
+    });
+
+    it('skips relation and cohort lookups for the own profile', async () => {
+      const r = await service.getPublicProfile(target.id, target.id, ORG_ID, 'STUDENT');
+      expect(r).toMatchObject({ relation: 'NONE', friendshipId: null, sharedCourses: [] });
+      expect(prisma.friendship.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
   describe('searchUsers', () => {
     it('searches only within the organization, never selects email and defaults to no relation', async () => {
       (prisma.friendship.findMany as jest.Mock).mockResolvedValue([]);

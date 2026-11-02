@@ -312,6 +312,7 @@ We claim **18 points** of modules; the subject requires **14**, so we keep a 4-p
 | Advanced analytics dashboard | Major | 2 | David | Interactive line/bar charts, live refresh, date range filter, CSV and PDF export (see below) |
 | File upload | Minor | 1 | Aloiki | `files` module with a storage driver (S3/Garage or local disk), size limits (10 MB, avatars 2 MB), MIME + magic-bytes validation, org-scoped downloads; used by the library (folders, resources), lessons, tasks and avatars |
 | OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | Passport Google strategy, link-by-email, signed `state` — see below |
+| Custom-made design system | Minor | 1 (margin, not in the 18 total) | Aloiki | 19 reusable components in `apps/frontend/src/components/ui`, design tokens in `tokens.css` (palette, Hanken Grotesk scale, spacing, radius, shadows), `lucide-react` icons; live showcase at `/design` (admin) — see below |
 | **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
 | **Total** | | **18** | | |
 
@@ -426,6 +427,37 @@ accounts; forcing a second password raises drop-off. *Implementation:* Passport 
 (`apps/backend/src/auth/google.strategy.ts`), start at `/api/auth/google`, callback with a signed
 single-use `state`, auto-create or link by email to an existing local user, then issue the same JWT
 pair as password login. Credentials stay in env; with empty client id/secret the routes stay off.
+
+**Custom-made design system (Minor, margin).** *Justification:* the whole UI is built on our own
+kit instead of a third-party component library, so every screen looks and behaves the same, forms
+carry the same accessible error/hint wiring, and a colour or spacing change is made once.
+*Implementation:* `apps/frontend/src/components/ui` (barrel `index.ts`) holds **19 reusable
+components**, each with its own CSS module and typed props:
+
+- Primitives: `Button` (primary, secondary, outline, ghost, danger; sm/md/lg; loading, disabled,
+  icons, full width), `Input`, `Card`, `Spinner`, `Badge` (6 variants, optional dot), `Avatar`.
+- Form controls: `FormField` (label/hint/error wrapper for any control), `Textarea`, `Select`,
+  `DatePicker`, `Toggle`, `FileUpload` (drag and drop, client-side validation, progress).
+- Overlays: `Modal` (focus trap, Escape), `ConfirmDialog`, `Dropdown`, `Toast` (`useToast()`,
+  4 variants).
+- Display: `Table`, `Tabs` (keyboard navigation), `EmptyState`.
+
+*Tokens* (`components/ui/tokens.css`, CSS custom properties; feature code does not use hard-coded
+colours):
+
+- Colour: backgrounds, text, accent (blue), semantic (success, warning, error, info, each with a
+  muted variant), neutral, borders and an 8-colour categorical palette for course cards.
+- Typography: **Hanken Grotesk** (`--font-sans`) and a monospace stack, a size scale
+  `--text-xs` to `--text-4xl`, five weights and five line heights.
+- Spacing (`--space-1` to `--space-16`, 8 px base), radius (`--radius-sm` to `--radius-full`) and
+  shadows (`--shadow-sm` to `--shadow-xl`); transitions and a z-index scale.
+- Icons: `lucide-react` throughout (nav, buttons, empty states, file types).
+- Dark mode: not implemented; the tokens are the single place where a second theme would go.
+
+*How to see it:* log in as an admin (`admin@demo`) and open **`/design`** ("Sistema de diseño").
+The page reads the live values of the CSS variables (`getComputedStyle`) for the palette,
+typography and spacing sections, shows a sample of the icons in use, and renders every component
+with its variants, sizes and disabled/error states. It is responsive down to 375 px.
 
 ## Individual contributions
 
