@@ -245,7 +245,7 @@ export class RealtimeGateway
    * Connect-time access check, mirroring JwtStrategy.validate: the user must
    * still exist and their organization (if any; platform users have none) must
    * be ACTIVE. Fails closed: a query error rejects the socket (the client
-   * retries). When #134 adds `User.deactivatedAt`, reject it here too.
+   * retries). Deactivated users (#134, `User.deactivatedAt`) are rejected too.
    */
   private async authorize(userId: string): Promise<{ organizationId: string | null } | null> {
     try {
