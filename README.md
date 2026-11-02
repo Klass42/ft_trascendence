@@ -131,6 +131,35 @@ settings live there: internal host names, ports and image tags are fixed in
 To serve the stack to other machines (multi-user demo), set `CADDY_DOMAIN` to the host's name
 or IP and run `make up`.
 
+### Google OAuth setup
+
+Google sign-in is off until a client id is configured (`GET /api/auth/providers` returns
+`{"google":false}` and the login/register pages hide the button). To enable it:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) pick or create the team project.
+   Under *APIs & Services → OAuth consent screen* configure an *External* app (name, support
+   e-mail, scopes `openid`, `email`, `profile`). While it is in *Testing*, add every Google account
+   used in the demo as a *Test user*.
+2. *APIs & Services → Credentials → Create credentials → OAuth client ID*, type *Web application*:
+   - Authorized JavaScript origin: `https://localhost:4443`
+   - Authorized redirect URI: `https://localhost:4443/api/auth/google/callback`
+
+   For another host use `https://<CADDY_DOMAIN>:<CADDY_HTTPS_PORT>` and the same path; Google only
+   accepts `localhost` or a real domain (not a bare IP) as an HTTPS redirect host.
+3. Copy the client id and secret into your local `.env` (never into `.env.example` or any
+   committed file; share them with the team through a private channel):
+   ```
+   GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxx
+   ```
+4. `make up` (or `docker compose up -d backend`) and check
+   `curl -k https://localhost:4443/api/auth/providers` → `{"google":true}`.
+
+Demo flow: on `/login` enter the organization slug and click *Continue with Google*. A Google
+account whose e-mail matches an existing user of that organization is linked to it and signs in;
+an unknown e-mail creates a new user in that organization; later sign-ins reuse the link. The
+step-by-step script is in [`docs/evaluation-checklist.md`](docs/evaluation-checklist.md).
+
 ### Everyday commands
 
 | Command | What it does |
@@ -466,7 +495,7 @@ deployment and the Monitoring module meet the subject:
 every `make` re-seeded the database, and the one scrape target that was down was invisible.
 Rebuilding it around health checks and `depends_on` conditions made failures visible at deploy
 time. Backend metrics had to be pushed rather than scraped because the app exposes no `/metrics`
-endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. Google OAuth could not be verified end-to-end without the team's client credentials.
+endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. Google OAuth needs the team's client credentials to be verified end-to-end; the setup is documented in "Google OAuth setup".
 
 ## Resources
 

@@ -180,6 +180,11 @@ describe('Google OAuth HTTP', () => {
       await app?.close();
     });
 
+    it('GET /auth/providers reports google:true when GOOGLE_CLIENT_ID is set (#136)', async () => {
+      const res = await request(app.getHttpServer()).get('/auth/providers').expect(200);
+      expect(res.body).toEqual({ google: true });
+    });
+
     it('GET /auth/google without a slug is 400 and does not redirect', async () => {
       const res = await request(app.getHttpServer()).get('/auth/google').redirects(0);
 
