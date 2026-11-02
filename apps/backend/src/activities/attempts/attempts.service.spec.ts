@@ -10,7 +10,7 @@ import {
   NotificationType,
   QuestionKind,
 } from '@prisma/client';
-import { AttemptsService } from './attempts.service';
+import { AttemptsService, TIME_LIMIT_GRACE_MS } from './attempts.service';
 import { ActivitiesService } from '../activities.service';
 import { accessFromPrisma } from '../../test/access-from-prisma';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -43,6 +43,7 @@ describe('AttemptsService', () => {
     openAt?: Date | null;
     closeAt?: Date | null;
     maxScore?: number;
+    timeLimitSec?: number | null;
     config?: Record<string, unknown>;
   }) {
     const activity: any = {
@@ -56,7 +57,7 @@ describe('AttemptsService', () => {
       dueAt: null,
       maxScore: opts.maxScore ?? 10,
       attemptsAllowed: opts.attemptsAllowed ?? 1,
-      timeLimitSec: null,
+      timeLimitSec: opts.timeLimitSec ?? null,
       config: opts.config ?? {},
     };
     const attempts: any[] = [];
@@ -164,6 +165,7 @@ describe('AttemptsService', () => {
           seq += 1;
           const row = {
             id: `att-${seq}`,
+            startedAt: new Date(),
             score: null,
             submittedAt: null,
             gradedAt: null,
@@ -821,6 +823,167 @@ describe('AttemptsService', () => {
     expect(first.id).toBe(second.id);
     expect(attempts).toHaveLength(1);
     expect(attempts[0].attemptNo).toBe(1);
+  });
+
+  describe('server-enforced time limit', () => {
+    const LIMIT_SEC = 600;
+    const answer = (selected: number[]) => ({
+      answers: [{ questionId: 'q1', response: { selected } }],
+    });
+    /** Pretend the attempt started `secondsAgo` seconds ago. */
+    const startedAgo = (attempt: any, secondsAgo: number) => {
+      attempt.startedAt = new Date(Date.now() - secondsAgo * 1000);
+    };
+    const timed = () =>
+      build({
+        questions: [mcq('q1', [0]), mcq('q2', [1], 1)],
+        attemptsAllowed: 2,
+        timeLimitSec: LIMIT_SEC,
+      });
+
+    it('exposes the server deadline in the student view', async () => {
+      const { service } = timed();
+      const started = (await service.start('act-1', STUDENT)) as any;
+      expect(started.expiresAt).toBeInstanceOf(Date);
+      expect(started.expiresAt.getTime() - started.startedAt.getTime()).toBe(
+        LIMIT_SEC * 1000,
+      );
+      expect(started.serverNow).toBeInstanceOf(Date);
+    });
+
+    it('caps the deadline at the activity closeAt', async () => {
+      const closeAt = new Date(Date.now() + 60_000);
+      const { service } = build({
+        questions: [mcq('q1', [0])],
+        timeLimitSec: LIMIT_SEC,
+        closeAt,
+      });
+      const started = (await service.start('act-1', STUDENT)) as any;
+      expect(started.expiresAt).toEqual(closeAt);
+    });
+
+    it('rejects saving after the deadline and closes the attempt with the saved answers', async () => {
+      const { service, attempts, answers } = timed();
+      const started = await service.start('act-1', STUDENT);
+      await service.saveAnswers(started.id, STUDENT, answer([0]));
+      startedAgo(attempts[0], LIMIT_SEC + TIME_LIMIT_GRACE_MS / 1000 + 5);
+
+      await expect(
+        service.saveAnswers(started.id, STUDENT, answer([2])),
+      ).rejects.toThrow(/tiempo/i);
+
+      expect(attempts[0].status).toBe(AttemptStatus.GRADED);
+      expect(attempts[0].submittedAt).toEqual(
+        new Date(attempts[0].startedAt.getTime() + LIMIT_SEC * 1000),
+      );
+      // the late payload was not stored; the earlier answer was graded
+      expect(answers.find((a) => a.questionId === 'q1').response).toEqual({
+        selected: [0],
+      });
+      expect(attempts[0].score).toBe(5);
+    });
+
+    it('still accepts save and submit inside the grace period', async () => {
+      const { service, attempts } = timed();
+      const started = await service.start('act-1', STUDENT);
+      startedAgo(attempts[0], LIMIT_SEC + 5); // 5 s past the limit, within grace
+
+      await service.saveAnswers(started.id, STUDENT, answer([0]));
+      const before = Date.now();
+      const done = await service.submit(started.id, STUDENT);
+
+      expect(done.status).toBe(AttemptStatus.GRADED);
+      expect(done.score).toBe(5);
+      // stamped "now", not at the deadline
+      expect(attempts[0].submittedAt.getTime()).toBeGreaterThanOrEqual(before);
+    });
+
+    it('finalises a late submit with the answers saved before the deadline', async () => {
+      const { service, attempts, emitted } = timed();
+      const started = await service.start('act-1', STUDENT);
+      await service.saveAnswers(started.id, STUDENT, answer([0]));
+      startedAgo(attempts[0], LIMIT_SEC + TIME_LIMIT_GRACE_MS / 1000 + 60);
+
+      const done = await service.submit(started.id, STUDENT);
+
+      expect(done.status).toBe(AttemptStatus.GRADED);
+      expect(done.score).toBe(5); // q1 right, q2 unanswered → 1/2 of 10
+      expect(attempts[0].submittedAt).toEqual(
+        new Date(attempts[0].startedAt.getTime() + LIMIT_SEC * 1000),
+      );
+      expect(emitted).toHaveLength(1);
+      await expect(service.submit(started.id, STUDENT)).rejects.toThrow(
+        /ya fue enviado/,
+      );
+    });
+
+    it('closes a stale in-progress attempt when it is resumed, freeing the next attempt', async () => {
+      const { service, attempts, analyticsEvents } = timed();
+      const first = await service.start('act-1', STUDENT);
+      await service.saveAnswers(first.id, STUDENT, answer([0]));
+      startedAgo(attempts[0], LIMIT_SEC * 3);
+
+      const second = await service.start('act-1', STUDENT);
+
+      expect(second.id).not.toBe(first.id);
+      expect(second.attemptNo).toBe(2);
+      expect(attempts[0].status).toBe(AttemptStatus.GRADED);
+      expect(attempts[0].score).toBe(5);
+      expect(analyticsEvents).toHaveLength(1);
+    });
+
+    it('closes a stale attempt on read, in the history and for staff', async () => {
+      const { service, attempts } = timed();
+      const first = await service.start('act-1', STUDENT);
+      startedAgo(attempts[0], LIMIT_SEC * 3);
+      expect(((await service.getMine(first.id, STUDENT)) as any).status).toBe(
+        AttemptStatus.GRADED,
+      );
+
+      const second = await service.start('act-1', STUDENT);
+      startedAgo(attempts[1], LIMIT_SEC * 3);
+      const history = await service.listMine('act-1', STUDENT);
+      expect(history.map((a) => a.status)).toEqual([
+        AttemptStatus.GRADED,
+        AttemptStatus.GRADED,
+      ]);
+      expect(second.attemptNo).toBe(2);
+    });
+
+    it('closes a stale attempt for staff reading the attempt list', async () => {
+      const { service, attempts } = timed();
+      await service.start('act-1', STUDENT);
+      startedAgo(attempts[0], LIMIT_SEC * 3);
+
+      const list = await service.listForActivity('act-1', TEACHER);
+
+      expect(list[0].status).toBe(AttemptStatus.GRADED);
+    });
+
+    it('leaves a live attempt in progress and resumes it', async () => {
+      const { service, attempts } = timed();
+      const first = await service.start('act-1', STUDENT);
+      startedAgo(attempts[0], 30);
+
+      const again = await service.start('act-1', STUDENT);
+
+      expect(again.id).toBe(first.id);
+      expect(attempts[0].status).toBe(AttemptStatus.IN_PROGRESS);
+    });
+
+    it('behaves as before without a time limit', async () => {
+      const { service, attempts } = build({ questions: [mcq('q1', [0])] });
+      const started = (await service.start('act-1', STUDENT)) as any;
+      expect(started.expiresAt).toBeNull();
+      expect(started.serverNow).toBeUndefined();
+
+      startedAgo(attempts[0], 10 * 24 * 3600); // days later, still open
+      const again = await service.start('act-1', STUDENT);
+      expect(again.id).toBe(started.id);
+      await service.saveAnswers(started.id, STUDENT, answer([0]));
+      const done = await service.submit(started.id, STUDENT);
+      expect(done.status).toBe(AttemptStatus.GRADED);
+    });
   });
 
   it('mixed MCQ+ESSAY submit stays SUBMITTED, auto-awards the MCQ, and skips GRADE_PUBLISHED', async () => {

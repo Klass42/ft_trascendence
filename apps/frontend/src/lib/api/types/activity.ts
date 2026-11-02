@@ -118,6 +118,10 @@ export interface AttemptDTO {
   status: AttemptStatus;
   startedAt: string;
   submittedAt: string | null;
+  /** Server deadline of a timed, in-progress attempt; null otherwise. */
+  expiresAt?: string | null;
+  /** Server clock when this view was built, to correct client clock skew. */
+  serverNow?: string;
   score: number | null;
   gradedAt: string | null;
   feedback: string | null;

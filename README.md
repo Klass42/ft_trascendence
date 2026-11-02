@@ -313,7 +313,8 @@ We claim **18 points** of modules; the subject requires **14**, so we keep a 4-p
 | File upload | Minor | 1 | Aloiki | `files` module with a storage driver (S3/Garage or local disk), size limits (10 MB, avatars 2 MB), MIME + magic-bytes validation, org-scoped downloads; used by the library (folders, resources), lessons, tasks and avatars |
 | OAuth 2.0 authentication (Google) | Minor | 1 | Jorge | Passport Google strategy, link-by-email, signed `state` — see below |
 | **Monitoring system (Prometheus + Grafana)** | Major | 2 | Viacheslav | see below |
-| **Total** | | **18** | | |
+| Module of choice — Activities & assessment engine | Major (margin) | 2 | David | Pluggable question-block registry, auto-grading with partial credit, manual grading with feedback, attempt windows/limits, server-enforced time limit, templates and side-effect-free preview (see below) |
+| **Total** | | **18** + 2 (margin) | | |
 
 **Real-time features with WebSocket (Major).** *Justification:* a learning platform is full of
 things that change under the user's feet (a grade is published, a teacher posts a task, a friend
@@ -390,6 +391,61 @@ accounts; forcing a second password raises drop-off. *Implementation:* Passport 
 (`apps/backend/src/auth/google.strategy.ts`), start at `/api/auth/google`, callback with a signed
 single-use `state`, auto-create or link by email to an existing local user, then issue the same JWT
 pair as password login. Credentials stay in env; with empty client id/secret the routes stay off.
+
+**Module of choice (Major): Activities & assessment engine.** *Why we chose it.* The subject is
+free-choice and an LMS is only useful if teachers can set work and trust the result, so the
+assessment engine is the core of Klass, not an add-on. Beyond a simple CRUD of "tasks", it covers
+what a real exam needs: several question types, grading rules, retries, time pressure, review and
+reuse. It is a self-contained domain (`apps/backend/src/activities`, `apps/frontend/src/features/activities`)
+with its own data model (`Activity`, `Question`, `Attempt`, `Answer`, task templates).
+
+*Technical challenges.*
+- **Pluggable block registry.** Each question kind is a `BlockKindAdapter` (`blocks/types.ts`):
+  `validateContent`, `validateResponse` and an optional pure `grade`. `blocks/registry.ts` maps the
+  eight kinds (multiple choice, true/false, fill the blanks, matching, ordering, short answer,
+  essay, file upload) to adapters, so a new kind is one file plus a registry entry; authoring,
+  saving answers and grading all go through the registry. Absent `grade` means "manual".
+- **Auto-grading with partial credit.** `grading/graders.ts` and `grade-responses.ts` are pure
+  functions: fill-the-blanks gives one share per correct blank (with accepted synonyms), matching
+  one per correct pair, malformed responses score 0 instead of throwing. The score is scaled to the
+  activity's `maxScore`, and the same function backs submit and preview, so they cannot disagree.
+- **Manual grading with feedback.** Subjective answers (essay, file upload, short answer without accepted answers) leave
+  the attempt `SUBMITTED` and notify the staff; the teacher awards points per question (capped at
+  the question's points) and writes per-question and overall feedback. The attempt becomes `GRADED`
+  only when every question has a mark, then the student is notified. Solutions are revealed only if
+  the author enabled `showSolutions`.
+- **Attempt windows and limits, concurrency-safe.** `openAt`/`closeAt` and `attemptsAllowed` are
+  enforced when starting and resuming. Starting runs in a `Serializable` transaction with retries on
+  serialization/unique conflicts (`P2034`/`P2002`), so a double click or two tabs resume the same
+  attempt and the attempt cap cannot be exceeded. Closing an attempt (grading + status change) is
+  another `Serializable` transaction that reads the answers inside it.
+- **Server-enforced time limit.** `timeLimitSec` is not a client-side hint. An attempt's deadline is
+  `startedAt + timeLimitSec`, capped by `closeAt`, and the API returns it as `expiresAt` together
+  with the server clock (`serverNow`) so the countdown in `ActivityPlayer` is immune to a wrong
+  local clock. The server accepts the final autosave/submit during a 30 s grace period
+  (`TIME_LIMIT_GRACE_MS`); after it, saving is rejected and the attempt is closed with the answers
+  already saved (nothing is lost, nothing can be added). Abandoned attempts are closed lazily when
+  they are read, resumed, listed by the teacher, or when the learner starts a new one, so they never
+  block an attempt or stay open forever. The client auto-submits when the countdown reaches zero.
+- **Templates and preview without side effects.** Teachers keep a library of task templates (create,
+  save an activity as a template, instantiate into a course) and can try any activity or template
+  with `POST .../preview/grade`, which grades the given responses with the same code but writes
+  nothing: no attempt, no notification, no analytics event.
+
+*Value for the project.* Grades, the gradebook and final grade, the analytics dashboard and the
+notification system all consume attempts, so this engine is the data source of most other features.
+*Why it deserves Major status.* It is a large domain with real design problems (extensibility,
+correct grading, transactional integrity under concurrency, server-side time enforcement, tenant
+isolation by `organizationId` on every query), a full teacher and student UI, and extensive unit
+tests (`attempts.service.spec.ts`, `graders.spec.ts`, `registry.spec.ts`,
+`task-templates.service.spec.ts`).
+
+*Key files.* Backend: `activities/blocks/registry.ts`, `activities/grading/graders.ts`,
+`activities/grading/grade-responses.ts`, `activities/attempts/attempts.service.ts`,
+`activities/activities.service.ts`, `activities/templates/task-templates.service.ts`. Frontend:
+`features/activities/ActivityPlayer.tsx` (student player and timer), `ActivityForm.tsx` (limits and
+time limit), `QuestionForm.tsx` / `QuestionContentEditor.tsx` (authoring), `AttemptReview.tsx`,
+`TaskLibrary.tsx`, `ActivityPreviewModal.tsx`.
 
 ## Individual contributions
 
