@@ -1,6 +1,6 @@
 # Diagramas — Klass / ft_trascendence
 
-Vista del LMS a 2026-09-20. El copy de producto es **«Tarea»**; en Prisma y Nest la instancia sigue llamándose `Activity`. Las escrituras a `Assignment` / `Submission` responden **410**; las tablas siguen por GET y por la migración.
+Vista del LMS a 2026-11-02 (revisada contra `staging`, #153). El copy de producto es **«Tarea»**; en Prisma y Nest la instancia sigue llamándose `Activity`. Las escrituras a `Assignment` / `Submission` responden **410**; las tablas siguen por GET y por la migración.
 
 Fuente de verdad del esquema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.prisma).  
 Ciclo de tareas: [`planning/task-templates.md`](./planning/task-templates.md).
@@ -132,6 +132,9 @@ erDiagram
     string role
     string platformRole
     datetime emailVerifiedAt "nullable"
+    datetime deactivatedAt "nullable (#134: baja en la org, historial conservado)"
+    datetime onlineAt "nullable (presencia)"
+    bool emailNotificationsEnabled
     string preferredLanguage
   }
   OAuthAccount {
@@ -249,7 +252,13 @@ erDiagram
     string id PK
     string subjectId FK
     string title
+    string type "QUIZ LISTENING SPEAKING"
     string status "DRAFT PUBLISHED ARCHIVED"
+    datetime openAt "nullable"
+    datetime dueAt "nullable (soft)"
+    datetime closeAt "nullable (hard)"
+    int timeLimitSec "nullable"
+    json config "shuffle, showSolutions"
     boolean countsTowardFinal
     string templateId "procedencia, sin FK"
     float maxScore "sum Question.points"
@@ -270,7 +279,10 @@ erDiagram
     string userId FK
     int attemptNo
     string status "IN_PROGRESS SUBMITTED GRADED"
+    datetime startedAt
+    datetime submittedAt "nullable"
     float score
+    string gradedById FK "nullable"
     string feedback
   }
   Answer {
@@ -278,8 +290,9 @@ erDiagram
     string attemptId FK
     string questionId FK
     json response
-    boolean correct
+    boolean correct "null = pendiente manual"
     float awarded
+    string feedback "comentario por pregunta"
   }
   ActivityFile {
     string activityId PK
@@ -328,11 +341,13 @@ flowchart TB
     Friendships["users/friendships"]
     Organizations
     Platform
-    CommonAuth["common/auth"]
+    CommonAuth["common/auth · guards, JwtStrategy, tenant-context"]
+    PlanLimits["common/plan-limits"]
   end
 
   subgraph aloiki["Aloiki — Content"]
     Courses
+    CourseAccess["courses/course-access"]
     Enrollments["courses/enrollments"]
     Sections["courses/sections"]
     Lessons["courses/lessons"]
@@ -368,6 +383,8 @@ flowchart TB
   Notifications -- "emit" --> Bus
   Bus -. "notification.created" .-> Realtime
   Users --> Friendships
+  Courses --> CourseAccess
+  Organizations --> PlanLimits
   Courses --> Enrollments
   Courses --> Sections
   Sections --> Lessons
@@ -524,7 +541,7 @@ sequenceDiagram
   participant DB as Postgres
   U->>F: email + contraseña
   F->>A: POST /auth/login
-  A->>DB: User + bcrypt, crea Session
+  A->>DB: User + argon2.verify, crea Session
   A-->>F: access JWT (15 min) + refresh JWT (7 d, jti = Session)
   F->>A: POST /auth/refresh
   A->>DB: rota la Session (la vieja se invalida)
@@ -551,6 +568,26 @@ sequenceDiagram
 ```
 
 No hay tabla de reset: el token es un JWT firmado que lleva una huella del `passwordHash` actual, así que al cambiar la contraseña deja de ser válido (un solo uso). Las invitaciones sí se guardan (`OrganizationInvitation.tokenHash`) y se aceptan con `POST /auth/invitations/:token/accept`. Google OAuth usa un `state` firmado y el botón solo aparece si hay `GOOGLE_CLIENT_ID`.
+
+### 3.6 Baja y reactivación de miembros (#134)
+
+Quitar a alguien de la organización **no borra** la cuenta: pone `User.deactivatedAt` y revoca sus sesiones. Notas, entregas y mensajes se conservan (se quitan matrículas y docencia); el usuario deja de contar para `maxUsers`.
+
+```mermaid
+sequenceDiagram
+  actor Ad as Admin de la org
+  participant O as OrganizationsController
+  participant DB as Postgres
+  participant RT as Realtime
+  Ad->>O: DELETE /organizations/:id/members/:userId
+  O->>DB: tx: deactivatedAt = now, borra Sessions,<br/>CourseMembership y SubjectStaff, AuditLog MEMBER_DEACTIVATED
+  O-->>RT: evento USER_DEACTIVATED → desconecta user:<id>
+  Note over DB: login, refresh, JwtStrategy, OAuth y handshake WS<br/>rechazan cuentas con deactivatedAt
+  Ad->>O: POST /organizations/:id/members/:userId/reactivate
+  O->>DB: assertUserLimit, deactivatedAt = null
+```
+
+Puntos de control: `auth/auth.service.ts` (login, refresh, OAuth), `common/auth/jwt.strategy.ts`, `realtime/realtime.gateway.ts`, `common/plan-limits/plan-limits.ts`, `platform/platform.service.ts` (contadores activos/desactivados).
 
 ## Cómo verlos
 

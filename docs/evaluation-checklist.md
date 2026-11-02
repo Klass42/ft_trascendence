@@ -2,6 +2,8 @@
 
 Guía para preparar la defensa. Qué datos tiene la demo, cómo dejarla limpia y en qué
 pantalla se demuestra cada módulo de la [tabla de módulos del README](../README.md#modules).
+Para el recorrido punto a punto del subject (código, por qué está bien, preguntas típicas) ver
+[`defense-guide.md`](./defense-guide.md).
 
 ## 1. Dejar la demo limpia
 
