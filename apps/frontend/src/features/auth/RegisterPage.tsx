@@ -86,7 +86,7 @@ export function RegisterPage() {
         <div className={styles.header}>
           <div style={{
             width: 48, height: 48, borderRadius: 14,
-            background: 'var(--color-accent-primary)', color: '#fff',
+            background: 'var(--color-accent-primary)', color: 'var(--color-text-inverse)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 800, fontSize: 24, margin: '0 auto 16px',
           }}>

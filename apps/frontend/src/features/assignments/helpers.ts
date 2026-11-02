@@ -6,11 +6,11 @@ export const STATUS_CHIP: Record<
   SubmissionStatus | 'NONE',
   { bg: string; fg: string; label: string }
 > = {
-  NONE: { bg: '#f1f5f9', fg: '#475569', label: 'Sin entregar' },
-  DRAFT: { bg: '#fff4e5', fg: '#b45309', label: 'Borrador' },
-  SUBMITTED: { bg: '#eff4ff', fg: '#1d4ed8', label: 'Entregado' },
-  LATE: { bg: '#fef2f2', fg: '#b91c1c', label: 'Entregado tarde' },
-  GRADED: { bg: '#e7f6ef', fg: '#0f766e', label: 'Calificado' },
+  NONE: { bg: 'var(--color-neutral-muted)', fg: 'var(--color-neutral)', label: 'Sin entregar' },
+  DRAFT: { bg: 'var(--color-warning-muted)', fg: 'var(--color-warning)', label: 'Borrador' },
+  SUBMITTED: { bg: 'var(--color-accent-muted)', fg: 'var(--color-accent-hover)', label: 'Entregado' },
+  LATE: { bg: 'var(--color-error-muted)', fg: 'var(--color-error)', label: 'Entregado tarde' },
+  GRADED: { bg: 'var(--color-success-muted)', fg: 'var(--color-success)', label: 'Calificado' },
 };
 
 /** True when the assignment's due date is in the past. */

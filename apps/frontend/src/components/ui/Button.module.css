@@ -130,11 +130,11 @@
 }
 
 .danger:hover:not(:disabled) {
-  background-color: #991b1b; /* darker red */
+  background-color: var(--color-error-hover);
 }
 
 .danger:active:not(:disabled) {
-  background-color: #7f1d1d; /* even darker */
+  background-color: var(--color-error-active);
 }
 
 /* =============================================================================

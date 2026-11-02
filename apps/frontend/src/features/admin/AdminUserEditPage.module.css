@@ -42,9 +42,9 @@
 .banner {
   padding: 12px 16px;
   border-radius: 10px;
-  background: rgba(192, 57, 43, 0.08);
-  border: 1px solid rgba(192, 57, 43, 0.35);
-  color: #c0392b;
+  background: var(--color-error-muted);
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
+  color: var(--color-error);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -52,15 +52,15 @@
 .dangerZone {
   margin-top: 32px;
   padding: 18px 20px;
-  border: 1px solid rgba(192, 57, 43, 0.35);
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
   border-radius: 13px;
-  background: rgba(192, 57, 43, 0.04);
+  background: color-mix(in srgb, var(--color-error) 4%, transparent);
 }
 
 .dangerTitle {
   font-size: 14px;
   font-weight: 700;
-  color: #c0392b;
+  color: var(--color-error);
   margin: 0 0 8px;
 }
 
