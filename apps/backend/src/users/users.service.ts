@@ -336,6 +336,74 @@ export class UsersService {
     });
   }
 
+  /**
+   * Public profile of another member of the caller's organization (#137).
+   * Only public fields; email is exposed to staff viewers only. Blocked pairs
+   * are reported as not found in both directions (a block is never revealed).
+   */
+  async getPublicProfile(targetId: string, callerId: string, organizationId: string, callerRole: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: targetId, organizationId },
+      select: {
+        id: true, name: true, avatarUrl: true, role: true, bio: true, email: true, createdAt: true,
+      },
+    });
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+
+    let relation: FriendRelation = 'NONE';
+    let friendshipId: string | null = null;
+    let sharedCourses: { id: string; name: string }[] = [];
+    if (targetId !== callerId) {
+      const [friendship, callerMemberships] = await Promise.all([
+        this.prisma.friendship.findFirst({
+          where: {
+            OR: [
+              { requesterId: callerId, addresseeId: targetId },
+              { requesterId: targetId, addresseeId: callerId },
+            ],
+            requester: { is: { organizationId } },
+            addressee: { is: { organizationId } },
+          },
+          select: { id: true, requesterId: true, status: true },
+        }),
+        this.prisma.courseMembership.findMany({
+          where: { userId: callerId, course: { organizationId } },
+          select: { courseId: true },
+        }),
+      ]);
+      if (friendship?.status === 'BLOCKED') throw new NotFoundException('Usuario no encontrado.');
+      if (friendship) {
+        friendshipId = friendship.id;
+        relation = friendship.status === 'ACCEPTED'
+          ? 'FRIEND'
+          : friendship.requesterId === callerId ? 'PENDING_SENT' : 'PENDING_RECEIVED';
+      }
+      if (callerMemberships.length > 0) {
+        const shared = await this.prisma.courseMembership.findMany({
+          where: {
+            userId: targetId,
+            courseId: { in: callerMemberships.map((membership) => membership.courseId) },
+            course: { organizationId },
+          },
+          select: { course: { select: { id: true, name: true } } },
+          take: 10,
+        });
+        sharedCourses = shared.map((membership) => membership.course).sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
+
+    const { email, createdAt, ...publicFields } = target;
+    const canSeeEmail = callerRole === 'ADMIN' || (callerRole === 'TEACHER' && target.role !== 'ADMIN');
+    return {
+      ...publicFields,
+      ...(canSeeEmail ? { email } : {}),
+      memberSince: createdAt,
+      sharedCourses,
+      relation,
+      friendshipId,
+    };
+  }
+
   async uploadAvatar(user: AuthUser, file: Express.Multer.File) {
     if (!this.files) throw new BadRequestException('La subida de archivos no está disponible.');
     const fileRecord = await this.files.createUpload(

@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api';
 import type { GlobalRole } from '@/lib/api';
 import { usePresence } from '@/features/presence';
 import { useNotifications } from '@/features/notifications';
+import { UserLink } from '@/features/profile/UserLink';
 import styles from './FriendsPage.module.css';
 
 interface FriendPerson {
@@ -300,7 +301,7 @@ export function FriendsPage() {
                     <div className={styles.personInfo}>
                       <Avatar src={person.avatarUrl} size="md" />
                       <div className={styles.personText}>
-                        <div className={styles.personName}>{person.name}</div>
+                        <div className={styles.personName}><UserLink userId={person.id}>{person.name}</UserLink></div>
                         <div className={styles.muted}>
                           {ROLE_LABEL[person.role]}
                           {person.sharedCourse && ` · Cohorte: ${person.sharedCourse}`}
@@ -371,7 +372,7 @@ export function FriendsPage() {
                 <li className={styles.personRow} key={request.friendshipId}>
                   <div className={styles.personInfo}>
                     <Avatar src={request.avatarUrl} size="md" />
-                    <span className={styles.personName}>{request.name}</span>
+                    <span className={styles.personName}><UserLink userId={request.id}>{request.name}</UserLink></span>
                   </div>
                   <div className={styles.actions}>
                     <Button
@@ -417,7 +418,7 @@ export function FriendsPage() {
                   <div className={styles.personInfo}>
                     <Avatar src={request.avatarUrl} size="md" />
                     <div>
-                      <div className={styles.personName}>{request.name}</div>
+                      <div className={styles.personName}><UserLink userId={request.id}>{request.name}</UserLink></div>
                       <div className={styles.muted}>Pendiente de respuesta</div>
                     </div>
                   </div>
@@ -466,7 +467,7 @@ export function FriendsPage() {
                 <li className={styles.personRow} key={friend.friendshipId}>
                   <div className={styles.personInfo}>
                     <Avatar src={friend.avatarUrl} size="md" />
-                    <span className={styles.personName}>{friend.name}</span>
+                    <span className={styles.personName}><UserLink userId={friend.id}>{friend.name}</UserLink></span>
                     <Badge variant={online ? 'success' : 'neutral'} dot aria-live="polite">
                       {isPresenceLoading ? 'Comprobando' : presenceError ? 'Estado no disponible' : online ? 'En línea' : 'Desconectado'}
                     </Badge>

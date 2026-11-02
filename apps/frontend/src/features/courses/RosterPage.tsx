@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Minus } from 'lucide-react';
 import { Avatar, EmptyState, Spinner } from '@/components/ui';
+import { UserLink } from '@/features/profile/UserLink';
 import { useEnrollments, useLessonProgress, useSections, useUsersByIds } from '@/lib/api';
 import styles from './RosterPage.module.css';
 
@@ -81,6 +82,9 @@ export function RosterPage({ courseId }: { courseId: string }) {
 
             {expanded && (
               <div id={detailId} className={styles.detail}>
+                <p className={styles.detailNote}>
+                  <UserLink userId={row.userId}>Ver perfil de {row.name}</UserLink>
+                </p>
                 {progressLoading && <Spinner label="Cargando progreso" />}
                 {!progressLoading && (progressError || !completed) && (
                   <p className={styles.detailNote}>No se pudo cargar el detalle del progreso.</p>
