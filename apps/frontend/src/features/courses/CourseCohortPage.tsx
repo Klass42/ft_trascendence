@@ -116,6 +116,7 @@ export function CourseCohortPage() {
   const [removalTarget, setRemovalTarget] = useState<RemovalTarget | null>(null);
   const rosterIds = Array.from(new Set([...members.map((m) => m.userId), ...staff.map((s) => s.userId)]));
   const { data: rosterUsers } = useUsersByIds(rosterIds);
+  const isDeactivated = (userId: string) => rosterUsers?.find((u) => u.id === userId)?.deactivated ?? false;
   const userLabel = (userId: string) => {
     const found = rosterUsers?.find((u) => u.id === userId);
     return found ? `${found.name} (${found.email})` : userId;
@@ -454,7 +455,7 @@ export function CourseCohortPage() {
             <ul className={styles.subjectList} aria-label="Matriculados">
               {members.map((member) => (
                 <li className={styles.subjectRow} key={member.userId}>
-                  <span className={styles.subjectTitle}><UserLink userId={member.userId}>{userLabel(member.userId)}</UserLink></span>
+                  <span className={styles.subjectTitle}><UserLink userId={member.userId}>{userLabel(member.userId)}</UserLink>{isDeactivated(member.userId) && <> <Badge variant="neutral">Cuenta desactivada</Badge></>}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -479,7 +480,7 @@ export function CourseCohortPage() {
                 const subjectTitle = subjects.find((subject) => subject.id === row.subjectId)?.title ?? '';
                 return (
                   <li className={styles.subjectRow} key={`${row.subjectId}:${row.userId}`}>
-                    <span className={styles.subjectTitle}><UserLink userId={row.userId}>{userLabel(row.userId)}</UserLink></span>
+                    <span className={styles.subjectTitle}><UserLink userId={row.userId}>{userLabel(row.userId)}</UserLink>{isDeactivated(row.userId) && <> <Badge variant="neutral">Cuenta desactivada</Badge></>}</span>
                     <Badge variant="info">{row.role === 'TEACHER' ? 'Profesor' : 'Asistente'} · {subjectTitle}</Badge>
                     <Button
                       variant="ghost"

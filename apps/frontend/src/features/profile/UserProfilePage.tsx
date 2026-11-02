@@ -134,6 +134,7 @@ export function UserProfilePage() {
             <h1 className={styles.name}>{profile.name}</h1>
             <div className={styles.badges}>
               <Badge variant="accent">{ROLE_LABEL[profile.role]}</Badge>
+              {profile.deactivated && <Badge variant="neutral">Cuenta desactivada</Badge>}
               {isFriend && (
                 presence ? (
                   <Badge variant={presence.online ? 'success' : 'neutral'} dot aria-live="polite">
@@ -148,7 +149,7 @@ export function UserProfilePage() {
             </div>
           </div>
           <div className={styles.action}>
-            {profile.relation === 'NONE' && (
+            {profile.relation === 'NONE' && !profile.deactivated && (
               <Button leftIcon={<UserPlus size={16} />} loading={isBusy} onClick={() => void sendRequest()}>
                 Añadir
               </Button>

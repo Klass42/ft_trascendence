@@ -8,6 +8,8 @@ export interface RosterUserDTO {
   name: string;
   email: string;
   avatarUrl: string | null;
+  /** #134: the account is deactivated (enrolment kept). */
+  deactivated: boolean;
 }
 
 /** Frontend row model after merging enrollment + user data. */

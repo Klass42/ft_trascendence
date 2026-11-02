@@ -85,6 +85,7 @@ export class NotificationsService {
    * Notify a de-duplicated set of users after the main action has completed.
    * When an organization is supplied, re-resolve recipients inside that tenant
    * before emitting so callers cannot accidentally cross organization bounds.
+   * Deactivated accounts (#134) are dropped from that same query.
    */
   async emitMany(
     userIds: readonly string[] | NotificationRecipientLoader,
@@ -97,8 +98,9 @@ export class NotificationsService {
       let recipients = [...new Set(resolvedIds.filter(Boolean))];
       if (options.actorId) recipients = recipients.filter((id) => id !== options.actorId);
       if (options.organizationId && recipients.length > 0) {
+        // #134: deactivated accounts get nothing while they are out of the organization.
         const users = await this.prisma.user.findMany({
-          where: { id: { in: recipients }, organizationId: options.organizationId },
+          where: { id: { in: recipients }, organizationId: options.organizationId, deactivatedAt: null },
           select: { id: true },
         });
         recipients = users.map((user) => user.id);

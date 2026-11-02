@@ -11,6 +11,8 @@ export interface PublicProfileDTO {
   bio: string | null;
   email?: string;
   memberSince: string;
+  /** #134: only staff receive a deactivated profile; there are no friend actions for it. */
+  deactivated?: boolean;
   sharedCourses: { id: string; name: string }[];
   relation: FriendRelation;
   friendshipId: string | null;

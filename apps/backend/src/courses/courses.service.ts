@@ -280,10 +280,13 @@ export class CoursesService {
 
           const target = await tx.user.findFirst({
             where: { id: dto.userId, organizationId: user.organizationId },
-            select: { id: true, role: true },
+            select: { id: true, role: true, deactivatedAt: true },
           });
           if (!target) {
             throw new NotFoundException('Usuario no encontrado en esta organización.');
+          }
+          if (target.deactivatedAt) {
+            throw new ConflictException('Esa cuenta está desactivada. Reactívala antes de matricularla.');
           }
           if (target.role !== 'STUDENT' && target.role !== 'TEACHER') {
             throw new ForbiddenException(
@@ -389,10 +392,13 @@ export class CoursesService {
     const subject = await this.requireSubject(subjectId, user.organizationId);
     const target = await this.prisma.user.findFirst({
       where: { id: dto.userId, organizationId: user.organizationId },
-      select: { id: true, role: true },
+      select: { id: true, role: true, deactivatedAt: true },
     });
     if (!target) {
       throw new NotFoundException('Usuario no encontrado en esta organización.');
+    }
+    if (target.deactivatedAt) {
+      throw new ConflictException('Esa cuenta está desactivada. Reactívala antes de asignarla.');
     }
     if (target.role !== 'TEACHER' && target.role !== 'ADMIN') {
       throw new ForbiddenException(

@@ -74,13 +74,12 @@ export function MemberAccessDialog({ organizationId, target, onCancel, onDone }:
           deactivate ? (
             <>
               <strong>{target.name}</strong>{target.email ? ` (${target.email})` : ''} dejará de poder
-              entrar, se cerrarán sus sesiones y saldrá de sus cohortes y asignaturas. Sus entregas,
-              notas y mensajes se conservan y podrás reactivarla más tarde.
+              entrar y se cerrarán sus sesiones. Sus matrículas, entregas, notas y mensajes se conservan
+              (seguirá apareciendo en las calificaciones como cuenta desactivada) y podrás reactivarla más tarde.
             </>
           ) : (
             <>
-              <strong>{target.name}</strong> podrá volver a entrar con su cuenta y su historial. Las
-              matrículas en cohortes no se restauran: vuelve a matricularla si hace falta.
+              <strong>{target.name}</strong> podrá volver a entrar con su cuenta, sus matrículas y su historial.
             </>
           )
         ) : null

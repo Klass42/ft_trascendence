@@ -344,9 +344,10 @@ export class OrganizationsService {
 
   /**
    * #134: "remove from the organization" = DEACTIVATE, not delete. The account
-   * keeps its submissions, grades, attempts and forum posts; it loses its
-   * sessions, course enrolments and subject staff seats, and cannot sign in
-   * until an admin reactivates it. Hard delete stays on DELETE /users/:id.
+   * keeps its submissions, grades, attempts, forum posts, course enrolments and
+   * subject staff seats (so grades stay in the gradebook and reactivation
+   * restores everything); it only loses its sessions and cannot sign in until
+   * an admin reactivates it. Hard delete stays on DELETE /users/:id.
    */
   async removeMember(
     id: string, userId: string, callerOrgId: string, callerUserId: string,
@@ -365,9 +366,7 @@ export class OrganizationsService {
     const removed = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { deactivatedAt } });
       const sessions = await tx.session.deleteMany({ where: { userId } });
-      const enrolments = await tx.courseMembership.deleteMany({ where: { userId } });
-      const staff = await tx.subjectStaff.deleteMany({ where: { userId } });
-      await tx.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_DEACTIVATED', organizationId: id, targetUserId: userId, metadata: { userId, name: target.name, sessions: sessions.count, enrolments: enrolments.count, staff: staff.count } } });
+      await tx.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_DEACTIVATED', organizationId: id, targetUserId: userId, metadata: { userId, name: target.name, sessions: sessions.count } } });
       return true;
     });
     // #135 (PR #142): the realtime gateway disconnects user:<id> on this event.
@@ -386,7 +385,7 @@ export class OrganizationsService {
     );
   }
 
-  /** #134: undo removeMember. Enrolments are not restored (re-enrol by hand). */
+  /** #134: undo removeMember. Enrolments and staff seats were kept, so access is fully restored. */
   async reactivateMember(
     id: string, userId: string, callerOrgId: string, callerUserId: string,
   ) {
@@ -400,6 +399,25 @@ export class OrganizationsService {
     await assertUserLimit(this.prisma as any, id);
     await this.prisma.user.update({ where: { id: userId }, data: { deactivatedAt: null } });
     await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_REACTIVATED', organizationId: id, targetUserId: userId, metadata: { userId, name: target.name } } });
+    // Sent after clearing deactivatedAt, otherwise emitMany would drop the recipient.
+    await this.notifications.emitMany(
+      [userId],
+      NotificationType.USER_CHANGED,
+      { title: 'Tu cuenta se ha reactivado', body: 'Ya puedes volver a iniciar sesión y acceder a tus cursos.', link: '/dashboard' },
+      { organizationId: id, actorId: callerUserId },
+    );
+    await this.notifications.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId: id, role: 'ADMIN', deactivatedAt: null },
+          select: { id: true },
+        });
+        return admins.map(({ id: adminId }) => adminId);
+      },
+      NotificationType.USER_CHANGED,
+      { title: 'Se ha reactivado a un miembro', body: `Se ha reactivado la cuenta de ${target.name}.`, link: '/admin/users' },
+      { organizationId: id, actorId: callerUserId },
+    );
     return { id: userId, deactivatedAt: null };
   }
 

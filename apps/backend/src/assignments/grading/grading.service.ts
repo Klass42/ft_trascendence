@@ -131,7 +131,7 @@ export class GradingService {
     const enrollments = await this.prisma.courseMembership.findMany({
       where: subjectStudentsWhere(subject),
       include: {
-        user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        user: { select: { id: true, name: true, email: true, avatarUrl: true, deactivatedAt: true } },
       },
       orderBy: { user: { name: 'asc' } },
     });
@@ -155,17 +155,19 @@ export class GradingService {
     const finalItems: FinalItem[] = activities.map(toFinalItem);
     const finalAttempts: FinalAttempt[] = attempts.map(toFinalAttempt);
 
-    const students = enrollments.map((e) => ({
-      user: e.user,
+    // #134: deactivated accounts keep their enrolment and grades; the flag lets the UI label them.
+    const students = enrollments.map(({ user: { deactivatedAt, ...user }, userId }) => ({
+      user,
+      deactivated: Boolean(deactivatedAt),
       cells: activities.map<GradebookCell>((a) =>
         pickCell(
           a.id,
           attempts.filter(
-            (att) => att.activityId === a.id && att.userId === e.userId,
+            (att) => att.activityId === a.id && att.userId === userId,
           ),
         ),
       ),
-      final: computeFinalGrade(finalItems, finalAttempts, e.userId, now),
+      final: computeFinalGrade(finalItems, finalAttempts, userId, now),
     }));
 
     return {
@@ -394,7 +396,7 @@ export class GradingService {
     ];
 
     const rows = gradebook.students.map((student) => [
-      student.user.name ?? '',
+      `${student.user.name ?? ''}${student.deactivated ? ' (desactivada)' : ''}`,
       student.user.email ?? '',
       ...student.cells.map((c) =>
         c.status === AttemptStatus.SUBMITTED

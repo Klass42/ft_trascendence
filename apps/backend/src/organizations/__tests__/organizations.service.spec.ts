@@ -240,14 +240,14 @@ describe('OrganizationsService', () => {
   });
 
   describe('removeMember', () => {
-    it('#134 deactivates (never deletes): revokes sessions, unenrols, keeps history, emits user.deactivated', async () => {
+    it('#134 deactivates (never deletes): revokes sessions, keeps enrolments and history, emits user.deactivated', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'Sam', organizationId: ORG_ID, deactivatedAt: null });
       await service.removeMember(ORG_ID, 'user-student-0001', ORG_ID, 'user-admin-0001');
       expect(prisma.user.delete).not.toHaveBeenCalled();
       expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-student-0001' }, data: { deactivatedAt: expect.any(Date) } });
       expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
-      expect(prisma.courseMembership.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
-      expect(prisma.subjectStaff.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
+      expect(prisma.courseMembership.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.subjectStaff.deleteMany).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'MEMBER_DEACTIVATED', targetUserId: 'user-student-0001' }) }));
       expect(events.emit).toHaveBeenCalledWith('user.deactivated', { userId: 'user-student-0001' });
     });
@@ -296,6 +296,24 @@ describe('OrganizationsService', () => {
       await expect(service.reactivateMember(ORG_ID, 'u', ORG_ID, 'user-admin-0001')).resolves.toEqual({ id: 'u', deactivatedAt: null });
       expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u' }, data: { deactivatedAt: null } });
       expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'MEMBER_REACTIVATED' }) }));
+    });
+
+    it('notifies the reactivated user and the other admins', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u', name: 'Sam', organizationId: ORG_ID, deactivatedAt: new Date() });
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ maxUsers: null });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-admin-0001' }, { id: 'admin-2' }]);
+      await service.reactivateMember(ORG_ID, 'u', ORG_ID, 'user-admin-0001');
+      expect(notifications.emitMany).toHaveBeenCalledTimes(2);
+      const [toUser, toAdmins] = notifications.emitMany.mock.calls;
+      expect(toUser[0]).toEqual(['u']);
+      expect(toUser[1]).toBe(NotificationType.USER_CHANGED);
+      expect(toUser[2]).toMatchObject({ title: 'Tu cuenta se ha reactivado', link: '/dashboard' });
+      expect(toUser[3]).toEqual({ organizationId: ORG_ID, actorId: 'user-admin-0001' });
+      expect(toAdmins[1]).toBe(NotificationType.USER_CHANGED);
+      expect(toAdmins[2]).toMatchObject({ link: '/admin/users' });
+      expect(toAdmins[3]).toEqual({ organizationId: ORG_ID, actorId: 'user-admin-0001' });
+      await expect(toAdmins[0]()).resolves.toEqual(['user-admin-0001', 'admin-2']);
+      expect(prisma.user.findMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID, role: 'ADMIN', deactivatedAt: null }, select: { id: true } });
     });
 
     it('respects the plan user limit', async () => {

@@ -65,6 +65,8 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id }, select: selectUser });
     if (!user) throw new NotFoundException('Usuario no encontrado.');
     if (user.organizationId !== organizationId) throw new ForbiddenException('El usuario pertenece a otra organización.');
+    // #134: a deactivated account is only visible to staff.
+    if (user.deactivatedAt && callerRole !== 'ADMIN' && callerRole !== 'TEACHER') throw new NotFoundException('Usuario no encontrado.');
     if (callerRole !== 'ADMIN') {
       const { id: uid, name, avatarUrl, role, bio, onlineAt } = user;
       return { id: uid, name, avatarUrl, role, bio, onlineAt };
@@ -282,6 +284,7 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: {
         organizationId,
+        deactivatedAt: null,
         id: { notIn: [...hiddenIds] },
         OR: [
           { name: { contains: normalizedQuery, mode: 'insensitive' } },
@@ -322,7 +325,7 @@ export class UsersService {
     });
     if (!caller) throw new NotFoundException('Usuario no encontrado.');
     const target = await this.prisma.user.findFirst({
-      where: { id: targetId, organizationId: callerOrgId },
+      where: { id: targetId, organizationId: callerOrgId, deactivatedAt: null },
       select: { id: true },
     });
     if (!target) throw new NotFoundException('Usuario no encontrado.');
@@ -358,7 +361,7 @@ export class UsersService {
     const friendIds = friendships.map(f => f.requesterId === userId ? f.addresseeId : f.requesterId);
     if (friendIds.length === 0) return [];
     return this.prisma.user.findMany({
-      where: { id: { in: friendIds }, organizationId },
+      where: { id: { in: friendIds }, organizationId, deactivatedAt: null },
       select: selectPublicProfile,
       orderBy: { name: 'asc' },
     });
@@ -373,10 +376,14 @@ export class UsersService {
     const target = await this.prisma.user.findFirst({
       where: { id: targetId, organizationId },
       select: {
-        id: true, name: true, avatarUrl: true, role: true, bio: true, email: true, createdAt: true,
+        id: true, name: true, avatarUrl: true, role: true, bio: true, email: true, createdAt: true, deactivatedAt: true,
       },
     });
     if (!target) throw new NotFoundException('Usuario no encontrado.');
+    // #134: deactivated accounts are hidden from the directory; only staff (reached from
+    // the gradebook/roster) still see the profile, flagged and without friend actions.
+    const deactivated = Boolean(target.deactivatedAt);
+    if (deactivated && callerRole !== 'ADMIN' && callerRole !== 'TEACHER') throw new NotFoundException('Usuario no encontrado.');
 
     let relation: FriendRelation = 'NONE';
     let friendshipId: string | null = null;
@@ -420,12 +427,13 @@ export class UsersService {
       }
     }
 
-    const { email, createdAt, ...publicFields } = target;
+    const { email, createdAt, deactivatedAt: _deactivatedAt, ...publicFields } = target;
     const canSeeEmail = callerRole === 'ADMIN' || (callerRole === 'TEACHER' && target.role !== 'ADMIN');
     return {
       ...publicFields,
       ...(canSeeEmail ? { email } : {}),
       memberSince: createdAt,
+      deactivated,
       sharedCourses,
       relation,
       friendshipId,
@@ -474,9 +482,9 @@ export class UsersService {
     if (ids.length === 0) return [];
     return this.prisma.user.findMany({
       where: { id: { in: ids }, organizationId },
-      select: { id: true, name: true, email: true, avatarUrl: true },
+      select: { id: true, name: true, email: true, avatarUrl: true, deactivatedAt: true },
       orderBy: { name: 'asc' },
-    });
+    }).then((users) => users.map(({ deactivatedAt, ...user }) => ({ ...user, deactivated: Boolean(deactivatedAt) })));
   }
 
   // ── Single lookup for add-student modal (A3) ──
