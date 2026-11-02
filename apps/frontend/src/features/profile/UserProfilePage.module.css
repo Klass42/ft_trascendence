@@ -1,0 +1,134 @@
+.page {
+  width: min(100%, 44rem);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-10);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-16);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-extrabold);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.badges,
+.action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-primary);
+}
+
+.sectionTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+}
+
+.bio {
+  margin: 0;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.details dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.details dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.courseList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.courseLink {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-full);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.courseLink:hover { background: var(--color-accent-muted); }
+.courseLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.error {
+  margin: var(--space-3) 0;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .page { padding: var(--space-6) var(--space-5); }
+}
+
+@media (max-width: 480px) {
+  .page { padding: var(--space-5) var(--space-3); }
+  .header { flex-direction: column; align-items: flex-start; }
+  .action { width: 100%; }
+}

@@ -73,6 +73,9 @@ const ResourcesPage = lazy(() =>
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
 );
+const UserProfilePage = lazy(() =>
+  import('@/features/profile').then((m) => ({ default: m.UserProfilePage }))
+);
 const FriendsPage = lazy(() =>
   import('@/features/friends').then((m) => ({ default: m.FriendsPage }))
 );
@@ -346,6 +349,14 @@ const routes: RouteObject[] = [
         element: (
           <Suspense fallback={<PageLoader />}>
             <ProfilePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/users/:id',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <UserProfilePage />
           </Suspense>
         ),
       },
