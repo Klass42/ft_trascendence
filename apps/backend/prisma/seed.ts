@@ -125,6 +125,8 @@ async function clearApplicationData(): Promise<void> {
     await tx.activity.deleteMany();
     await tx.subjectResource.deleteMany();
     await tx.learningResource.deleteMany();
+    await tx.subjectFolder.deleteMany();
+    await tx.resourceFolder.deleteMany();
     await tx.submissionFile.deleteMany();
     await tx.submission.deleteMany();
     await tx.assignmentFile.deleteMany();
