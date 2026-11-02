@@ -96,7 +96,7 @@ export function SubmissionForm({
           {chip.label}
         </span>
         {submission?.status === 'GRADED' && submission.score != null && (
-          <span style={{ fontSize: 15, fontWeight: 800, color: '#0f766e' }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-success)' }}>
             {submission.score} / {assignment.maxScore}
           </span>
         )}
@@ -248,7 +248,7 @@ export function SubmissionForm({
             </p>
           )}
           {okMessage && (
-            <p style={{ color: '#0f766e', fontSize: 13, margin: 0 }}>
+            <p style={{ color: 'var(--color-success)', fontSize: 13, margin: 0 }}>
               {okMessage}
             </p>
           )}

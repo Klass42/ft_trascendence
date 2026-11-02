@@ -1,5 +1,5 @@
 import { Users } from 'lucide-react';
-import { useNavigate, NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { Badge, Dropdown } from '@/components/ui';
 import { usePresence } from './PresenceProvider';
 import styles from './FriendsPresence.module.css';
@@ -10,7 +10,6 @@ import styles from './FriendsPresence.module.css';
  * `presence:update` events in real time (A6b).
  */
 export function FriendsPresence() {
-  const navigate = useNavigate();
   const { friends, onlineCount, isLoading } = usePresence();
 
   const trigger = (
@@ -52,9 +51,9 @@ export function FriendsPresence() {
             </Badge>
           </span>
         ),
-        onClick: () => navigate('/friends'),
+        to: `/users/${encodeURIComponent(friend.id)}`,
       })),
-    { label: 'Gestionar amigos', onClick: () => navigate('/friends') },
+    { label: 'Gestionar amigos', to: '/friends' },
   ];
 
   return (

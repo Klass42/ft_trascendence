@@ -3,11 +3,14 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { USER_DEACTIVATED } from '@/realtime/realtime.events';
 import { NotificationsService } from '@/notifications/notifications.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -66,6 +69,7 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly events?: EventEmitter2,
   ) {}
 
   async invite(organizationId: string, invitedById: string, dto: CreateInvitationDto, auditAction = 'MEMBER_INVITED') {
@@ -325,6 +329,7 @@ export class OrganizationsService {
     if (!target) throw new NotFoundException('Usuario no encontrado.');
     if (target.organizationId !== id) throw new ForbiddenException('El usuario pertenece a otra organización.');
     await this.prisma.user.delete({ where: { id: userId } });
+    this.events?.emit(USER_DEACTIVATED, { userId });
     await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_REMOVED', organizationId: id, metadata: { userId, name: target.name } } });
     await this.notifications.emitMany(
       async () => {

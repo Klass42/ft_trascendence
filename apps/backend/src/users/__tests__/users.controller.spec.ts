@@ -17,6 +17,7 @@ const mkService = () =>
     listFriends: jest.fn(),
     sendFriendRequest: jest.fn(),
     searchUsers: jest.fn(),
+    getPublicProfile: jest.fn(),
   }) as unknown as UsersService;
 
 const admin = {
@@ -44,6 +45,16 @@ describe('UsersController', () => {
       UsersController,
     ]);
     expect(roles).toBeUndefined();
+  });
+
+  it('getPublicProfile is open to any authenticated member and forwards caller context', async () => {
+    const svc = mkService();
+    const ctrl = new UsersController(svc);
+    expect(reflector.getAllAndOverride(ROLES_KEY, [ctrl.getPublicProfile, UsersController])).toBeUndefined();
+    await ctrl.getPublicProfile('user-student-0001', admin);
+    expect(svc.getPublicProfile).toHaveBeenCalledWith(
+      'user-student-0001', 'user-admin-0001', 'org-klass-0001', 'ADMIN',
+    );
   });
 
   it('create requires ADMIN role', () => {

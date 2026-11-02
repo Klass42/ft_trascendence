@@ -154,6 +154,16 @@ describe('PlatformService', () => {
       expect(session.deleteMany).toHaveBeenCalled();
     });
 
+    it('emits organization.suspended so the gateway cuts live sockets (#135)', async () => {
+      const { prisma } = buildFake();
+      const events = { emit: jest.fn() };
+      const service = new PlatformService(prisma, noOpFiles, undefined, events as any);
+
+      await service.suspend(ORG_ID, ACTOR_ID);
+
+      expect(events.emit).toHaveBeenCalledWith('organization.suspended', { organizationId: ORG_ID });
+    });
+
     it('sets status to SUSPENDED and revokes active sessions', async () => {
       const { prisma, organization, user, session, auditLog } = buildFake();
       (user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1' }, { id: 'user-2' }]);

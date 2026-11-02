@@ -72,6 +72,12 @@ export class UsersController {
     return this.usersService.sendFriendRequest(user.userId, id, user.organizationId);
   }
 
+  /** Public profile of another member of the organization (#137). */
+  @Get(':id/profile')
+  async getPublicProfile(@Param('id', ParseIdPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.usersService.getPublicProfile(id, user.userId, user.organizationId, user.role);
+  }
+
   @Get('search')
   async search(@Query() query: SearchUsersDto, @CurrentUser() user: AuthUser) {
     return this.usersService.searchUsers(query.q, user.userId, user.organizationId);
