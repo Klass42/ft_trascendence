@@ -21,6 +21,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ name?: string; organization?: string; email?: string; password?: string; form?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   function validate(): boolean {
     const next: typeof errors = {};
@@ -70,8 +71,9 @@ export function RegisterPage() {
     if (!validate()) return;
     setIsLoading(true);
     try {
-      await register(name.trim(), email.trim(), password, organizationSlug.trim().toLowerCase());
-      navigate('/dashboard', { replace: true });
+      const result = await register(name.trim(), email.trim(), password, organizationSlug.trim().toLowerCase());
+      if (result === true) navigate('/dashboard', { replace: true });
+      else setPendingMessage(result);
     } catch (err) {
       if (err instanceof ApiError) mapServerErrors(err);
       else setErrors({ form: 'Error de red. Comprueba tu conexión.' });
@@ -97,6 +99,12 @@ export function RegisterPage() {
         </div>
 
         <Card className={styles.card}>
+          {pendingMessage ? (
+            <div role="status" className={styles.form}>
+              <p>{pendingMessage}</p>
+              <Link to="/login">Ir a iniciar sesión</Link>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} noValidate className={styles.form}>
             {errors.form && (
               <div className={styles.error} role="alert">{errors.form}</div>
@@ -191,6 +199,7 @@ export function RegisterPage() {
               </>
             )}
           </form>
+          )}
         </Card>
 
         <p className={styles.footer}>

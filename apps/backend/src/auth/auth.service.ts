@@ -132,23 +132,33 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async register(dto: RegisterDto): Promise<{
-    user: AuthUser;
-    accessToken: string;
-    refreshToken: string;
-  }> {
+  /**
+   * #74/#140: tokens are only issued when the new account is already verified (auto-verified
+   * outside production). Otherwise the answer is a uniform "pending verification" body with no
+   * tokens, and an e-mail that already exists in the organization gets exactly the same answer
+   * (no account enumeration).
+   */
+  async register(dto: RegisterDto): Promise<
+    | { user: AuthUser; accessToken: string; refreshToken: string }
+    | { verificationRequired: true; message: string }
+  > {
+    const pending = {
+      verificationRequired: true as const,
+      message: 'Si los datos son correctos, recibirás un enlace para confirmar tu correo electrónico antes de iniciar sesión.',
+    };
     // #110: un registro con un código inexistente o suspendido no es un problema de «credenciales».
     const organization = await this.prisma.organization.findUnique({ where: { slug: dto.organizationSlug! } });
-    if (!organization || organization.status !== 'ACTIVE') {
-      throw new BadRequestException('No hay ninguna organización activa con ese código. Revisa el código que te ha dado tu centro.');
-    }
+    // #140: unknown or suspended codes get the same answer as a valid registration, so the
+    // register endpoint does not reveal which organizations exist.
+    if (!organization || organization.status !== 'ACTIVE') return pending;
 
     const existing = await this.prisma.user.findFirst({
       where: { organizationId: organization.id, email: dto.email },
     });
     if (existing) {
-      // #110: mensaje genérico (no confirma de forma explícita qué cuentas existen).
-      throw new ConflictException('No se ha podido crear la cuenta con estos datos. Si ya tienes una cuenta, inicia sesión o recupera tu contraseña.');
+      // #110/#140: same answer as a new pending account, so the response does not reveal
+      // which e-mails are registered.
+      return pending;
     }
 
     await assertUserLimit(this.prisma as any, organization.id);
@@ -182,6 +192,9 @@ export class AuthService {
       `${user.name} (${user.email}) se ha registrado como estudiante.`,
       `/admin/users/${user.id}`,
     );
+
+    // #74: never hand out a session before the e-mail is verified.
+    if (!user.emailVerifiedAt) return pending;
 
     const tokens = await this.issueTokens(user.id);
     return { user: this.mapUser(user), ...tokens };

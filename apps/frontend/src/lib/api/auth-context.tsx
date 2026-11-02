@@ -67,7 +67,8 @@ interface AuthContextValue {
   /** Platform accounts have no organization and authenticate separately. */
   loginPlatform: (email: string, password: string) => Promise<void>;
   /** Register with name/email/password inside an organization */
-  register: (name: string, email: string, password: string, organizationSlug: string) => Promise<void>;
+  /** Register. Resolves to `true` when signed in, or to the pending-verification message (#74). */
+  register: (name: string, email: string, password: string, organizationSlug: string) => Promise<true | string>;
   /** Login with OAuth (Google) inside an organization. Returns false if the code is not a slug. */
   loginWithGoogle: (organizationSlug: string) => boolean;
   /** Logout and clear tokens */
@@ -182,11 +183,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Register with name/email/password
   // ---------------------------------------------------------------------------
   const register = useCallback(async (name: string, email: string, password: string, organizationSlug: string) => {
-    const response = await apiClient.post<LoginResponse>(
+    const response = await apiClient.post<LoginResponse | { verificationRequired: true; message: string }>(
       '/auth/register',
       { name, email, password, organizationSlug },
       { skipAuth: true }
     );
+    // #74: no tokens until the e-mail is verified.
+    if ('verificationRequired' in response) return response.message;
 
     const tokens: AuthTokens = {
       accessToken: response.accessToken,
@@ -195,6 +198,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     tokenStorage.setTokens(tokens);
 
     setUser(response.user);
+    return true as const;
   }, []);
 
   // ---------------------------------------------------------------------------

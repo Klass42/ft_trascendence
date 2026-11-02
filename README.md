@@ -22,8 +22,9 @@ assignments and tests, grades, forums, friends and real-time notifications. Fina
 
 ## Description
 
-<!-- TODO(team): goal of the project, a short overview and the key features (subject: "a clear
-     name for the project and its key features"). Draft below, extend or rewrite. -->
+**Goal.** Give a small academy everything it needs to run its courses online in one place —
+content, assessment, grades and communication — with strict separation between academies and
+between roles, deployable by anyone with Docker in a single command.
 
 **Klass** is a multi-tenant LMS. Each organization (an academy) has its own courses, subjects,
 teachers and students; the platform administrator manages organizations from a separate
@@ -38,8 +39,8 @@ monitored deployment (Prometheus + Grafana).
 
 ## Team information
 
-<!-- TODO(team): the subject requires PO and PM to be named. Add the roles and one line of
-     responsibilities per person. Keep the order of the first line of this file. -->
+<!-- TODO(team): the subject requires the Product Owner and the Project Manager to be named.
+     Confirm who holds PO and PM and fill the Role(s) column; nothing has been invented here. -->
 
 | Member | 42 login | GitHub | Role(s) | Responsibilities |
 |---|---|---|---|---|
@@ -50,15 +51,19 @@ monitored deployment (Prometheus + Grafana).
 
 ## Project management
 
-<!-- TODO(team): how the work was organized (task split, meetings, branches), tools (GitHub
-     Issues / Projects, …) and communication channels (Discord, …). -->
-
+- **Task split:** work is split by domain (identity/organizations, content and assessment,
+  frontend and design system, infrastructure), each with an owner; cross-domain work is agreed in
+  the issue first (e.g. #134/#135: Jorge emits `user.deactivated`, David cuts the sockets).
+- **Planning:** GitHub Issues with labels (`plan-18-puntos`, `security`, `documentation`, …) and
+  one assignee per issue; the final plan targets 18 demonstrable points plus 3 margin points.
+- **One pull request per issue**, reviewed and merged into `staging` with green CI; `Closes #n`
+  links the PR to its issue.
 - **Branches:** every member works on a personal branch and opens a pull request to `staging`;
   `staging` is merged into `master` for delivery. CI runs on every pull request, including a real
   deployment of the stack (see [CI](#continuous-integration)).
 - **Code ownership:** [`.github/CODEOWNERS`](.github/CODEOWNERS); the split per person is in
   [`docs/planning/README.md`](docs/planning/README.md).
-- **Tools:** <!-- TODO --> · **Communication:** <!-- TODO --> · **Meetings:** <!-- TODO -->
+- **Tools:** GitHub (Issues, Pull Requests, Actions, CODEOWNERS) · **Communication:** <!-- TODO(team): Discord / Slack / … --> · **Meetings:** <!-- TODO(team): cadence -->
 
 ## Instructions
 
@@ -206,9 +211,14 @@ Full infrastructure guide: [`docs/infra/README.md`](docs/infra/README.md).
 
 ### Frontend
 
-<!-- TODO(Aloiki): technologies, frameworks and why. Known facts: React 19, TypeScript, Vite 6,
-     react-router-dom 7, CSS Modules + design tokens (own design system, 17 components),
-     socket.io-client, react-markdown, lucide-react. -->
+React 19 with TypeScript 5, built by Vite 6; routing with react-router-dom 7; styling with CSS
+Modules on top of our own design tokens and component kit (19 components, see
+[Custom-made design system](#modules)); socket.io-client 4 for real time, react-markdown for
+lessons, lucide-react icons, and jspdf + svg2pdf.js (loaded on demand) for the analytics PDF.
+The production build is static files served by unprivileged nginx.
+
+<!-- TODO(Aloiki): add the *why* behind the frontend choices (React vs. alternatives, CSS Modules
+     vs. a CSS framework, Vite). -->
 
 ### Backend
 
@@ -297,10 +307,8 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 
 ## Features list
 
-<!-- TODO(team): complete list, one line per feature: what it does + who built it. Suggested
-     groups: authentication & accounts, organizations & roles, courses & subjects, lessons &
-     content, assignments & tests, grades, forums, friends & presence, notifications, files,
-     platform back-office, deployment & monitoring. -->
+<!-- TODO(Aloiki): add your rows (courses & subjects, lessons & content, library, frontend shell)
+     with the correct author; only features with a known author are listed below. -->
 
 | Feature | Description | Member(s) |
 |---|---|---|
@@ -323,6 +331,9 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 | Friends and presence | Search people in your organization, send/accept/reject/cancel/remove friend requests, live online status | David |
 | Analytics dashboard | Course KPIs, submissions over time, grade distribution, date range, CSV and print-to-PDF export, live refresh when an attempt is submitted or graded | David |
 | Secure file access | Downloads are authorised per owner (course member, author, library, avatar) and served through short-lived HMAC-signed URLs; no public `/uploads` | David / Aloiki |
+| Account deactivation | Removing a member deactivates the account (`User.deactivatedAt`): sessions revoked, sockets cut, enrolments removed, history kept; admins can reactivate | Jorge (socket cut with David) |
+| Public user profile | `/users/:id` profile page with friendship actions | David |
+| Design system showcase | `/design` page rendering the live tokens and every UI component | David / Aloiki |
 | Auth hardening | Refresh tokens verified before any revocation, signed single-use OAuth `state`, rate limiting with `429 + Retry-After` | David / Jorge |
 
 ## Modules
@@ -334,7 +345,7 @@ We claim **18 points** of modules (the subject requires **14**) plus **3 margin 
 | Use a framework for both frontend and backend | Major | 2 | Whole team (shell: Aloiki) | React 19 (Vite) + NestJS 10: typed TypeScript end to end, Nest modules/guards/DI fit RBAC and multi-tenancy; React for a component-based SPA with our own design system |
 | Real-time features with WebSocket | Major | 2 | David | Socket.io gateway with JWT handshake, per-user rooms, live notifications, presence to friends and live analytics; connect/disconnect handled; efficient targeted broadcasting (see below) |
 | Use an ORM for the database | Minor | 1 | Jorge | Prisma 6 over PostgreSQL 16 (typed client, migrations, seed) — see below |
-| Standard user management | Major | 2 | Jorge | register/login/refresh/logout, profile, admin user CRUD, admin-mediated password recovery (no SMTP), anti-enumeration answers, self export/delete (`GET /users/me/export`, `POST /users/me/delete`) — see below |
+| Standard user management | Major | 2 | Jorge | register/login/refresh/logout, profile, admin user CRUD, admin-mediated password recovery (no SMTP), no session before e-mail verification, anti-enumeration answers (register and forgot-password answer the same for existing/unknown accounts and organizations), self export/delete (`GET /users/me/export`, `POST /users/me/delete`) — see below |
 | Advanced permissions / RBAC | Major | 2 | Jorge | `GlobalRole` + `PlatformRole`, guards, tenant-scoped queries — see below |
 | Organization system | Major | 2 | Jorge | orgs, invitations, members, platform back-office — see below |
 | Notification system | Minor | 1 | David | Persisted, real-time notifications for the create/update/delete actions of tasks, content, subjects, enrolments, forum, library and users (see below) |
@@ -574,8 +585,7 @@ time limit), `QuestionForm.tsx` / `QuestionContentEditor.tsx` (authoring), `Atte
 
 ## Individual contributions
 
-<!-- TODO(Aloiki): what you built, which modules, and the challenges you hit and how you solved
-     them. Be specific (the subject asks for honesty here). David's section is done. -->
+<!-- TODO(Aloiki): your section below is still missing. Jorge, David and Viacheslav are done. -->
 
 ### Jorge
 
@@ -618,7 +628,9 @@ audit found a cross-course clone and an answer-key leak, both fixed with regress
 
 ### Aloiki
 
-<!-- TODO -->
+<!-- TODO(Aloiki): what you built (frontend shell, design system, courses, files…), which modules
+     you carry (framework, file upload, design system) and the challenges you hit and how you
+     solved them. Be specific: the subject asks for honesty here. -->
 
 ### Viacheslav (vtrofyme) — DevOps
 
@@ -651,13 +663,14 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ## Resources
 
-<!-- TODO(team): add the references you used for the frontend, backend, Prisma and the modules,
-     and describe your use of AI (which tasks, which parts). -->
+<!-- TODO(Aloiki): add the frontend references you used (React Router, CSS Modules, …). -->
 
 ### Documentation and references
 
 - 42 subject: `ft_transcendence` v21.1.
 - [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/)
+- [Socket.IO documentation](https://socket.io/docs/v4/) · [Passport](https://www.passportjs.org/) and [Google OAuth 2.0 for web server apps](https://developers.google.com/identity/protocols/oauth2/web-server)
+- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) (account enumeration, session handling) and [argon2](https://github.com/ranisalt/node-argon2)
 - [Docker Compose specification](https://docs.docker.com/compose/compose-file/) and [Compose `depends_on` conditions](https://docs.docker.com/compose/how-tos/startup-order/)
 - [Caddy documentation](https://caddyserver.com/docs/) (automatic HTTPS, `reverse_proxy`, internal CA)
 - [Prometheus: configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/), [alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/), [Blackbox exporter](https://github.com/prometheus/blackbox_exporter), [node_exporter](https://github.com/prometheus/node_exporter), [postgres_exporter](https://github.com/prometheus-community/postgres_exporter)
@@ -668,7 +681,7 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ### Use of AI
 
-<!-- TODO(Aloiki): your part. -->
+<!-- TODO(Aloiki): add your bullet (tools used, for which tasks, how you checked the output). -->
 
 - **Jorge:** Coding assistants (Claude Code and Grok) were used as a pair-programmer for Nest
   modules, Prisma schema/migrations, specs under `docs/superpowers/`, and the unit/E2E tests around

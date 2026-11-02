@@ -113,12 +113,12 @@ describe('AuthService', () => {
       mockSessionCreate.mockResolvedValue({ id: 'session-1', refreshTokenHash: 'hash' });
       mockUserCreate.mockResolvedValue(mockUser);
 
-      const result = await service.register({
+      const result = (await service.register({
         email: 'new@demo',
         password: 'Password1',
         name: 'New User',
         organizationSlug: 'klass',
-      });
+      })) as { user: { email: string }; accessToken: string; refreshToken: string };
 
       expect(result.user.email).toBe('student@demo');
       expect(result.user).toEqual({
@@ -137,12 +137,13 @@ describe('AuthService', () => {
       expect(mockOrganizationFindUnique).toHaveBeenCalledWith({ where: { slug: 'klass' } });
     });
 
-    it('throws 409 on duplicate email within org', async () => {
+    it('answers a duplicate email with the generic pending body, without tokens (#140)', async () => {
       mockUserFindFirst.mockResolvedValue(mockUser);
 
-      await expect(
-        service.register({ email: 'student@demo', password: 'Password1', name: 'Dup', organizationSlug: 'klass' }),
-      ).rejects.toThrow(ConflictException);
+      const result = await service.register({ email: 'student@demo', password: 'Password1', name: 'Dup', organizationSlug: 'klass' });
+      expect(result).toEqual({ verificationRequired: true, message: expect.any(String) });
+      expect(mockUserCreate).not.toHaveBeenCalled();
+      expect(mockSessionCreate).not.toHaveBeenCalled();
     });
 
     it('auto-verifies email in dev (emailVerifiedAt set)', async () => {
@@ -162,9 +163,13 @@ describe('AuthService', () => {
       mockSessionCreate.mockResolvedValue({ id: 'session-1', refreshTokenHash: 'hash' });
       mockUserCreate.mockResolvedValue({ ...mockUser, emailVerifiedAt: null });
 
-      await service.register({ email: 'new@demo', password: 'Password1', name: 'New', organizationSlug: 'klass' });
+      const result = await service.register({ email: 'new@demo', password: 'Password1', name: 'New', organizationSlug: 'klass' });
       const createData = (mockUserCreate.mock.calls[0][0] as { data: { emailVerifiedAt?: Date | null } }).data;
       expect(createData.emailVerifiedAt).toBeNull();
+      // #74: no session before the e-mail is verified.
+      expect(result).toEqual({ verificationRequired: true, message: expect.any(String) });
+      expect(result).not.toHaveProperty('accessToken');
+      expect(mockSessionCreate).not.toHaveBeenCalled();
       expect(console.log).not.toHaveBeenCalled();
       process.env.NODE_ENV = 'development';
     });

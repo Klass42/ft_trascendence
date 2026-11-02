@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../auth.service';
@@ -40,15 +40,15 @@ describe('Forgot password (#110)', () => {
 describe('Registration messages and enumeration (#110)', () => {
   const dto = { organizationSlug: 'nope', email: 'a@demo', name: 'A', password: 'Abcdefg1' };
 
-  it('unknown or suspended organization → 400 with a registration message', async () => {
-    await expect(setup({ org: null }).service.register(dto)).rejects.toThrow(BadRequestException);
-    await expect(setup({ org: { id: 'o', status: 'SUSPENDED' } }).service.register(dto)).rejects.toThrow(/organización activa/);
+  it('unknown or suspended organization → same pending answer, nothing created (#140)', async () => {
+    const pending = { verificationRequired: true, message: expect.any(String) };
+    await expect(setup({ org: null }).service.register(dto)).resolves.toEqual(pending);
+    await expect(setup({ org: { id: 'o', status: 'SUSPENDED' } }).service.register(dto)).resolves.toEqual(pending);
   });
 
-  it('duplicate email → generic 409', async () => {
-    const promise = setup({ org: { id: 'o', status: 'ACTIVE' }, user: { id: 'x' } }).service.register(dto);
-    await expect(promise).rejects.toThrow(ConflictException);
-    await expect(setup({ org: { id: 'o', status: 'ACTIVE' }, user: { id: 'x' } }).service.register(dto)).rejects.toThrow(/No se ha podido crear la cuenta/);
+  it('duplicate email → same pending answer as a new account, no tokens (#140)', async () => {
+    const result = await setup({ org: { id: 'o', status: 'ACTIVE' }, user: { id: 'x' } }).service.register(dto);
+    expect(result).toEqual({ verificationRequired: true, message: expect.stringMatching(/confirmar tu correo/) });
   });
 
   it('resolve-organization hides status and treats suspended as unknown', async () => {
