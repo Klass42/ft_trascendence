@@ -304,11 +304,37 @@ describe('ForumsService', () => {
       await expect(service.updatePost(nested.id, OTHER_ORG, { body: 'x' })).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('deleting a post sends no notifications and keeps thread-level links', async () => {
+    it('deleting a post tells the thread participants but keeps thread-level links', async () => {
       const { service, reply, emitMany, removeByLink } = await threadWithReplies();
       await service.deletePost(reply.id, TEACHER);
-      expect(emitMany).not.toHaveBeenCalled();
+      expect(emitMany).toHaveBeenCalledTimes(1);
+      const [recipients, type, payload, options] = emitMany.mock.calls[0] as any[];
+      expect(new Set(recipients)).toEqual(new Set([STUDENT, OTHER_STUDENT]));
+      expect(type).toBe(NotificationType.FORUM_REPLY);
+      expect(payload.link).toMatch(/^\/forums\/thread-/);
+      expect(options.actorId).toBe(TEACHER);
       expect(removeByLink).not.toHaveBeenCalled();
+    });
+
+    it('notifies participants (not the actor) when a post is edited or a thread is renamed', async () => {
+      const { service, reply, thread, emitMany } = await threadWithReplies();
+
+      await service.updatePost(reply.id, OTHER_STUDENT, { body: 'Corregido' });
+      let [loader, type, payload, options] = emitMany.mock.calls.at(-1) as any[];
+      expect(new Set(await loader())).toEqual(new Set([STUDENT, OTHER_STUDENT]));
+      expect(type).toBe(NotificationType.FORUM_REPLY);
+      expect(payload.link).toBe(`/forums/${thread.id}`);
+      expect(options).toEqual({ organizationId: ORG_ID, actorId: OTHER_STUDENT });
+
+      emitMany.mockClear();
+      await service.updatePost(reply.id, OTHER_STUDENT, { body: 'Corregido' });
+      expect(emitMany).not.toHaveBeenCalled(); // unchanged body: nothing to announce
+
+      await service.updateThread(thread.id, STUDENT, { title: 'Duda resuelta' });
+      [loader, type, payload, options] = emitMany.mock.calls.at(-1) as any[];
+      expect(new Set(await loader())).toEqual(new Set([STUDENT, OTHER_STUDENT, TEACHER])); // + subject staff
+      expect(type).toBe(NotificationType.FORUM_THREAD);
+      expect(options).toEqual({ organizationId: ORG_ID, actorId: STUDENT });
     });
 
     it('lets only the author rename a thread', async () => {

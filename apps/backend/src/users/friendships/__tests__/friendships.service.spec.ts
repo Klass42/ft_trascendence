@@ -29,12 +29,12 @@ const mkPrisma = () => ({
 describe('FriendshipsService', () => {
   let service: FriendshipsService;
   let prisma: ReturnType<typeof mkPrisma>;
-  let notifications: { emit: jest.Mock };
+  let notifications: { emit: jest.Mock; emitMany: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = mkPrisma();
-    notifications = { emit: jest.fn().mockResolvedValue({}) };
+    notifications = { emit: jest.fn().mockResolvedValue({}), emitMany: jest.fn().mockResolvedValue(undefined) };
     service = new FriendshipsService(prisma, notifications as unknown as NotificationsService);
   });
 
@@ -154,6 +154,37 @@ describe('FriendshipsService', () => {
         addressee: { is: { organizationId: ORG_ID } },
       },
     });
+  });
+
+  it('tells the other person when a request is cancelled, rejected or a friendship ends', async () => {
+    (prisma.friendship.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+    (prisma.friendship.findFirst as jest.Mock).mockResolvedValue(pendingFriendship);
+    await service.remove('friendship-1', requesterId, ORG_ID);
+    expect(notifications.emitMany).toHaveBeenLastCalledWith(
+      [addresseeId], 'FRIEND_REQUEST', expect.objectContaining({ title: 'Solicitud de amistad cancelada' }),
+      { organizationId: ORG_ID, actorId: requesterId },
+    );
+
+    await service.remove('friendship-1', addresseeId, ORG_ID);
+    expect(notifications.emitMany).toHaveBeenLastCalledWith(
+      [requesterId], 'FRIEND_REQUEST', expect.objectContaining({ title: 'Solicitud de amistad rechazada' }),
+      { organizationId: ORG_ID, actorId: addresseeId },
+    );
+
+    (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ ...pendingFriendship, status: 'ACCEPTED' });
+    await service.remove('friendship-1', addresseeId, ORG_ID);
+    expect(notifications.emitMany).toHaveBeenLastCalledWith(
+      [requesterId], 'FRIEND_REQUEST', expect.objectContaining({ title: 'Una amistad ha terminado' }),
+      { organizationId: ORG_ID, actorId: addresseeId },
+    );
+  });
+
+  it('never announces the removal of a blocked relation', async () => {
+    (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ ...pendingFriendship, status: 'BLOCKED' });
+    (prisma.friendship.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    await service.remove('friendship-1', addresseeId, ORG_ID);
+    expect(notifications.emitMany).not.toHaveBeenCalled();
   });
 
   it('does not expose or delete a friendship from another organization', async () => {

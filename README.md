@@ -333,6 +333,42 @@ library resources and users, never notify the actor, deduplicate recipients and 
 action if they fail. The UI has the bell, unread counter, toasts, a page with deep links and
 mark-all-read.
 
+*Coverage* (who receives the notification; the actor is never included, every recipient is
+re-checked against the organization, and each row is covered by
+`apps/backend/src/notifications/notifications-emitters.spec.ts` or the service's own spec):
+
+| Entity | Create | Update | Delete |
+|---|---|---|---|
+| Cohort | org admins | cohort members and subject staff | cohort members and subject staff |
+| Subject | subject staff (+ students when published) | subject staff (+ students when published) | subject staff and students |
+| Enrolment / subject staff | the person enrolled or assigned | the person whose role changed | the person removed |
+| Section, lesson, lesson attachment | enrolled students | enrolled students | enrolled students |
+| Manual task (assignment) and quiz activity (incl. its questions) | enrolled students | enrolled students | enrolled students |
+| Submission / attempt | subject staff on submit | the student when it is graded | n/a (not deletable) |
+| Library resource | admins and teachers (+ students of linked subjects if published) | same | same |
+| Library folder | admins and teachers | admins and teachers | admins and teachers |
+| Folder published to / removed from a subject | admins and teachers (+ the subject's students when published) | admins and teachers | admins and teachers |
+| Task template (create, edit, delete, "save activity as template") | admins and teachers | admins and teachers | admins and teachers |
+| Forum thread | subject staff | thread participants and subject staff (rename) | thread author |
+| Forum post | thread author and parent-post author | thread participants (edit) | thread participants |
+| Invitation (send, resend, CSV import, revoke) | org admins (one summary per CSV import) | org admins (resend) | org admins (revoke) |
+| Organization (own) | n/a | all members | org admins on member removal; deletion request / withdrawal: org admins |
+| Platform organization (create, edit, suspend, delete, invite admin) | superadmins | superadmins and the org's members | superadmins |
+| User account | admins when someone registers or accepts an invitation; the new user when an admin creates the account | admins on profile edit; the user when an admin changes role, name or email | admins on admin removal or self-deletion |
+| Password | n/a | the account owner themself on change / reset (security notice, the only case that includes the actor); the owner when an admin issues a reset link | n/a |
+| Avatar | n/a | the user's accepted friends | the user's accepted friends |
+| Friendship | the addressee (request) | the requester (accepted) | the other person (cancelled, rejected or ended) |
+
+*Deliberate exceptions* (an action that changes data but is not announced, and why):
+lesson completion / un-completion (it is the student's own progress, read through the analytics
+and grade views, not content); starting an attempt and autosaving a draft answer (private work in
+progress, staff are notified on submit); blocking a person (the other party must never learn of
+it); marking notifications as read (own state); logging in or out and token refresh (session
+mechanics); preferences such as language or e-mail opt-in (private); file upload and delete
+(`/files` is a storage primitive: a file is readable only by its uploader until it is linked, and
+the API refuses to delete a linked one, so the observable events are the lesson attachment,
+resource, task or submission that links it, and those do notify).
+
 **Advanced analytics dashboard (Major).** *Justification:* teachers need to see how a course is
 going without opening every attempt. *Implementation:* `apps/backend/src/analytics` aggregates
 attempts with `groupBy`/`aggregate` (no N+1), always filtered by organization and gated to the

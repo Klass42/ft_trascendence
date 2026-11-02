@@ -41,6 +41,36 @@ test('shows the new notification type and follows its deep link', async ({ page 
   await expect(page).toHaveURL(/\/activities\?subjectId=subject-web-101&activityId=activity-web-101/);
 });
 
+test('renders every C/U/D notification kind with its label and a real link', async ({ page }) => {
+  // One row per entity family covered by the README coverage table (#132).
+  const kinds = [
+    { type: 'FORUM_THREAD', title: 'Un hilo del foro se ha renombrado', label: 'Foro', link: '/forums/thread-1' },
+    { type: 'FORUM_REPLY', title: 'Un mensaje del foro se ha eliminado', label: 'Respuesta en el foro', link: '/forums/thread-1' },
+    { type: 'RESOURCE_CHANGED', title: 'Carpeta creada: Apuntes', label: 'Biblioteca', link: '/resources' },
+    { type: 'USER_CHANGED', title: 'Has cambiado tu contraseña', label: 'Tu cuenta', link: '/profile' },
+    { type: 'ORGANIZATION_CHANGED', title: 'Invitación revocada', label: 'Organización', link: '/org' },
+    { type: 'FRIEND_REQUEST', title: 'Solicitud de amistad rechazada', label: 'Amistad', link: '/friends' },
+  ];
+  const items = kinds.map(({ type, title, link }, index) => ({
+    id: `coverage-${index}`, userId: STUDENT, type, title, body: null, link, read: false, createdAt: new Date().toISOString(),
+  }));
+  await page.route('**/api/notifications?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items, page: 1, pageSize: 50, total: items.length, unread: items.length }),
+    });
+  });
+
+  await page.goto('/notifications');
+  for (const { label, title } of kinds) {
+    await expect(page.getByRole('button', { name: new RegExp(`${label}: ${title}`) })).toBeVisible();
+  }
+
+  await page.getByRole('button', { name: /Amistad: Solicitud de amistad rechazada/ }).click();
+  await expect(page).toHaveURL(/\/friends$/);
+});
+
 test.describe('notification list filters and pagination', () => {
   const row = (n: number, read: boolean) => ({
     id: `notification-${n}`,

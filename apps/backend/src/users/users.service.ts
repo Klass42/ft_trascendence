@@ -124,6 +124,16 @@ export class UsersService {
           { title: 'Tu rol ha cambiado', body: `Tu nuevo rol es ${this.roleLabel(dto.role)}.`, link: '/profile' },
           { organizationId, actorId: callerUserId },
         );
+      }      const profileChanged = (dto.name !== undefined && dto.name !== user.name)
+        || (dto.email !== undefined && dto.email !== user.email)
+        || (dto.bio !== undefined && dto.bio !== user.bio);
+      if (profileChanged) {
+        await this.notifications?.emitMany(
+          [id],
+          NotificationType.USER_CHANGED,
+          { title: 'Un administrador ha actualizado tus datos', body: 'Revisa tu perfil para ver los cambios.', link: '/profile' },
+          { organizationId, actorId: callerUserId },
+        );
       }
       return updated;
     } catch (err) {
@@ -155,7 +165,18 @@ export class UsersService {
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const data = dto.name !== undefined ? { ...dto, name: dto.name.trim() } : dto;
-    return this.prisma.user.update({ where: { id: userId }, data, select: selectOwnProfile });
+    const updated = await this.prisma.user.update({ where: { id: userId }, data, select: selectOwnProfile });
+    // Preferences (language, email opt-in) are private; only name/bio edits are news for admins.
+    if (updated.organizationId && (dto.name !== undefined || dto.bio !== undefined)) {
+      await this.notifyAdmins(
+        updated.organizationId,
+        userId,
+        'Un miembro ha actualizado su perfil',
+        `${updated.name} ha modificado sus datos de perfil.`,
+        `/admin/users/${userId}`,
+      );
+    }
+    return updated;
   }
 
   /** Everything we hold about the caller, as promised by the privacy policy (#111). */
@@ -188,7 +209,7 @@ export class UsersService {
   async deleteOwnAccount(userId: string, dto: DeleteAccountDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, organizationId: true, role: true, passwordHash: true },
+      select: { id: true, name: true, organizationId: true, role: true, passwordHash: true },
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     if (user.passwordHash) {
@@ -210,6 +231,13 @@ export class UsersService {
       await this.prisma.auditLog.create({
         data: { actorId: null, action: 'USER_SELF_DELETED', organizationId: user.organizationId, metadata: { userId } },
       });
+      await this.notifyAdmins(
+        user.organizationId,
+        userId,
+        'Un miembro ha eliminado su cuenta',
+        `${user.name} ha eliminado su cuenta de la organización.`,
+        '/admin/users',
+      );
     }
   }
 
@@ -345,10 +373,12 @@ export class UsersService {
       data: { avatarUrl: url },
     });
     if (updated.count === 0) throw new NotFoundException('Usuario no encontrado.');
-    return this.prisma.user.findFirst({
+    const profile = await this.prisma.user.findFirst({
       where: { id: user.userId, organizationId: user.organizationId },
       select: selectPublicProfile,
     });
+    await this.notifyFriends(user, `${profile?.name ?? 'Una persona'} ha cambiado su foto de perfil`);
+    return profile;
   }
 
   async removeAvatar(user: AuthUser) {
@@ -357,10 +387,12 @@ export class UsersService {
       data: { avatarUrl: null },
     });
     if (updated.count === 0) throw new NotFoundException('Usuario no encontrado.');
-    return this.prisma.user.findFirst({
+    const profile = await this.prisma.user.findFirst({
       where: { id: user.userId, organizationId: user.organizationId },
       select: selectPublicProfile,
     });
+    await this.notifyFriends(user, `${profile?.name ?? 'Una persona'} ha quitado su foto de perfil`);
+    return profile;
   }
 
   // ── Batch fetch for roster (A3) ──
@@ -386,6 +418,43 @@ export class UsersService {
       throw new ForbiddenException('No se puede consultar a los administradores.');
     }
     return { userId: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl };
+  }
+
+  /** Org admins (never the actor). */
+  private async notifyAdmins(organizationId: string, actorId: string, title: string, body: string, link: string) {
+    await this.notifications?.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId, role: 'ADMIN' },
+          select: { id: true },
+        });
+        return admins.map(({ id }) => id);
+      },
+      NotificationType.USER_CHANGED,
+      { title, body, link },
+      { organizationId, actorId },
+    );
+  }
+
+  /** Accepted friends of the actor, resolved inside the actor's organization. */
+  private async notifyFriends(user: AuthUser, title: string) {
+    await this.notifications?.emitMany(
+      async () => {
+        const friendships = await this.prisma.friendship.findMany({
+          where: {
+            status: 'ACCEPTED',
+            OR: [{ requesterId: user.userId }, { addresseeId: user.userId }],
+            requester: { is: { organizationId: user.organizationId } },
+            addressee: { is: { organizationId: user.organizationId } },
+          },
+          select: { requesterId: true, addresseeId: true },
+        });
+        return friendships.map((f) => (f.requesterId === user.userId ? f.addresseeId : f.requesterId));
+      },
+      NotificationType.FRIEND_REQUEST,
+      { title, link: '/friends' },
+      { organizationId: user.organizationId, actorId: user.userId },
+    );
   }
 
   private roleLabel(role: string) {

@@ -6,11 +6,13 @@ import {
 } from '@nestjs/common';
 import {
   GlobalRole,
+  NotificationType,
   Prisma,
   QuestionKind,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CourseAccessService } from '../../courses/course-access.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { getAdapter } from '../blocks/registry';
 import { CreateTaskTemplateDto } from './dto/create-task-template.dto';
 import { SaveAsTemplateDto } from './dto/save-as-template.dto';
@@ -31,13 +33,14 @@ export class TaskTemplatesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: CourseAccessService,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   async create(actingUserId: string, dto: CreateTaskTemplateDto) {
     const user = await this.requireOrgUser(actingUserId);
     await this.assertCanWriteLibrary(user);
     this.validateBlocks(dto.blocks);
-    return this.prisma.taskTemplate.create({
+    const created = await this.prisma.taskTemplate.create({
       data: {
         organizationId: user.organizationId,
         createdById: actingUserId,
@@ -46,6 +49,8 @@ export class TaskTemplatesService {
         blocks: dto.blocks as unknown as Prisma.InputJsonValue,
       },
     });
+    await this.notifyTeachers(user.organizationId, actingUserId, `Plantilla de tarea creada: ${created.title}`);
+    return created;
   }
 
   async findAll(actingUserId: string) {
@@ -115,7 +120,7 @@ export class TaskTemplatesService {
   async update(id: string, actingUserId: string, dto: UpdateTaskTemplateDto) {
     const template = await this.requireWritable(id, actingUserId);
     if (dto.blocks) this.validateBlocks(dto.blocks);
-    return this.prisma.taskTemplate.update({
+    const updated = await this.prisma.taskTemplate.update({
       where: { id: template.id },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
@@ -125,11 +130,14 @@ export class TaskTemplatesService {
         }),
       },
     });
+    await this.notifyTeachers(template.organizationId, actingUserId, `Plantilla de tarea actualizada: ${updated.title}`);
+    return updated;
   }
 
   async remove(id: string, actingUserId: string) {
     const template = await this.requireWritable(id, actingUserId);
     await this.prisma.taskTemplate.delete({ where: { id: template.id } });
+    await this.notifyTeachers(template.organizationId, actingUserId, `Plantilla de tarea eliminada: ${template.title}`);
   }
 
   async saveFromActivity(
@@ -159,7 +167,7 @@ export class TaskTemplatesService {
     }));
     this.validateBlocks(blocks);
 
-    return this.prisma.taskTemplate.create({
+    const created = await this.prisma.taskTemplate.create({
       data: {
         organizationId: activity.subject.organizationId,
         createdById: actingUserId,
@@ -170,6 +178,28 @@ export class TaskTemplatesService {
         createdFromId: activity.id,
       },
     });
+    await this.notifyTeachers(
+      activity.subject.organizationId,
+      actingUserId,
+      `Plantilla de tarea creada: ${created.title}`,
+    );
+    return created;
+  }
+
+  /** Templates are shared across the organization: tell its teachers and admins (not the actor). */
+  private async notifyTeachers(organizationId: string, actorId: string, title: string) {
+    await this.notifications?.emitMany(
+      async () => {
+        const staff = await this.prisma.user.findMany({
+          where: { organizationId, role: { in: [GlobalRole.ADMIN, GlobalRole.TEACHER] } },
+          select: { id: true },
+        });
+        return staff.map(({ id }) => id);
+      },
+      NotificationType.RESOURCE_CHANGED,
+      { title, link: '/activities' },
+      { organizationId, actorId },
+    );
   }
 
   private validateBlocks(blocks: TemplateBlock[]): void {
