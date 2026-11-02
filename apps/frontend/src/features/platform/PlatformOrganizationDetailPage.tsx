@@ -19,7 +19,28 @@ interface OrganizationDetail {
   maxCourses: number | null;
   maxStorageMb: number | null;
   createdAt: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  timezone: string | null;
+  defaultLanguage: string | null;
   _count: { users: number; invitations: number };
+  /** #134: only on GET; PATCH/suspend responses omit it, so they are merged. */
+  usage?: {
+    users: { used: number; deactivated: number; limit: number | null };
+    courses: { used: number; limit: number | null };
+    storage: { usedBytes: number; usedMb: number; limitMb: number | null };
+  };
+  users?: Array<{ id: string; name: string; email: string; role: 'ADMIN' | 'TEACHER' | 'STUDENT'; emailVerifiedAt: string | null; deactivatedAt: string | null; createdAt: string }>;
+}
+
+const ROLE_LABEL = { ADMIN: 'Administrador', TEACHER: 'Profesor', STUDENT: 'Alumno' } as const;
+const LANGUAGE_OPTIONS = [
+  { value: 'es', label: 'Español' },
+  { value: 'en', label: 'English' },
+];
+
+function usageLine(used: number, limit: number | null, unit = '') {
+  return limit === null ? `${used}${unit} / ilimitado` : `${used}${unit} / ${limit}${unit}`;
 }
 
 interface AdminInvitationResult {
@@ -62,6 +83,9 @@ export function PlatformOrganizationDetailPage() {
   const [limitErrors, setLimitErrors] = useState<Record<string, string>>({});
   const [savingLimits, setSavingLimits] = useState(false);
 
+  const [details, setDetails] = useState({ name: '', logoUrl: '', primaryColor: '', timezone: '', defaultLanguage: 'es' });
+  const [savingDetails, setSavingDetails] = useState(false);
+
   const [confirmSuspend, setConfirmSuspend] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
 
@@ -82,6 +106,13 @@ export function PlatformOrganizationDetailPage() {
         setMaxUsers(limitToInput(data.maxUsers));
         setMaxCourses(limitToInput(data.maxCourses));
         setMaxStorageMb(limitToInput(data.maxStorageMb));
+        setDetails({
+          name: data.name,
+          logoUrl: data.logoUrl ?? '',
+          primaryColor: data.primaryColor ?? '',
+          timezone: data.timezone ?? '',
+          defaultLanguage: data.defaultLanguage ?? 'es',
+        });
         setHasError(false);
       })
       .catch(() => setHasError(true))
@@ -111,12 +142,33 @@ export function PlatformOrganizationDetailPage() {
         maxCourses: courses,
         maxStorageMb: storage,
       });
-      setOrg(updated);
+      setOrg((current) => ({ ...current, ...updated }));
       toast({ message: 'Plan y límites actualizados.', variant: 'success' });
     } catch (error) {
       toast({ message: error instanceof ApiError ? error.message : 'No se pudo actualizar la organización.', variant: 'error' });
     } finally {
       setSavingLimits(false);
+    }
+  }
+
+  async function saveDetails(event: FormEvent) {
+    event.preventDefault();
+    if (!id) return;
+    setSavingDetails(true);
+    try {
+      const updated = await apiClient.patch<OrganizationDetail>(`/platform/organizations/${id}`, {
+        name: details.name.trim(),
+        logoUrl: details.logoUrl.trim() || null,
+        ...(details.primaryColor.trim() && { primaryColor: details.primaryColor.trim() }),
+        ...(details.timezone.trim() && { timezone: details.timezone.trim() }),
+        defaultLanguage: details.defaultLanguage,
+      });
+      setOrg((current) => ({ ...current, ...updated }));
+      toast({ message: 'Datos de la organización actualizados.', variant: 'success' });
+    } catch (error) {
+      toast({ message: error instanceof ApiError ? error.message : 'No se pudo actualizar la organización.', variant: 'error' });
+    } finally {
+      setSavingDetails(false);
     }
   }
 
@@ -129,7 +181,7 @@ export function PlatformOrganizationDetailPage() {
       const updated = nextStatus === 'SUSPENDED'
         ? await apiClient.post<OrganizationDetail>(`/platform/organizations/${id}/suspend`)
         : await apiClient.patch<OrganizationDetail>(`/platform/organizations/${id}`, { status: nextStatus });
-      setOrg(updated);
+      setOrg((current) => ({ ...current, ...updated }));
       toast({
         message: nextStatus === 'SUSPENDED' ? 'Organización suspendida.' : 'Organización reactivada.',
         variant: 'success',
@@ -216,6 +268,29 @@ export function PlatformOrganizationDetailPage() {
       </header>
 
       <div className={styles.grid}>
+        {org.usage && (
+          <Card padding="lg">
+            <h2>Uso del plan</h2>
+            <dl className={styles.form}>
+              <div><dt>Usuarios activos</dt><dd>{usageLine(org.usage.users.used, org.usage.users.limit)}{org.usage.users.deactivated > 0 ? ` · ${org.usage.users.deactivated} desactivados` : ''}</dd></div>
+              <div><dt>Cohortes</dt><dd>{usageLine(org.usage.courses.used, org.usage.courses.limit)}</dd></div>
+              <div><dt>Almacenamiento</dt><dd>{usageLine(org.usage.storage.usedMb, org.usage.storage.limitMb, ' MB')}</dd></div>
+            </dl>
+          </Card>
+        )}
+
+        <Card padding="lg">
+          <h2>Datos de la organización</h2>
+          <form onSubmit={saveDetails} noValidate className={styles.form}>
+            <Input label="Nombre" value={details.name} maxLength={100} onChange={(e) => setDetails({ ...details, name: e.target.value })} required />
+            <Input label="URL del logo (https)" value={details.logoUrl} onChange={(e) => setDetails({ ...details, logoUrl: e.target.value })} placeholder="https://…" />
+            <Input label="Color principal" value={details.primaryColor} onChange={(e) => setDetails({ ...details, primaryColor: e.target.value })} placeholder="#4f46e5" />
+            <Input label="Zona horaria (IANA)" value={details.timezone} onChange={(e) => setDetails({ ...details, timezone: e.target.value })} placeholder="Europe/Madrid" />
+            <Select label="Idioma por defecto" value={details.defaultLanguage} onChange={(e) => setDetails({ ...details, defaultLanguage: e.target.value })} options={LANGUAGE_OPTIONS} />
+            <Button type="submit" loading={savingDetails}>Guardar datos</Button>
+          </form>
+        </Card>
+
         <Card padding="lg">
           <h2>Plan y límites</h2>
           <p className={styles.hint}>Deja un campo vacío para dejarlo sin límite.</p>
@@ -267,6 +342,41 @@ export function PlatformOrganizationDetailPage() {
             {org.status === 'ACTIVE' ? 'Suspender organización' : 'Reactivar organización'}
           </Button>
         </Card>
+
+        {org.users && (
+          <Card padding="lg" className={styles.wide}>
+            <h2>Usuarios</h2>
+            <p className={styles.hint}>
+              Solo lectura. Quitar o reactivar miembros lo hace la administración de la organización en Usuarios.
+              {org.users.length >= 200 ? ' Se muestran los 200 primeros.' : ''}
+            </p>
+            {org.users.length === 0 ? (
+              <p className={styles.hint}>Aún no hay usuarios.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr><th align="left">Nombre</th><th align="left">Correo electrónico</th><th align="left">Rol</th><th align="left">Cuenta</th></tr>
+                </thead>
+                <tbody>
+                  {org.users.map((member) => (
+                    <tr key={member.id}>
+                      <td>{member.name}</td>
+                      <td>{member.email}</td>
+                      <td>{ROLE_LABEL[member.role]}</td>
+                      <td>
+                        {member.deactivatedAt
+                          ? <Badge variant="neutral">Desactivada</Badge>
+                          : member.emailVerifiedAt
+                            ? <Badge variant="success" dot>Activa</Badge>
+                            : <Badge variant="warning" dot>Pendiente</Badge>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        )}
 
         <Card padding="lg" className={styles.wide}>
           <h2>Administrador de recuperación</h2>

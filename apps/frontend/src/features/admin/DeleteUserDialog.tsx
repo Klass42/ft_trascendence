@@ -1,8 +1,8 @@
 /**
  * Shared hard-delete flow for /admin/users/:id and /org/members (#104).
  *
- * Decision (#104): deleting a member is a HARD DELETE of the account (no
- * soft-deactivate). Both screens use the same endpoint (DELETE /users/:id),
+ * Permanent deletion (RGPD). Removing someone from the organization is a
+ * deactivation instead (#134, MemberAccessDialog). This uses DELETE /users/:id,
  * the same irreversible confirmation copy and the same toast feedback.
  */
 import { useState } from 'react';
@@ -27,7 +27,7 @@ export const DELETE_USER_COPY = {
   title: 'Eliminar cuenta definitivamente',
   confirm: 'Sí, eliminar definitivamente',
   hint:
-    'Eliminar quita la cuenta de forma permanente (no es una desactivación). Esta acción no se puede deshacer.',
+    'Eliminar borra la cuenta y todo su historial de forma permanente (RGPD). Para quitar el acceso conservando entregas y notas, usa «Quitar de la organización» en Usuarios. Esta acción no se puede deshacer.',
 };
 
 export function DeleteUserDialog({ target, onCancel, onDeleted }: Props) {

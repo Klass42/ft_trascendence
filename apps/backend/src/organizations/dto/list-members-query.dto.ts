@@ -17,6 +17,11 @@ export class ListMembersQueryDto {
   @IsOptional()
   status?: 'active' | 'inactive' | 'pending';
 
+  /** #134: account state; `status` above is presence/verification. */
+  @IsIn(['active', 'deactivated'])
+  @IsOptional()
+  account?: 'active' | 'deactivated';
+
   @Type(() => Number)
   @IsInt()
   @Min(1)

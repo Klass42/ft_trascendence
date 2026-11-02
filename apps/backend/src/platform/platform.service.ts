@@ -31,7 +31,28 @@ export class PlatformService {
   }); await this.notifySuperadmins(actorId, `Organización creada: ${result.organization.name}`, `Se ha aprovisionado «${result.organization.name}» (${result.organization.slug}).`, `/platform/organizations/${result.organization.id}`); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Ya existe una organización con ese código.'); throw error; }
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
- async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); if (!org) throw new NotFoundException('Organización no encontrada.'); return org; }
+ async getOrganization(id: string) {
+  const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } });
+  if (!org) throw new NotFoundException('Organización no encontrada.');
+  // #134: platform detail shows usage against plan limits and the member list.
+  const [activeUsers, deactivatedUsers, courses, storage, users] = await Promise.all([
+   this.prisma.user.count({ where: { organizationId: id, deactivatedAt: null } }),
+   this.prisma.user.count({ where: { organizationId: id, deactivatedAt: { not: null } } }),
+   this.prisma.course.count({ where: { organizationId: id } }),
+   this.prisma.file.aggregate({ where: { organizationId: id }, _sum: { sizeBytes: true } }),
+   this.prisma.user.findMany({ where: { organizationId: id }, orderBy: { name: 'asc' }, take: 200, select: { id: true, name: true, email: true, role: true, emailVerifiedAt: true, deactivatedAt: true, createdAt: true } }),
+  ]);
+  const storageBytes = Number(storage?._sum?.sizeBytes ?? 0);
+  return {
+   ...org,
+   usage: {
+    users: { used: activeUsers, deactivated: deactivatedUsers, limit: org.maxUsers },
+    courses: { used: courses, limit: org.maxCourses },
+    storage: { usedBytes: storageBytes, usedMb: Math.round((storageBytes / 1048576) * 10) / 10, limitMb: org.maxStorageMb },
+   },
+   users,
+  };
+ }
  async updateOrganization(id: string, dto: UpdatePlatformOrganizationDto, actorId: string) {
   // Suspending through PATCH must also revoke sessions (issue #106).
   if (dto.status === 'SUSPENDED') { const { status: _s, ...rest } = dto; if (Object.keys(rest).length) await this.updateOrganization(id, rest as UpdatePlatformOrganizationDto, actorId); return this.suspend(id, actorId); }

@@ -33,6 +33,10 @@ export function OAuthCallbackPage() {
       setError('Esta cuenta de Google ya está vinculada a otra organización.');
       return;
     }
+    if (oauthError === 'account_deactivated') {
+      setError('Tu cuenta se ha desactivado en esta organización. Contacta con su administración para reactivarla.');
+      return;
+    }
     if (oauthError === 'invalid_state') {
       setError('La solicitud de Google no es válida o ha caducado. Vuelve a intentarlo.');
       return;

@@ -6,11 +6,12 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { assertUserLimit } from '@/common/plan-limits/plan-limits';
 import { NotificationType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { USER_DEACTIVATED } from '@/realtime/realtime.events';
+import { USER_DEACTIVATED, type UserDeactivatedEvent } from '@/realtime/realtime.events';
 import { NotificationsService } from '@/notifications/notifications.service';
 import type { UpdateOrganizationDto } from './dto/update-organization.dto';
 import type { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -26,6 +27,7 @@ export interface Member {
   bio: string | null;
   onlineAt: Date | null;
   emailVerifiedAt: Date | null;
+  deactivatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -249,7 +251,7 @@ export class OrganizationsService {
 
     const select = {
       id: true, email: true, name: true, avatarUrl: true, role: true,
-      bio: true, onlineAt: true, emailVerifiedAt: true,
+      bio: true, onlineAt: true, emailVerifiedAt: true, deactivatedAt: true,
       createdAt: true, updatedAt: true,
     } as const;
     const hasQuery = !!query && Object.values(query).some((value) => value !== undefined);
@@ -286,6 +288,10 @@ export class OrganizationsService {
         OR: [{ onlineAt: null }, { onlineAt: { lt: presenceSince } }],
       });
     }
+
+    // #134: account state (removed from the org = deactivated), independent of presence `status`.
+    if (query?.account === 'active') filters.push({ deactivatedAt: null });
+    else if (query?.account === 'deactivated') filters.push({ deactivatedAt: { not: null } });
 
     const where: Prisma.UserWhereInput = {
       organizationId: id,
@@ -336,6 +342,12 @@ export class OrganizationsService {
     return { pending: Boolean(pending) };
   }
 
+  /**
+   * #134: "remove from the organization" = DEACTIVATE, not delete. The account
+   * keeps its submissions, grades, attempts and forum posts; it loses its
+   * sessions, course enrolments and subject staff seats, and cannot sign in
+   * until an admin reactivates it. Hard delete stays on DELETE /users/:id.
+   */
   async removeMember(
     id: string, userId: string, callerOrgId: string, callerUserId: string,
   ): Promise<void> {
@@ -345,24 +357,50 @@ export class OrganizationsService {
     if (userId === callerUserId) {
       throw new BadRequestException('No puedes quitarte a ti mismo de la organización.');
     }
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true } });
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true, deactivatedAt: true } });
     if (!target) throw new NotFoundException('Usuario no encontrado.');
     if (target.organizationId !== id) throw new ForbiddenException('El usuario pertenece a otra organización.');
-    await this.prisma.user.delete({ where: { id: userId } });
-    this.events?.emit(USER_DEACTIVATED, { userId });
-    await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_REMOVED', organizationId: id, metadata: { userId, name: target.name } } });
+    if (target.deactivatedAt) throw new BadRequestException('Esta persona ya está desactivada.');
+    const deactivatedAt = new Date();
+    const removed = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { deactivatedAt } });
+      const sessions = await tx.session.deleteMany({ where: { userId } });
+      const enrolments = await tx.courseMembership.deleteMany({ where: { userId } });
+      const staff = await tx.subjectStaff.deleteMany({ where: { userId } });
+      await tx.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_DEACTIVATED', organizationId: id, targetUserId: userId, metadata: { userId, name: target.name, sessions: sessions.count, enrolments: enrolments.count, staff: staff.count } } });
+      return true;
+    });
+    // #135 (PR #142): the realtime gateway disconnects user:<id> on this event.
+    if (removed) this.events?.emit(USER_DEACTIVATED, { userId } satisfies UserDeactivatedEvent);
     await this.notifications.emitMany(
       async () => {
         const admins = await this.prisma.user.findMany({
-          where: { organizationId: id, role: 'ADMIN' },
+          where: { organizationId: id, role: 'ADMIN', deactivatedAt: null },
           select: { id: true },
         });
         return admins.map(({ id: adminId }) => adminId);
       },
       NotificationType.USER_CHANGED,
-      { title: 'Se ha eliminado un miembro', body: `Se ha dado de baja a ${target.name}.`, link: '/admin/users' },
+      { title: 'Se ha quitado a un miembro', body: `Se ha desactivado la cuenta de ${target.name}. Se puede reactivar desde Usuarios.`, link: '/admin/users' },
       { organizationId: id, actorId: callerUserId },
     );
+  }
+
+  /** #134: undo removeMember. Enrolments are not restored (re-enrol by hand). */
+  async reactivateMember(
+    id: string, userId: string, callerOrgId: string, callerUserId: string,
+  ) {
+    if (id !== callerOrgId) {
+      throw new ForbiddenException('No puedes reactivar miembros de otra organización.');
+    }
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, organizationId: true, deactivatedAt: true } });
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+    if (target.organizationId !== id) throw new ForbiddenException('El usuario pertenece a otra organización.');
+    if (!target.deactivatedAt) throw new BadRequestException('Esta persona ya está activa.');
+    await assertUserLimit(this.prisma as any, id);
+    await this.prisma.user.update({ where: { id: userId }, data: { deactivatedAt: null } });
+    await this.prisma.auditLog.create({ data: { actorId: callerUserId, action: 'MEMBER_REACTIVATED', organizationId: id, targetUserId: userId, metadata: { userId, name: target.name } } });
+    return { id: userId, deactivatedAt: null };
   }
 
   /**

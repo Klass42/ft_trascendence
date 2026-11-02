@@ -29,7 +29,7 @@ function isPrismaUniqueViolation(err: unknown): err is PrismaClientKnownRequestE
 
 const selectUser = {
   id: true, email: true, name: true, avatarUrl: true,
-  role: true, bio: true, onlineAt: true, emailVerifiedAt: true,
+  role: true, bio: true, onlineAt: true, emailVerifiedAt: true, deactivatedAt: true,
   organizationId: true, createdAt: true, updatedAt: true,
 } as const;
 
