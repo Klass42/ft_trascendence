@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileUp, History, MailPlus, Pencil, Search, UserPlus, Users } from 'lucide-react';
+import { FileUp, History, MailPlus, Pencil, RotateCcw, Search, UserMinus, UserPlus, Users } from 'lucide-react';
 import { apiClient, useAuth } from '@/lib/api';
 import type { GlobalRole } from '@/lib/api/types';
 import { Badge, Button, EmptyState, Input, Select, Spinner, Table } from '@/components/ui';
 import type { MemberDTO } from '@/features/org/types';
+import { MemberAccessDialog, MEMBER_ACCESS_COPY, type MemberAccessTarget } from './MemberAccessDialog';
 import styles from './AdminUsersPage.module.css';
 
 type MemberStatus = 'active' | 'inactive' | 'pending';
@@ -44,6 +45,8 @@ export function AdminUsersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [role, setRole] = useState<GlobalRole | ''>('');
   const [status, setStatus] = useState<MemberStatus | ''>('');
+  const [account, setAccount] = useState<'' | 'active' | 'deactivated'>('');
+  const [accessTarget, setAccessTarget] = useState<MemberAccessTarget | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [reloadCount, setReloadCount] = useState(0);
@@ -70,6 +73,7 @@ export function AdminUsersPage() {
     if (debouncedSearch) params.set('q', debouncedSearch);
     if (role) params.set('role', role);
     if (status) params.set('status', status);
+    if (account) params.set('account', account);
 
     setIsLoading(true);
     setError(null);
@@ -86,28 +90,51 @@ export function AdminUsersPage() {
       });
 
     return () => { cancelled = true; };
-  }, [organizationId, debouncedSearch, role, status, page, pageSize, reloadCount]);
+  }, [organizationId, debouncedSearch, role, status, account, page, pageSize, reloadCount]);
 
   const columns = useMemo(() => [
     { key: 'name', header: 'Nombre', render: (member: PaginatedMember) => <span className={styles.memberName} title={member.name}>{member.name}</span> },
     { key: 'email', header: 'Correo electrónico', render: (member: PaginatedMember) => <span className={styles.memberEmail} title={member.email}>{member.email}</span> },
     { key: 'role', header: 'Rol', render: (member: PaginatedMember) => <Badge variant="accent">{ROLE_LABEL[member.role]}</Badge> },
     { key: 'status', header: 'Estado', render: (member: PaginatedMember) => {
+      if (member.deactivatedAt) return <Badge variant="neutral">Desactivada</Badge>;
       return <Badge variant={statusVariant(member.status)} dot>{statusLabel(member.status)}</Badge>;
     } },
     { key: 'actions', header: 'Acciones', align: 'right' as const, render: (member: PaginatedMember) => (
+      <span style={{ display: 'inline-flex', gap: 4 }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<Pencil size={15} />}
+          onClick={() => navigate(`/admin/users/${member.id}`)}
+        >Editar</Button>
+        {member.id !== user?.userId && accessButton(member)}
+      </span>
+    ) },
+  ], [navigate, user?.userId]);
+
+  function accessButton(member: PaginatedMember) {
+    return member.deactivatedAt ? (
       <Button
         variant="ghost"
         size="sm"
-        leftIcon={<Pencil size={15} />}
-        onClick={() => navigate(`/admin/users/${member.id}`)}
-      >Editar</Button>
-    ) },
-  ], [navigate]);
+        leftIcon={<RotateCcw size={15} />}
+        onClick={() => setAccessTarget({ id: member.id, name: member.name, email: member.email, action: 'reactivate' })}
+      >{MEMBER_ACCESS_COPY.reactivate}</Button>
+    ) : (
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={<UserMinus size={15} />}
+        aria-label={`${MEMBER_ACCESS_COPY.deactivate}: ${member.name}`}
+        onClick={() => setAccessTarget({ id: member.id, name: member.name, email: member.email, action: 'deactivate' })}
+      >Quitar</Button>
+    );
+  }
 
-  const hasFilters = Boolean(debouncedSearch || search.trim() || role || status);
+  const hasFilters = Boolean(debouncedSearch || search.trim() || role || status || account);
   function clearFilters() {
-    setSearch(''); setDebouncedSearch(''); setRole(''); setStatus(''); setPage(1);
+    setSearch(''); setDebouncedSearch(''); setRole(''); setStatus(''); setAccount(''); setPage(1);
   }
 
   const totalPages = Math.max(result?.totalPages ?? 0, 1);
@@ -166,6 +193,17 @@ export function AdminUsersPage() {
             { value: 'pending', label: 'Pendiente' },
           ]}
         />
+        <Select
+          label="Cuenta"
+          hint="Desactivada: quitada de la organización; conserva su historial y se puede reactivar."
+          value={account}
+          onChange={(event) => { setAccount(event.target.value as '' | 'active' | 'deactivated'); setPage(1); }}
+          options={[
+            { value: '', label: 'Todas' },
+            { value: 'active', label: 'Activas' },
+            { value: 'deactivated', label: 'Desactivadas' },
+          ]}
+        />
       </div>
 
       {isLoading ? (
@@ -214,6 +252,7 @@ export function AdminUsersPage() {
                       leftIcon={<Pencil size={15} />}
                       onClick={() => navigate(`/admin/users/${member.id}`)}
                     >Editar</Button>
+                    {member.id !== user?.userId && accessButton(member)}
                   </div>
                 </article>
               ))}
@@ -242,6 +281,12 @@ export function AdminUsersPage() {
           )}
         </>
       )}
+      <MemberAccessDialog
+        organizationId={organizationId ?? undefined}
+        target={accessTarget}
+        onCancel={() => setAccessTarget(null)}
+        onDone={() => { setAccessTarget(null); setReloadCount((count) => count + 1); }}
+      />
     </div>
   );
 }
