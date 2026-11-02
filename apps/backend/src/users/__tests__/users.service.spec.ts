@@ -223,6 +223,12 @@ describe('UsersService', () => {
       expect((r as any).organizationId).toBeUndefined();
     });
 
+    it('#134 404s for a deactivated account unless the caller is staff', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, deactivatedAt: new Date() });
+      await expect(service.findOne('user-student-0001', ORG_ID, 'STUDENT')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('user-student-0001', ORG_ID, 'TEACHER')).resolves.toMatchObject({ id: 'user-student-0001' });
+    });
+
     it('throws ForbiddenException for org mismatch in STUDENT role', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
       await expect(service.findOne('user-student-0001', OTHER_ORG, 'STUDENT')).rejects.toThrow(ForbiddenException);
@@ -327,6 +333,13 @@ describe('UsersService', () => {
       expect((r[0] as any).email).toBeUndefined();
     });
 
+    it('#134 leaves deactivated accounts out of the friends list', async () => {
+      (prisma.friendship.findMany as jest.Mock).mockResolvedValue([{ requesterId: ADMIN_ID, addresseeId: 'user-teacher-0001', status: 'ACCEPTED' }]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      await service.listFriends(ADMIN_ID, ORG_ID);
+      expect((prisma.user.findMany as jest.Mock).mock.calls[0][0].where).toMatchObject({ organizationId: ORG_ID, deactivatedAt: null });
+    });
+
     it('keeps prefs out of the public profile select (listFriends)', async () => {
       (prisma.friendship.findMany as jest.Mock).mockResolvedValue([
         { requesterId: 'user-student-0001', addresseeId: 'user-teacher-0001' },
@@ -363,7 +376,7 @@ describe('UsersService', () => {
       const r = await service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT');
       expect(r).toEqual({
         id: target.id, name: 'Sam', avatarUrl: null, role: 'STUDENT', bio: 'Hola',
-        memberSince: target.createdAt, sharedCourses: [], relation: 'NONE', friendshipId: null,
+        memberSince: target.createdAt, deactivated: false, sharedCourses: [], relation: 'NONE', friendshipId: null,
       });
       expect(r).not.toHaveProperty('email');
       expect(r).not.toHaveProperty('onlineAt');
@@ -386,6 +399,14 @@ describe('UsersService', () => {
       (prisma.friendship.findFirst as jest.Mock).mockResolvedValue({ id: 'f1', requesterId: target.id, status: 'ACCEPTED' });
       await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT'))
         .resolves.toMatchObject({ relation: 'FRIEND' });
+    });
+
+    it('#134 hides a deactivated account from students (404) but shows it, flagged, to staff', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ ...target, deactivatedAt: new Date() });
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'STUDENT')).rejects.toThrow(NotFoundException);
+      await expect(service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'TEACHER')).resolves.toMatchObject({ deactivated: true });
+      const r = await service.getPublicProfile(target.id, ADMIN_ID, ORG_ID, 'ADMIN');
+      expect(r).not.toHaveProperty('deactivatedAt');
     });
 
     it('hides blocked pairs behind a 404', async () => {
@@ -422,6 +443,7 @@ describe('UsersService', () => {
       ]);
       const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(args.where.organizationId).toBe(ORG_ID);
+      expect(args.where.deactivatedAt).toBeNull();
       expect(args.where.id).toEqual({ notIn: [ADMIN_ID] });
       expect(args.where.OR).toEqual([
         { name: { contains: 'th', mode: 'insensitive' } },
@@ -523,14 +545,17 @@ describe('UsersService', () => {
   describe('findByIds', () => {
     it('returns matching users org-scoped (no passwordHash)', async () => {
       const users = [
-        { id: 'u1', name: 'Alice', email: 'a@demo', avatarUrl: null },
-        { id: 'u2', name: 'Bob', email: 'b@demo', avatarUrl: '/img.png' },
+        { id: 'u1', name: 'Alice', email: 'a@demo', avatarUrl: null, deactivatedAt: null },
+        { id: 'u2', name: 'Bob', email: 'b@demo', avatarUrl: '/img.png', deactivatedAt: new Date() },
       ];
       (prisma.user.findMany as jest.Mock).mockResolvedValue(users);
 
       const result = await service.findByIds(['u1', 'u2', 'u3'], ORG_ID);
 
-      expect(result).toEqual(users);
+      expect(result).toEqual([
+        { id: 'u1', name: 'Alice', email: 'a@demo', avatarUrl: null, deactivated: false },
+        { id: 'u2', name: 'Bob', email: 'b@demo', avatarUrl: '/img.png', deactivated: true },
+      ]);
       const args = (prisma.user.findMany as jest.Mock).mock.calls[0][0];
       expect(args.where).toEqual({ id: { in: ['u1', 'u2', 'u3'] }, organizationId: ORG_ID });
       expect(args.select.passwordHash).toBeUndefined();

@@ -37,6 +37,10 @@ export class DevAuthGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException(`Dev user ${devUserId} not found`);
     }
+    // #134: the dev valve must not resurrect a deactivated account.
+    if (user.deactivatedAt) {
+      throw new UnauthorizedException(`Dev user ${devUserId} is deactivated`);
+    }
 
     req.user = {
       userId: user.id,

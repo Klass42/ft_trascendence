@@ -108,13 +108,31 @@ describe('NotificationsService', () => {
     );
 
     expect(findMany).toHaveBeenCalledWith({
-      where: { id: { in: ['target', 'other-org-user'] }, organizationId: 'org-one' },
+      where: { id: { in: ['target', 'other-org-user'] }, organizationId: 'org-one', deactivatedAt: null },
       select: { id: true },
     });
     expect(create).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith({
       data: expect.objectContaining({ userId: 'target', type: NotificationType.COURSE_CONTENT_CHANGED }),
     });
+  });
+
+  it('#134 emitMany never notifies deactivated accounts', async () => {
+    const create = jest.fn(async ({ data }: any) => ({ id: 'n-1', ...data }));
+    const users = [{ id: 'active', deactivatedAt: null }, { id: 'gone', deactivatedAt: new Date() }];
+    const findMany = jest.fn(async ({ where }: any) =>
+      users.filter((u) => where.id.in.includes(u.id) && (where.deactivatedAt === null ? u.deactivatedAt === null : true)).map(({ id }) => ({ id })),
+    );
+    const service = new NotificationsService(
+      { user: { findMany }, notification: { create } } as unknown as PrismaService,
+      { emit: jest.fn() } as unknown as EventEmitter2,
+    );
+
+    await service.emitMany(['active', 'gone'], NotificationType.USER_CHANGED, { title: 'Aviso' }, { organizationId: 'org-one' });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ deactivatedAt: null }) }));
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'active' }) });
   });
 
   it('notification persistence failures do not reject emitMany or its caller', async () => {

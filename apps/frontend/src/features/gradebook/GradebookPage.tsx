@@ -207,7 +207,10 @@ export function GradebookPage() {
                       header: 'Alumno',
                       render: (row: GradebookRowDTO) => (
                         <div className={styles.studentCell}>
-                          <div className={styles.studentName}>{row.user.name}</div>
+                          <div className={styles.studentName}>
+                            {row.user.name}
+                            {row.deactivated && <> <Badge variant="neutral">Cuenta desactivada</Badge></>}
+                          </div>
                           <div className={styles.studentEmail}>{row.user.email}</div>
                         </div>
                       ),
@@ -260,7 +263,10 @@ export function GradebookPage() {
                   <article key={row.user.id} className={styles.studentCard}>
                     <div className={styles.cardHeader}>
                       <div className={styles.cardIdentity}>
-                        <h2 className={styles.cardName}>{row.user.name}</h2>
+                        <h2 className={styles.cardName}>
+                          {row.user.name}
+                          {row.deactivated && <> <Badge variant="neutral">Cuenta desactivada</Badge></>}
+                        </h2>
                         <p className={styles.studentEmail}>{row.user.email}</p>
                       </div>
                       <div className={styles.cardFinal}>

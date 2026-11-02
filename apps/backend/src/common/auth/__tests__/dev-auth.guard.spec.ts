@@ -1,4 +1,4 @@
-import { ExecutionContext } from '@nestjs/common';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import type { PrismaService } from '@/prisma/prisma.service';
 import { DevAuthGuard } from '../dev-auth.guard';
 
@@ -44,6 +44,13 @@ describe('DevAuthGuard', () => {
     expect(req.user).toMatchObject({
       userId: 'user-admin-0001', role: 'ADMIN', organizationId: 'org-klass-0001',
     });
+  });
+
+  it('#134 rejects a deactivated user', async () => {
+    const deactivated = {
+      user: { findUnique: jest.fn(async () => ({ id: 'user-admin-0001', deactivatedAt: new Date() })) },
+    } as unknown as PrismaService;
+    await expect(new DevAuthGuard(deactivated).canActivate(mkCtx('user-admin-0001'))).rejects.toThrow(UnauthorizedException);
   });
 
   it('throws when header is missing', async () => {

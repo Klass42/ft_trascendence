@@ -163,7 +163,7 @@ describe('GradingService', () => {
   const ATTEMPT_ID = 'att-1';
 
   /** Prisma fake for a one-student, one-activity gradebook with the given attempt. */
-  function gradebookPrisma(attempt: { score: number | null; status: string }) {
+  function gradebookPrisma(attempt: { score: number | null; status: string }, deactivatedAt: Date | null = null) {
     return {
       course: {
         findUnique: async ({ where }: any) =>
@@ -205,6 +205,7 @@ describe('GradingService', () => {
               name: 'Lucía Molina',
               email: 'dev@example.com',
               avatarUrl: null,
+              deactivatedAt,
             },
           },
         ],
@@ -255,6 +256,21 @@ describe('GradingService', () => {
     expect(cell.status).toBe('GRADED');
     expect(cell.attemptId).toBe(ATTEMPT_ID);
     expect(gradebook.students[0].final).toBe(0.8);
+    expect(gradebook.students[0].deactivated).toBe(false);
+  });
+
+  it('#134 a deactivated student stays in the gradebook with their grades, flagged and marked in the CSV', async () => {
+    const prisma = gradebookPrisma({ score: 8, status: 'GRADED' }, new Date());
+    const service = buildService(prisma, []);
+
+    const gradebook = await service.getGradebook(COURSE_ID, TEACHER);
+    expect(gradebook.students).toHaveLength(1);
+    expect(gradebook.students[0]).toMatchObject({ deactivated: true, final: 0.8 });
+    expect(gradebook.students[0].user).not.toHaveProperty('deactivatedAt');
+    expect(gradebook.students[0].cells[0].score).toBe(8);
+
+    const { csv } = await service.getGradebookCsv(COURSE_ID, TEACHER);
+    expect(csv.split('\r\n')[1]).toContain('Lucía Molina (desactivada)');
   });
 
   it('a SUBMITTED attempt shows as pending: no final score, no final grade, "Por calificar" in the CSV', async () => {

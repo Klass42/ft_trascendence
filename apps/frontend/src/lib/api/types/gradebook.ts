@@ -38,6 +38,8 @@ export interface GradebookCellDTO {
 /** One student row: the student plus a cell per item (same order) and final. */
 export interface GradebookRowDTO {
   user: SubmissionAuthorDTO;
+  /** #134: the account is deactivated; the row keeps its enrolment and grades. */
+  deactivated: boolean;
   cells: GradebookCellDTO[];
   final: number | null;
 }

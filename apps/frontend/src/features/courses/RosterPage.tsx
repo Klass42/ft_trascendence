@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Minus } from 'lucide-react';
-import { Avatar, EmptyState, Spinner } from '@/components/ui';
+import { Avatar, Badge, EmptyState, Spinner } from '@/components/ui';
 import { UserLink } from '@/features/profile/UserLink';
 import { useEnrollments, useLessonProgress, useSections, useUsersByIds } from '@/lib/api';
 import styles from './RosterPage.module.css';
@@ -29,6 +29,7 @@ export function RosterPage({ courseId }: { courseId: string }) {
         name: user?.name ?? enrollment.userId,
         email: user?.email ?? '',
         avatarUrl: user?.avatarUrl ?? null,
+        deactivated: user?.deactivated ?? false,
         progress: enrollment.progress ?? 0,
       };
     });
@@ -68,7 +69,10 @@ export function RosterPage({ courseId }: { courseId: string }) {
               <div className={styles.userCell}>
                 <Avatar src={row.avatarUrl} size="sm" />
                 <div className={styles.userDetails}>
-                  <div className={styles.name}>{row.name}</div>
+                  <div className={styles.name}>
+                    {row.name}
+                    {row.deactivated && <> <Badge variant="neutral">Cuenta desactivada</Badge></>}
+                  </div>
                   <div className={styles.email}>{row.email}</div>
                 </div>
               </div>

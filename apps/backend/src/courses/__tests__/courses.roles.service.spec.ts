@@ -50,6 +50,18 @@ describe('CoursesService role rules (#105)', () => {
     expect(tx.courseMembership.create).not.toHaveBeenCalled();
   });
 
+  it('#134 rejects enrolling or assigning a deactivated account', async () => {
+    const member = memberService('STUDENT');
+    member.tx.user.findFirst.mockResolvedValue({ id: 'u-1', role: 'STUDENT', deactivatedAt: new Date() });
+    await expect(member.service.addMember('course-1', ADMIN, { userId: 'u-1' })).rejects.toThrow(/desactivada/);
+    expect(member.tx.courseMembership.create).not.toHaveBeenCalled();
+
+    const staff = staffService('TEACHER');
+    (staff.prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'u-1', role: 'TEACHER', deactivatedAt: new Date() });
+    await expect(staff.service.addStaff('s-1', ADMIN, { userId: 'u-1', role: 'TEACHER' })).rejects.toThrow(/desactivada/);
+    expect(staff.prisma.subjectStaff.create).not.toHaveBeenCalled();
+  });
+
   it('explains the 409 when the user already has another active cohort', async () => {
     const { service, tx } = memberService('STUDENT');
     tx.courseMembership.findFirst
