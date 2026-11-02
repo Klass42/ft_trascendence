@@ -9,6 +9,7 @@ import { io, type Socket } from 'socket.io-client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ANALYTICS_UPDATED } from '../analytics/analytics.events';
+import { ORGANIZATION_SUSPENDED, USER_DEACTIVATED } from './realtime.events';
 import { RealtimeGateway } from './realtime.gateway';
 
 // Same secret the gateway verifies with (ConfigService mock returns it below).
@@ -45,7 +46,14 @@ describe('RealtimeGateway (integration)', () => {
     user: {
       update: async () => ({}),
       findMany: jest.fn(async () => [{ id: 'analytics-admin' }]),
-      findUnique: async () => ({ organizationId: 'org-test' }),
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        if (where.id === 'suspended-user') {
+          return { organizationId: 'org-suspended', organization: { status: 'SUSPENDED' } };
+        }
+        if (where.id.startsWith('org-s-')) return { organizationId: 'org-s', organization: { status: 'ACTIVE' } };
+        if (where.id === 'ghost') return null;
+        return { organizationId: 'org-test' };
+      },
     },
     subjectStaff: {
       findMany: jest.fn(async () => [{ userId: 'analytics-teacher' }]),
@@ -162,6 +170,50 @@ describe('RealtimeGateway (integration)', () => {
       where: { organizationId: 'org-klass-0001', role: 'ADMIN' },
       select: { id: true },
     });
+  });
+
+  // The server accepts the handshake and then disconnects an unauthorized socket,
+  // so the client sees `disconnect` with reason "io server disconnect".
+  const serverDisconnect = (socket: Socket) =>
+    new Promise<string>((resolve) => socket.on('disconnect', resolve));
+
+  it('disconnects a socket of a suspended organization and one of a deleted user', async () => {
+    const suspended = io(`http://localhost:${port}`, {
+      auth: { userId: 'suspended-user' }, transports: ['websocket'], reconnection: false,
+    });
+    clients.push(suspended);
+    await expect(serverDisconnect(suspended)).resolves.toBe('io server disconnect');
+
+    const ghost = io(`http://localhost:${port}`, {
+      auth: { userId: 'ghost' }, transports: ['websocket'], reconnection: false,
+    });
+    clients.push(ghost);
+    await expect(serverDisconnect(ghost)).resolves.toBe('io server disconnect');
+  });
+
+  it('organization.suspended cuts live sockets of that org only', async () => {
+    const inside = await connect('org-s-1');
+    const other = await connect('user-bystander');
+    const closed = serverDisconnect(inside);
+    let otherClosed = false;
+    other.on('disconnect', () => { otherClosed = true; });
+
+    events.emit(ORGANIZATION_SUSPENDED, { organizationId: 'org-s' });
+
+    await expect(closed).resolves.toBe('io server disconnect');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(otherClosed).toBe(false);
+    other.close();
+  });
+
+  it('user.deactivated cuts every socket of that user', async () => {
+    const tabA = await connect('user-leaving');
+    const tabB = await connect('user-leaving');
+    const closed = Promise.all([serverDisconnect(tabA), serverDisconnect(tabB)]);
+
+    events.emit(USER_DEACTIVATED, { userId: 'user-leaving' });
+
+    await expect(closed).resolves.toEqual(['io server disconnect', 'io server disconnect']);
   });
 
   it('broadcasts presence:update online to a friend when a user connects', async () => {

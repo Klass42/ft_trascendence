@@ -23,6 +23,7 @@ import {
 } from '@/lib/api';
 import type { ForumPostDTO } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
+import { UserLink } from '@/features/profile/UserLink';
 import { CharCounter } from './CharCounter';
 import {
   FORUM_BODY_MAX,
@@ -233,7 +234,9 @@ export function ThreadPage() {
       </div>
 
       <div className={styles.meta}>
-        {thread.author?.name ?? 'Anónimo'} · {formatDateTime(thread.createdAt)}
+        {thread.authorId && thread.author
+          ? <UserLink userId={thread.authorId}>{thread.author.name}</UserLink>
+          : 'Anónimo'} · {formatDateTime(thread.createdAt)}
       </div>
 
       {thread.posts.length === 0 && (
@@ -374,7 +377,9 @@ function PostNode(props: PostNodeProps) {
         <div className={`${styles.bubble} ${mine ? styles.bubbleMine : ''}`}>
           <div className={styles.postHead}>
             <span className={`${styles.author} ${staff ? styles.authorStaff : ''}`}>
-              {post.author?.name ?? 'Anónimo'}
+              {post.authorId && post.author
+                ? <UserLink userId={post.authorId}>{post.author.name}</UserLink>
+                : 'Anónimo'}
             </span>
             {staff && (
               <span className={styles.roleBadge}>

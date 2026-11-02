@@ -73,6 +73,9 @@ const ResourcesPage = lazy(() =>
 const ProfilePage = lazy(() =>
   import('@/features/profile').then((m) => ({ default: m.ProfilePage }))
 );
+const UserProfilePage = lazy(() =>
+  import('@/features/profile').then((m) => ({ default: m.UserProfilePage }))
+);
 const FriendsPage = lazy(() =>
   import('@/features/friends').then((m) => ({ default: m.FriendsPage }))
 );
@@ -99,6 +102,9 @@ const ResetPasswordPage = lazy(() =>
 );
 const AdminUserEditPage = lazy(() =>
   import('@/features/admin').then((m) => ({ default: m.AdminUserEditPage }))
+);
+const DesignSystemPage = lazy(() =>
+  import('@/features/design').then((m) => ({ default: m.DesignSystemPage }))
 );
 const OrgSettingsPage = lazy(() =>
   import('@/features/org').then((m) => ({ default: m.OrgSettingsPage }))
@@ -350,11 +356,29 @@ const routes: RouteObject[] = [
         ),
       },
       {
+        path: '/users/:id',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <UserProfilePage />
+          </Suspense>
+        ),
+      },
+      {
         path: '/friends',
         element: (
           <Suspense fallback={<PageLoader />}>
             <FriendsPage />
           </Suspense>
+        ),
+      },
+      {
+        path: '/design',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <Suspense fallback={<PageLoader />}>
+              <DesignSystemPage />
+            </Suspense>
+          </ProtectedRoute>
         ),
       },
       {

@@ -20,16 +20,37 @@
   --color-accent-hover: #1d4ed8;
   --color-accent-active: #1e40af;
   --color-accent-muted: #eff4ff;
+  --color-accent-border: #dce7ff;
 
   /* Semantic */
   --color-success: #0f766e;
   --color-success-muted: #e7f6ef;
   --color-warning: #b45309;
+  --color-warning-strong: #92400e;
   --color-warning-muted: #fff4e5;
   --color-error: #b91c1c;
+  --color-error-hover: #991b1b;
+  --color-error-active: #7f1d1d;
   --color-error-muted: #fee2e2;
   --color-info: #2563eb;
   --color-info-muted: #eff4ff;
+
+  /* Neutral (status chips, "not started" states) */
+  --color-neutral: #475569;
+  --color-neutral-muted: #f1f5f9;
+
+  /* Overlays (dark scrim behind text on coloured surfaces) */
+  --color-scrim: rgb(0 0 0 / 0.22);
+
+  /* Data visualisation: categorical palette (course cards and heroes) */
+  --color-course-1: #2563eb;
+  --color-course-2: #0f766e;
+  --color-course-3: #d97706;
+  --color-course-4: #7c3aed;
+  --color-course-5: #dc2626;
+  --color-course-6: #0891b2;
+  --color-course-7: #4f46e5;
+  --color-course-8: #db2777;
 
   /* Borders */
   --color-border-primary: #eef2f6;

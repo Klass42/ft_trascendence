@@ -96,7 +96,7 @@ export function LoginPage() {
             height: 48,
             borderRadius: 14,
             background: 'var(--color-accent-primary)',
-            color: '#fff',
+            color: 'var(--color-text-inverse)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

@@ -3,6 +3,8 @@ import * as crypto from 'crypto';
 import { PrismaService } from '@/prisma/prisma.service';
 import { NotificationType, Prisma } from '@prisma/client';
 import { FilesService } from '@/files/files.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ORGANIZATION_SUSPENDED } from '@/realtime/realtime.events';
 import { NotificationsService } from '@/notifications/notifications.service';
 import type { CreatePlatformOrganizationDto } from './dto/create-platform-organization.dto';
 import type { UpdatePlatformOrganizationDto } from './dto/update-platform-organization.dto';
@@ -15,6 +17,8 @@ export class PlatformService {
   private readonly files: FilesService,
   @Optional()
   private readonly notifications?: NotificationsService,
+  @Optional()
+  private readonly events?: EventEmitter2,
  ) {}
  private token() { const raw = crypto.randomBytes(32).toString('base64url'); return { raw, hash: crypto.createHash('sha256').update(raw).digest('hex') }; }
  async createOrganization(dto: CreatePlatformOrganizationDto, actorId: string) {
@@ -37,6 +41,7 @@ export class PlatformService {
    data: dto,
    include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } },
   });
+  if (dto.status === 'ARCHIVED') this.events?.emit(ORGANIZATION_SUSPENDED, { organizationId: id });
   await this.prisma.auditLog.create({ data: { actorId, action: 'ORGANIZATION_UPDATED', organizationId: id, metadata: dto as Prisma.InputJsonValue } });
   await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha actualizado`, 'Se han cambiado sus datos o configuración.');
   return org;
@@ -56,6 +61,7 @@ export class PlatformService {
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_SUSPENDED', organizationId: id } });
    return updated;
   });
+  this.events?.emit(ORGANIZATION_SUSPENDED, { organizationId: id });
   await this.notifyOrganizationMembers(id, actorId, `La organización «${org.name}» se ha suspendido`, 'El acceso a la organización se ha desactivado.');
   return org;
  }
@@ -71,6 +77,7 @@ export class PlatformService {
    await tx.organization.delete({ where: { id } });
    return files.map(file => file.objectKey);
   });
+  this.events?.emit(ORGANIZATION_SUSPENDED, { organizationId: id });
   await this.files.deleteOrganizationObjects(id, objectKeys);
  }
 
