@@ -175,11 +175,11 @@ export class ForumsService {
    * edited through `updatePost`.
    */
   async updateThread(threadId: string, actingUserId: string, dto: UpdateThreadDto) {
-    const { thread } = await this.requireThreadMembership(threadId, actingUserId);
+    const { thread, access } = await this.requireThreadMembership(threadId, actingUserId);
     if (!thread.authorId || thread.authorId !== actingUserId) {
       throw new ForbiddenException('Solo el autor puede editar el hilo.');
     }
-    return this.prisma.forumThread.update({
+    const updated = await this.prisma.forumThread.update({
       where: { id: threadId },
       data: { title: dto.title.trim() },
       include: {
@@ -187,6 +187,17 @@ export class ForumsService {
         _count: { select: { posts: true } },
       },
     });
+    if (updated.title !== thread.title) {
+      await this.notifyThreadAudience(
+        thread,
+        access.subject.organizationId,
+        actingUserId,
+        NotificationType.FORUM_THREAD,
+        { title: 'Un hilo del foro se ha renombrado', body: `«${thread.title}» ahora se llama «${updated.title}».`, link: `/forums/${thread.id}` },
+        { includeStaff: true },
+      );
+    }
+    return updated;
   }
 
   /** Toggle a thread's pinned flag (course staff only). */
@@ -295,24 +306,35 @@ export class ForumsService {
 
   /** Edit a post's body (its author only). */
   async updatePost(postId: string, actingUserId: string, dto: UpdatePostDto) {
-    const { post } = await this.requirePostMembership(postId, actingUserId);
+    const { post, thread, access } = await this.requirePostMembership(postId, actingUserId);
     if (!post.authorId || post.authorId !== actingUserId) {
       throw new ForbiddenException('Solo el autor puede editar el mensaje.');
     }
-    return this.prisma.forumPost.update({
+    const body = dto.body.trim();
+    const updated = await this.prisma.forumPost.update({
       where: { id: postId },
-      data: { body: dto.body.trim() },
+      data: { body },
       include: { author: { select: AUTHOR_SELECT } },
     });
+    if (body !== post.body) {
+      await this.notifyThreadAudience(
+        thread,
+        access.subject.organizationId,
+        actingUserId,
+        NotificationType.FORUM_REPLY,
+        { title: 'Un mensaje del foro se ha editado', body: `${updated.author?.name ?? 'Alguien'} ha editado un mensaje en «${thread.title}».`, link: `/forums/${thread.id}` },
+      );
+    }
+    return updated;
   }
 
   /**
    * Delete a post — its author while it has no replies, or the subject's staff
    * or an org admin (nested replies go with it, cascade). Reply notices link to the thread,
-   * which stays valid, so there is nothing to clean up or announce.
+   * which stays valid, so there is nothing to clean up; the thread's participants are told.
    */
   async deletePost(postId: string, actingUserId: string) {
-    const { post, access } = await this.requirePostMembership(postId, actingUserId);
+    const { post, thread, access } = await this.requirePostMembership(postId, actingUserId);
     const isAuthor = !!post.authorId && post.authorId === actingUserId;
     if (!isAuthor && !access.isStaff) {
       throw new ForbiddenException('No tienes permiso para eliminar este mensaje.');
@@ -325,7 +347,18 @@ export class ForumsService {
         throw new ConflictException('Este mensaje ya tiene respuestas y no se puede eliminar.');
       }
     }
+    // Resolve the audience first: the deleted post (and its replies) take their authors with them.
+    const audience = await this.threadAudience(thread, access.subject.organizationId).catch((error) => {
+      this.logger.error('No se pudo resolver a quién avisar de un mensaje eliminado', error instanceof Error ? error.stack : undefined);
+      return [] as string[];
+    });
     await this.prisma.forumPost.delete({ where: { id: postId } });
+    await this.notifications.emitMany(
+      audience,
+      NotificationType.FORUM_REPLY,
+      { title: 'Un mensaje del foro se ha eliminado', body: `Se ha eliminado un mensaje en «${thread.title}».`, link: `/forums/${thread.id}` },
+      { organizationId: access.subject.organizationId, actorId: actingUserId },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -396,6 +429,48 @@ export class ForumsService {
     } catch (error) {
       this.logger.error('No se pudo preparar la notificación de respuesta en el foro', error instanceof Error ? error.stack : undefined);
     }
+  }
+
+  /**
+   * People with a stake in a thread: its author and everyone who posted in it,
+   * optionally plus the subject's staff. Resolved now (callers delete first, so
+   * they pass the array to `emitMany`), tenant-checked again by `emitMany`.
+   */
+  private async threadAudience(thread: ForumThread, organizationId: string, options: { includeStaff?: boolean } = {}) {
+    const [posters, staff] = await Promise.all([
+      this.prisma.forumPost.findMany({
+        where: { threadId: thread.id, thread: { subject: { organizationId } } },
+        distinct: ['authorId'],
+        select: { authorId: true },
+      }),
+      options.includeStaff
+        ? this.prisma.subjectStaff.findMany({
+          where: { subjectId: thread.subjectId, subject: { organizationId }, user: { organizationId } },
+          select: { userId: true },
+        })
+        : Promise.resolve([] as Array<{ userId: string }>),
+    ]);
+    return [
+      thread.authorId,
+      ...posters.map(({ authorId }) => authorId),
+      ...staff.map(({ userId }) => userId),
+    ].filter((id): id is string => !!id);
+  }
+
+  private async notifyThreadAudience(
+    thread: ForumThread,
+    organizationId: string,
+    actingUserId: string,
+    type: NotificationType,
+    payload: { title: string; body?: string; link: string },
+    options: { includeStaff?: boolean } = {},
+  ) {
+    await this.notifications.emitMany(
+      () => this.threadAudience(thread, organizationId, options),
+      type,
+      payload,
+      { organizationId, actorId: actingUserId },
+    );
   }
 
   private async notifyNewThread(thread: ForumThread, organizationId: string, actingUserId: string) {

@@ -94,7 +94,7 @@ export class ResourceFoldersService {
   async create(dto: CreateFolderDto, user: AuthUser) {
     this.assertLibraryStaff(user);
     if (dto.parentId) await this.assertValidParent(dto.parentId, user);
-    return this.prisma.resourceFolder.create({
+    const created = await this.prisma.resourceFolder.create({
       data: {
         organizationId: user.organizationId,
         createdById: user.userId,
@@ -103,6 +103,8 @@ export class ResourceFoldersService {
       },
       include: FOLDER_INCLUDE,
     });
+    await this.notifyLibraryStaff(user, `Carpeta creada: ${created.name}`);
+    return created;
   }
 
   async update(id: string, dto: UpdateFolderDto, user: AuthUser) {
@@ -110,7 +112,7 @@ export class ResourceFoldersService {
     const folder = await this.requireFolder(id, user);
     this.assertOwnerOrAdmin(folder, user);
     if (dto.parentId) await this.assertValidParent(dto.parentId, user, id);
-    return this.prisma.resourceFolder.update({
+    const updated = await this.prisma.resourceFolder.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
@@ -118,6 +120,8 @@ export class ResourceFoldersService {
       },
       include: FOLDER_INCLUDE,
     });
+    await this.notifyLibraryStaff(user, `Carpeta actualizada: ${updated.name}`);
+    return updated;
   }
 
   /** Deleting a folder moves its subfolders and resources to the root; nothing else is deleted. */
@@ -130,23 +134,37 @@ export class ResourceFoldersService {
       this.prisma.resourceFolder.updateMany({ where: { parentId: id }, data: { parentId: null } }),
       this.prisma.resourceFolder.delete({ where: { id } }),
     ]);
+    await this.notifyLibraryStaff(user, `Carpeta eliminada: ${folder.name}`);
   }
 
   /** Live publication: the subject sees everything inside the folder tree, now and later. */
   async publishToSubject(id: string, dto: PublishFolderDto, user: AuthUser) {
-    await this.requireFolder(id, user);
-    await this.access.assertSubjectStaff(dto.subjectId, user);
-    return this.prisma.subjectFolder.upsert({
+    const folder = await this.requireFolder(id, user);
+    const { subject } = await this.access.assertSubjectStaff(dto.subjectId, user);
+    const link = await this.prisma.subjectFolder.upsert({
       where: { folderId_subjectId: { folderId: id, subjectId: dto.subjectId } },
       create: { folderId: id, subjectId: dto.subjectId, required: dto.required ?? false },
       update: { ...(dto.required !== undefined && { required: dto.required }) },
     });
+    await this.notifyLibraryStaff(user, `Carpeta «${folder.name}» publicada en ${subject.title}`);
+    if (subject.status === 'PUBLISHED') {
+      await this.notifySubjectStudents(
+        subject.id,
+        user,
+        `Nuevo material en ${subject.title}: carpeta ${folder.name}`,
+        `/courses/${subject.courseId}/subjects/${subject.id}`,
+      );
+    }
+    return link;
   }
 
   async removeFromSubject(id: string, subjectId: string, user: AuthUser) {
-    await this.requireFolder(id, user);
-    await this.access.assertSubjectStaff(subjectId, user);
-    await this.prisma.subjectFolder.deleteMany({ where: { folderId: id, subjectId } });
+    const folder = await this.requireFolder(id, user);
+    const { subject } = await this.access.assertSubjectStaff(subjectId, user);
+    const removed = await this.prisma.subjectFolder.deleteMany({ where: { folderId: id, subjectId } });
+    if (removed.count > 0) {
+      await this.notifyLibraryStaff(user, `Carpeta «${folder.name}» retirada de ${subject.title}`);
+    }
   }
 
   /**
@@ -216,5 +234,37 @@ export class ResourceFoldersService {
       );
     }
     return result;
+  }
+
+  /** Admins and teachers of the organization (everyone who uses the library), minus the actor. */
+  private async notifyLibraryStaff(user: AuthUser, title: string) {
+    await this.notifications?.emitMany(
+      async () => (await this.prisma.user.findMany({
+        where: { organizationId: user.organizationId, role: { in: ['ADMIN', 'TEACHER'] } },
+        select: { id: true },
+      })).map(({ id }) => id),
+      NotificationType.RESOURCE_CHANGED,
+      { title, link: '/resources' },
+      { organizationId: user.organizationId, actorId: user.userId },
+    );
+  }
+
+  /** Students of the cohort that owns `subjectId`, minus the actor. */
+  private async notifySubjectStudents(subjectId: string, user: AuthUser, title: string, link: string) {
+    await this.notifications?.emitMany(
+      async () => (await this.prisma.courseMembership.findMany({
+        where: {
+          course: {
+            organizationId: user.organizationId,
+            subjects: { some: { id: subjectId, organizationId: user.organizationId, status: 'PUBLISHED' } },
+          },
+          user: { organizationId: user.organizationId, role: 'STUDENT' },
+        },
+        select: { userId: true },
+      })).map(({ userId }) => userId),
+      NotificationType.RESOURCE_CHANGED,
+      { title, body: 'Hay material nuevo o actualizado en una asignatura.', link },
+      { organizationId: user.organizationId, actorId: user.userId },
+    );
   }
 }

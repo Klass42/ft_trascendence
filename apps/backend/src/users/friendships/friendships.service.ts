@@ -100,6 +100,22 @@ export class FriendshipsService {
       },
     });
     if (result.count === 0) throw new NotFoundException('Solicitud de amistad no encontrada.');
+
+    // BLOCKED rows are never announced: a block must stay invisible to the other person.
+    if (friendship.status !== 'BLOCKED') {
+      const callerIsRequester = friendship.requesterId === callerUserId;
+      const [otherId, title, body] = friendship.status === 'ACCEPTED'
+        ? [callerIsRequester ? friendship.addresseeId : friendship.requesterId, 'Una amistad ha terminado', 'Ya no sois amigos en Klass.']
+        : callerIsRequester
+          ? [friendship.addresseeId, 'Solicitud de amistad cancelada', 'La persona que te la envió la ha retirado.']
+          : [friendship.requesterId, 'Solicitud de amistad rechazada', 'Tu solicitud de amistad no ha sido aceptada.'];
+      await this.notifications.emitMany(
+        [otherId],
+        'FRIEND_REQUEST',
+        { title, body, link: '/friends' },
+        { organizationId, actorId: callerUserId },
+      );
+    }
     return { deleted: true };
   }
 }

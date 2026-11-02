@@ -88,6 +88,16 @@ export class OrganizationsService {
       update: { role: dto.role, tokenHash, expiresAt, status: 'PENDING', acceptedAt: null, invitedById },
     });
     await this.prisma.auditLog.create({ data: { actorId: invitedById, action: auditAction, organizationId, metadata: { invitationId: invitation.id, email, role: dto.role, replacedPending } } });
+    // CSV rows are summarised once by importInvitations instead of one notice per row.
+    if (auditAction !== 'MEMBER_INVITED_CSV') {
+      await this.notifyAdmins(
+        organizationId,
+        invitedById,
+        auditAction === 'INVITATION_RESENT' ? 'Invitación reenviada' : 'Nueva invitación enviada',
+        `${email} (${dto.role}) tiene una invitación pendiente.`,
+        '/admin/users/invitations',
+      );
+    }
     return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt, invitationToken: raw, replacedPending };
   }
 
@@ -149,6 +159,15 @@ export class OrganizationsService {
     }
     const created = results.filter((r) => r.ok).length;
     await this.prisma.auditLog.create({ data: { actorId, action: 'INVITATIONS_IMPORTED', organizationId, metadata: { rows: results.length, created, failed: results.length - created } } });
+    if (created > 0) {
+      await this.notifyAdmins(
+        organizationId,
+        actorId,
+        'Invitaciones importadas',
+        `Se ${created === 1 ? 'ha creado 1 invitación' : `han creado ${created} invitaciones`} desde un CSV.`,
+        '/admin/users/invitations',
+      );
+    }
     return { total: results.length, created, failed: results.length - created, results };
   }
 
@@ -185,6 +204,7 @@ export class OrganizationsService {
     const changed = await this.prisma.organizationInvitation.updateMany({ where: { id: invitationId, organizationId, status: 'PENDING' }, data: { status: 'REVOKED' } });
     if (!changed.count) throw new NotFoundException('Invitación pendiente no encontrada.');
     await this.prisma.auditLog.create({ data: { actorId, action: 'INVITATION_REVOKED', organizationId, metadata: { invitationId } } });
+    await this.notifyAdmins(organizationId, actorId, 'Invitación revocada', 'Se ha revocado una invitación pendiente.', '/admin/users/invitations');
     return { revoked: true };
   }
 
@@ -395,6 +415,13 @@ export class OrganizationsService {
           metadata: { notified },
         },
       });
+      await this.notifyAdmins(
+        organizationId,
+        actor.userId,
+        'Solicitud de eliminación enviada',
+        `${actor.name} ha pedido eliminar «${org.name}». La plataforma la revisará.`,
+        '/org',
+      );
     }
 
     return { notified, alreadyPending: notified === 0 };
@@ -443,8 +470,30 @@ export class OrganizationsService {
         metadata: { cancelled: pending.length },
       },
     });
+    await this.notifyAdmins(
+      organizationId,
+      actor.userId,
+      'Solicitud de eliminación cancelada',
+      `Se ha retirado la solicitud para eliminar «${org.name}».`,
+      '/org',
+    );
 
     return { cancelled: pending.length, wasPending: true };
   }
 
+  /** Tell the organization's admins (never the actor). */
+  private async notifyAdmins(organizationId: string, actorId: string, title: string, body: string, link: string) {
+    await this.notifications.emitMany(
+      async () => {
+        const admins = await this.prisma.user.findMany({
+          where: { organizationId, role: 'ADMIN' },
+          select: { id: true },
+        });
+        return admins.map(({ id }) => id);
+      },
+      NotificationType.ORGANIZATION_CHANGED,
+      { title, body, link },
+      { organizationId, actorId },
+    );
+  }
 }

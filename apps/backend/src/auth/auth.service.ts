@@ -169,6 +169,14 @@ export class AuthService {
       console.log(`[Auth] Email verification link: /api/auth/verify-email?token=${verifyToken}`);
     }
 
+    await this.notifyAdmins(
+      organization.id,
+      user.id,
+      'Nuevo registro en la organización',
+      `${user.name} (${user.email}) se ha registrado como estudiante.`,
+      `/admin/users/${user.id}`,
+    );
+
     const tokens = await this.issueTokens(user.id);
     return { user: this.mapUser(user), ...tokens };
   }
@@ -299,6 +307,7 @@ export class AuthService {
     const passwordHash = await argon2.hash(dto.newPassword);
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
     await this.prisma.session.deleteMany({ where: { userId } });
+    await this.notifySecurity(user, 'Has cambiado tu contraseña', 'Se ha cerrado tu sesión en todos los dispositivos. Si no has sido tú, avisa a tu organización.');
     return { changed: true };
   }
 
@@ -430,7 +439,7 @@ export class AuthService {
     const tokenHash = this.hashToken(token);
     const now = new Date();
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const created = await this.prisma.$transaction(async (tx) => {
         const invitation = await tx.organizationInvitation.findUnique({ where: { tokenHash }, include: { organization: true } });
         if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt <= now || invitation.organization.status !== 'ACTIVE') throw new UnauthorizedException('La invitación no es válida o ha caducado.');
         const existing = await tx.user.findFirst({ where: { organizationId: invitation.organizationId, email: invitation.email } });
@@ -442,6 +451,16 @@ export class AuthService {
         await tx.auditLog.create({ data: { action: 'INVITATION_ACCEPTED', organizationId: invitation.organizationId, targetUserId: user.id, metadata: { role: invitation.role } } });
         return user;
       });
+      if (created.organizationId) {
+        await this.notifyAdmins(
+          created.organizationId,
+          created.id,
+          'Una invitación ha sido aceptada',
+          `${created.name} (${created.email}) ya forma parte de la organización.`,
+          `/admin/users/${created.id}`,
+        );
+      }
+      return created;
     } catch (error) { if (error instanceof ConflictException || error instanceof UnauthorizedException) throw error; throw error; }
   }
 
@@ -491,6 +510,7 @@ export class AuthService {
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
     await this.prisma.session.deleteMany({ where: { userId: user.id } });
     await this.prisma.auditLog.create({ data: { actorId: user.id, action: 'PASSWORD_RESET_COMPLETED', organizationId: user.organizationId, targetUserId: user.id } });
+    await this.notifySecurity(user, 'Tu contraseña se ha restablecido', 'Se ha cerrado tu sesión en todos los dispositivos. Si no has sido tú, avisa a tu organización.');
     return { reset: true };
   }
 
@@ -524,5 +544,25 @@ export class AuthService {
       }
     }
     return { requested: true };
+  }
+
+  /** Org admins (never the actor). */
+  private async notifyAdmins(organizationId: string, actorId: string, title: string, body: string, link: string) {
+    await this.notifications?.emitMany(
+      async () => (await this.prisma.user.findMany({ where: { organizationId, role: 'ADMIN' }, select: { id: true } })).map((admin) => admin.id),
+      NotificationType.USER_CHANGED,
+      { title, body, link },
+      { organizationId, actorId },
+    );
+  }
+
+  /** Security notice for the account owner themself: deliberately no `actorId`, the owner is the one to alert. */
+  private async notifySecurity(user: { id: string; organizationId: string | null }, title: string, body: string) {
+    await this.notifications?.emitMany(
+      [user.id],
+      NotificationType.USER_CHANGED,
+      { title, body, link: '/profile' },
+      { organizationId: user.organizationId ?? undefined },
+    );
   }
 }

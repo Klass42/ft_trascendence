@@ -37,7 +37,7 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
   return prisma;
 }
 
-const access = { assertSubjectStaff: jest.fn(), assertSubjectReadable: jest.fn().mockResolvedValue({ isStaff: false }) };
+const access = { assertSubjectStaff: jest.fn().mockResolvedValue({ subject: { id: 's1', title: 'Web', courseId: 'c1', status: 'PUBLISHED' } }), assertSubjectReadable: jest.fn().mockResolvedValue({ isStaff: false }) };
 
 describe('collectDescendants', () => {
   it('returns the root and every nested subfolder', () => {

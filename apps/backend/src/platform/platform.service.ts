@@ -28,7 +28,7 @@ export class PlatformService {
    const invitation = await tx.organizationInvitation.create({ data: { organizationId: organization.id, email: dto.adminEmail, role: 'ADMIN', tokenHash: token.hash, expiresAt, invitedById: actorId } });
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_PROVISIONED', organizationId: organization.id, metadata: { firstAdminEmail: dto.adminEmail, invitationId: invitation.id } } });
    return { organization, invitationId: invitation.id };
-  }); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Ya existe una organización con ese código.'); throw error; }
+  }); await this.notifySuperadmins(actorId, `Organización creada: ${result.organization.name}`, `Se ha aprovisionado «${result.organization.name}» (${result.organization.slug}).`, `/platform/organizations/${result.organization.id}`); return { ...result, invitationToken: token.raw }; } catch (error: any) { if (error?.code === 'P2002') throw new ConflictException('Ya existe una organización con ese código.'); throw error; }
  }
  async listOrganizations() { return this.prisma.organization.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); }
  async getOrganization(id: string) { const org = await this.prisma.organization.findUnique({ where: { id }, include: { _count: { select: { users: true, invitations: { where: { status: 'PENDING' } } } } } }); if (!org) throw new NotFoundException('Organización no encontrada.'); return org; }
@@ -79,6 +79,7 @@ export class PlatformService {
   });
   this.events?.emit(ORGANIZATION_SUSPENDED, { organizationId: id });
   await this.files.deleteOrganizationObjects(id, objectKeys);
+  await this.notifySuperadmins(actorId, `Organización eliminada: ${org.name}`, `«${org.name}» (${org.slug}) y sus datos se han eliminado.`, '/platform/organizations');
  }
 
  // Support/recovery flow (issue #18): an org that lost access to its own
@@ -102,10 +103,25 @@ export class PlatformService {
    await tx.auditLog.create({ data: { actorId, action: 'ORGANIZATION_ADMIN_RECOVERY_INVITED', organizationId, metadata: { invitationId: created.id } } });
    return created;
   });
+  await this.notifySuperadmins(actorId, `Invitación de administrador: ${organization.name}`, `Se ha invitado a ${dto.email} como administrador de «${organization.name}».`, `/platform/organizations/${organizationId}`);
   return { id: invitation.id, email: invitation.email, role: invitation.role, expiresAt: invitation.expiresAt, invitationToken: token.raw };
  }
 
+ /** Platform staff are not tenant members, so they are resolved by `platformRole` (never the actor). */
+ private async notifySuperadmins(actorId: string, title: string, body: string, link: string) {
+  await this.notifications?.emitMany(
+   async () => {
+    const superadmins = await this.prisma.user.findMany({ where: { platformRole: 'SUPERADMIN' }, select: { id: true } });
+    return superadmins.map(({ id }) => id);
+   },
+   NotificationType.ORGANIZATION_CHANGED,
+   { title, body, link },
+   { actorId },
+  );
+ }
+
  private async notifyOrganizationMembers(organizationId: string, actorId: string, title: string, body: string) {
+  await this.notifySuperadmins(actorId, title, body, `/platform/organizations/${organizationId}`);
   await this.notifications?.emitMany(
    async () => {
     const members = await this.prisma.user.findMany({ where: { organizationId }, select: { id: true } });
