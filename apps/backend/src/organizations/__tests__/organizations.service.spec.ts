@@ -58,8 +58,13 @@ const mkPrisma = () =>
       findMany: jest.fn(),
       findUnique: jest.fn(),
       delete: jest.fn(),
+      update: jest.fn(),
       count: jest.fn(),
     },
+    session: { deleteMany: jest.fn(async () => ({ count: 2 })) },
+    courseMembership: { deleteMany: jest.fn(async () => ({ count: 1 })) },
+    subjectStaff: { deleteMany: jest.fn(async () => ({ count: 0 })) },
+    $transaction: jest.fn(),
     notification: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -80,6 +85,7 @@ describe('OrganizationsService', () => {
   let service: OrganizationsService;
   let prisma: ReturnType<typeof mkPrisma>;
   let notifications: { emit: jest.Mock; emitMany: jest.Mock };
+  let events: { emit: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -88,9 +94,12 @@ describe('OrganizationsService', () => {
       emit: jest.fn(async () => ({ id: 'notif-1' })),
       emitMany: jest.fn(async () => undefined),
     };
+    (prisma.$transaction as jest.Mock).mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+    events = { emit: jest.fn() };
     service = new OrganizationsService(
       prisma,
       notifications as unknown as NotificationsService,
+      events as never,
     );
   });
 
@@ -231,11 +240,22 @@ describe('OrganizationsService', () => {
   });
 
   describe('removeMember', () => {
-    it('deletes the user when caller is admin of same org', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-student-0001', organizationId: ORG_ID });
-      (prisma.user.delete as jest.Mock).mockResolvedValue({});
+    it('#134 deactivates (never deletes): revokes sessions, unenrols, keeps history, emits user.deactivated', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-student-0001', name: 'Sam', organizationId: ORG_ID, deactivatedAt: null });
       await service.removeMember(ORG_ID, 'user-student-0001', ORG_ID, 'user-admin-0001');
-      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-student-0001' } });
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user-student-0001' }, data: { deactivatedAt: expect.any(Date) } });
+      expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
+      expect(prisma.courseMembership.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
+      expect(prisma.subjectStaff.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-student-0001' } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'MEMBER_DEACTIVATED', targetUserId: 'user-student-0001' }) }));
+      expect(events.emit).toHaveBeenCalledWith('user.deactivated', { userId: 'user-student-0001' });
+    });
+
+    it('#134 rejects removing an already deactivated member', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u', name: 'Sam', organizationId: ORG_ID, deactivatedAt: new Date() });
+      await expect(service.removeMember(ORG_ID, 'u', ORG_ID, 'user-admin-0001')).rejects.toThrow(BadRequestException);
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('throws ForbiddenException when org mismatch', async () => {
@@ -266,6 +286,30 @@ describe('OrganizationsService', () => {
         service.removeMember(ORG_ID, 'user-admin-0001', ORG_ID, 'user-admin-0001'),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reactivateMember (#134)', () => {
+    it('clears deactivatedAt and audits', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u', name: 'Sam', organizationId: ORG_ID, deactivatedAt: new Date() });
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ maxUsers: null });
+      await expect(service.reactivateMember(ORG_ID, 'u', ORG_ID, 'user-admin-0001')).resolves.toEqual({ id: 'u', deactivatedAt: null });
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u' }, data: { deactivatedAt: null } });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'MEMBER_REACTIVATED' }) }));
+    });
+
+    it('respects the plan user limit', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u', name: 'Sam', organizationId: ORG_ID, deactivatedAt: new Date() });
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({ maxUsers: 3 });
+      (prisma.user.count as jest.Mock).mockResolvedValue(3);
+      await expect(service.reactivateMember(ORG_ID, 'u', ORG_ID, 'user-admin-0001')).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an active member and other organizations', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u', name: 'Sam', organizationId: ORG_ID, deactivatedAt: null });
+      await expect(service.reactivateMember(ORG_ID, 'u', ORG_ID, 'a')).rejects.toThrow(BadRequestException);
+      await expect(service.reactivateMember(OTHER_ORG, 'u', ORG_ID, 'a')).rejects.toThrow(ForbiddenException);
     });
   });
 

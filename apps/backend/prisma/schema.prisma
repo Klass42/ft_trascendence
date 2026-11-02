@@ -80,6 +80,7 @@ model User {
   platformRole    PlatformRole @default(NONE)
   onlineAt        DateTime? // updated on activity; drives online status
   emailVerifiedAt DateTime?
+  deactivatedAt   DateTime? // #134: removed from the org (no login), history kept; null = active
   emailNotificationsEnabled Boolean  @default(true)
   preferredLanguage         String   @default("es")
   createdAt                 DateTime @default(now())

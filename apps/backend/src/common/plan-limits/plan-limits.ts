@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 
 // Issue #106: plan limits (maxUsers / maxCourses / maxStorageMb) stored on the
 // Organization are enforced at creation time. null = unlimited.
+// #134: deactivated users do not count against maxUsers (reactivating re-checks).
 type Db = {
   organization: { findUnique(args: any): Promise<any> };
   user: { count(args: any): Promise<number> };
@@ -16,7 +17,7 @@ async function limits(db: Db, organizationId: string) {
 export async function assertUserLimit(db: Db, organizationId: string, adding = 1) {
   const org = await limits(db, organizationId);
   if (org?.maxUsers == null) return;
-  const count = await db.user.count({ where: { organizationId } });
+  const count = await db.user.count({ where: { organizationId, deactivatedAt: null } });
   if (count + adding > org.maxUsers) throw new ForbiddenException(`La organización ha alcanzado el límite de usuarios de su plan (${org.maxUsers}).`);
 }
 

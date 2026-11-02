@@ -71,6 +71,16 @@ describe('RealtimeGateway access control', () => {
       expect(gateway.isOnline('u1')).toBe(false);
     });
 
+    it('rejects a deactivated user (#134)', async () => {
+      user.findUnique.mockResolvedValue({ organizationId: 'org1', deactivatedAt: new Date(), organization: { status: 'ACTIVE' } });
+      const client = makeClient();
+      await gateway.handleConnection(asSocket(client));
+
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+      expect(client.join).not.toHaveBeenCalled();
+      expect(gateway.isOnline('u1')).toBe(false);
+    });
+
     it('rejects a user that no longer exists', async () => {
       user.findUnique.mockResolvedValue(null);
       const client = makeClient();

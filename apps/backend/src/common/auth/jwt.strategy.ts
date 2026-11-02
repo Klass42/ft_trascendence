@@ -32,6 +32,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user) throw new UnauthorizedException('La cuenta ya no existe.');
     // Issue #106: cut access immediately when the organization is suspended.
     if (user.organization && user.organization.status !== 'ACTIVE') throw new UnauthorizedException('Tu organización está suspendida.');
+    // #134: deactivated accounts lose access on their next request.
+    if (user.deactivatedAt) throw new UnauthorizedException('Tu cuenta se ha desactivado en esta organización. Contacta con su administración para reactivarla.');
     return {
       userId: user.id,
       email: user.email,

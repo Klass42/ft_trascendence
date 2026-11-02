@@ -23,6 +23,12 @@ import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import type { PlatformLoginDto } from './dto/platform-login.dto';
 
+
+/** #134: the account exists but was removed (deactivated) from its organization. */
+export class AccountDeactivatedException extends ForbiddenException {
+  constructor() { super('Tu cuenta se ha desactivado en esta organización. Contacta con su administración para reactivarla.'); }
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -193,6 +199,11 @@ export class AuthService {
       throw new ForbiddenException('Tu organización está suspendida. Contacta con el soporte de la plataforma.');
     }
 
+    // #134: a member removed from the org keeps the account but cannot sign in.
+    if (user.deactivatedAt) {
+      throw new ForbiddenException('Tu cuenta se ha desactivado en esta organización. Contacta con su administración para reactivarla.');
+    }
+
     if (!user.emailVerifiedAt) {
       throw new ForbiddenException('Confirma tu correo electrónico antes de iniciar sesión.');
     }
@@ -241,6 +252,11 @@ export class AuthService {
     if (session.user.organization && session.user.organization.status !== 'ACTIVE') {
       await this.prisma.session.deleteMany({ where: { userId: session.userId } });
       throw new UnauthorizedException('Tu organización está suspendida.');
+    }
+
+    if (session.user.deactivatedAt) {
+      await this.prisma.session.deleteMany({ where: { userId: session.userId } });
+      throw new UnauthorizedException('Tu cuenta se ha desactivado en esta organización. Contacta con su administración para reactivarla.');
     }
 
     await this.prisma.session.delete({ where: { id: session.id } });
@@ -366,6 +382,7 @@ export class AuthService {
       if (oauthAccount.user.organizationId !== organization.id) {
         throw new ForbiddenException('Esta cuenta de Google está vinculada a otra organización.');
       }
+      if (oauthAccount.user.deactivatedAt) throw new AccountDeactivatedException();
       return this.issueTokens(oauthAccount.userId);
     }
 
@@ -375,6 +392,8 @@ export class AuthService {
         email: { equals: email, mode: 'insensitive' },
       },
     });
+
+    if (user?.deactivatedAt) throw new AccountDeactivatedException();
 
     if (!user) {
       await assertUserLimit(this.prisma as any, organization.id);

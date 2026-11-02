@@ -251,9 +251,11 @@ export class RealtimeGateway
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { organizationId: true, organization: { select: { status: true } } },
+        select: { organizationId: true, deactivatedAt: true, organization: { select: { status: true } } },
       });
       if (!user) return null;
+      // #134: a member removed from the organization cannot reconnect.
+      if (user.deactivatedAt) return null;
       if (user.organization && user.organization.status !== 'ACTIVE') return null;
       return { organizationId: user.organizationId };
     } catch (err) {

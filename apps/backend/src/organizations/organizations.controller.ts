@@ -115,4 +115,15 @@ export class OrganizationsController {
       id, userId, user.organizationId, user.userId,
     );
   }
+
+  @Post(':id/members/:userId/reactivate')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async reactivateMember(
+    @Param('id', ParseIdPipe) id: string,
+    @Param('userId', ParseIdPipe) userId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.organizationsService.reactivateMember(id, userId, user.organizationId, user.userId);
+  }
 }

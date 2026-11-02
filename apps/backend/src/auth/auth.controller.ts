@@ -17,7 +17,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { Response } from 'express';
-import { AuthService } from './auth.service';
+import { AccountDeactivatedException, AuthService } from './auth.service';
 import { Public, CurrentUser } from '@/common/auth';
 import type { AuthUser } from '@/common/auth';
 import type { GoogleProfile } from './google.strategy';
@@ -161,7 +161,9 @@ export class AuthController {
       res.redirect(`${frontendUrl}/auth/callback#${hash}`);
     } catch (error) {
       const code =
-        error instanceof UnauthorizedException
+        error instanceof AccountDeactivatedException
+          ? 'account_deactivated'
+          : error instanceof UnauthorizedException
           ? 'unknown_organization'
           : error instanceof ForbiddenException
             ? 'wrong_organization'
