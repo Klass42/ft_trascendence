@@ -162,6 +162,8 @@ export {
   type NotificationType,
   type NotificationDTO,
   type NotificationsListDTO,
+  type AnalyticsActivityType,
+  type AnalyticsFilters,
   type AnalyticsOverviewDTO,
   type SubmissionsSeriesPointDTO,
   type SubmissionsOverTimeDTO,
