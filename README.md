@@ -39,14 +39,15 @@ monitored deployment (Prometheus + Grafana).
 
 ## Team information
 
-<!-- TODO(team): the subject requires the Product Owner and the Project Manager to be named.
-     Confirm who holds PO and PM and fill the Role(s) column; nothing has been invented here. -->
+**Product Owner:** David (`dcid-san`) · **Project Manager:** Jorge (`jgomez-d`). Aloiki was the
+planned frontend lead; in practice Jorge and David also ended up building and fixing most of the
+product across frontend and backend.
 
 | Member | 42 login | GitHub | Role(s) | Responsibilities |
 |---|---|---|---|---|
-| Jorge | `jgomez-d` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, <!-- PO/PM? --> developer | authentication, roles and permissions, organizations, database schema |
-| David | `dcid-san` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
-| Aloiki | `ikondrat` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
+| Jorge | `jgomez-d` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, Project Manager, developer | authentication, roles and permissions, organizations, database schema |
+| David | `dcid-san` | [@dacs-dev](https://github.com/dacs-dev) | Product Owner, developer | assignments, grades, forums, notifications, WebSocket |
+| Aloiki | `ikondrat` | [@illia](https://github.com/illia) | Frontend lead (planned), developer | frontend, design system, courses, files |
 | Viacheslav | `vtrofyme` | [@ViacheslavTrofymenko](https://github.com/ViacheslavTrofymenko) | DevOps | Docker images and Compose stack, HTTPS, CI/CD, monitoring, deployment, infrastructure docs |
 
 ## Project management
@@ -63,7 +64,7 @@ monitored deployment (Prometheus + Grafana).
   deployment of the stack (see [CI](#continuous-integration)).
 - **Code ownership:** [`.github/CODEOWNERS`](.github/CODEOWNERS); the split per person is in
   [`docs/planning/README.md`](docs/planning/README.md).
-- **Tools:** GitHub (Issues, Pull Requests, Actions, CODEOWNERS) · **Communication:** <!-- TODO(team): Discord / Slack / … --> · **Meetings:** <!-- TODO(team): cadence -->
+- **Tools:** GitHub (Issues, Pull Requests, Actions, CODEOWNERS) · **Communication:** team chat / calls · **Meetings:** roughly twice a week (calls), plus async follow-up in issues and PRs
 
 ## Instructions
 
@@ -217,8 +218,11 @@ Modules on top of our own design tokens and component kit (19 components, see
 lessons, lucide-react icons, and jspdf + svg2pdf.js (loaded on demand) for the analytics PDF.
 The production build is static files served by unprivileged nginx.
 
-<!-- TODO(Aloiki): add the *why* behind the frontend choices (React vs. alternatives, CSS Modules
-     vs. a CSS framework, Vite). -->
+*Why these choices.* React is the library the team already knew, with the largest ecosystem
+(router, markdown, icons) for a single-page app. Vite gives fast dev reloads and a plain static
+build that nginx can serve without a Node runtime. CSS Modules plus our own tokens keep styles
+scoped per component and let us build a custom design system (a module of the subject) instead of
+relying on a CSS framework's look. TypeScript is shared with the backend, so API types stay aligned.
 
 ### Backend
 
@@ -306,9 +310,6 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 [`docs/diagrams/ERD.md`](docs/diagrams/ERD.md).
 
 ## Features list
-
-<!-- TODO(Aloiki): add your rows (courses & subjects, lessons & content, library, frontend shell)
-     with the correct author; only features with a known author are listed below. -->
 
 | Feature | Description | Member(s) |
 |---|---|---|
@@ -585,8 +586,6 @@ time limit), `QuestionForm.tsx` / `QuestionContentEditor.tsx` (authoring), `Atte
 
 ## Individual contributions
 
-<!-- TODO(Aloiki): your section below is still missing. Jorge, David and Viacheslav are done. -->
-
 ### Jorge
 
 I owned identity and access end to end: the Prisma schema (steward), email/password auth, Google
@@ -628,9 +627,12 @@ audit found a cross-course clone and an answer-key leak, both fixed with regress
 
 ### Aloiki
 
-<!-- TODO(Aloiki): what you built (frontend shell, design system, courses, files…), which modules
-     you carry (framework, file upload, design system) and the challenges you hit and how you
-     solved them. Be specific: the subject asks for honesty here. -->
+Planned frontend lead: set up the React + Vite + TypeScript application shell (routing, layout,
+API client), the design tokens and the shared component kit used across the app (custom-made
+design system), and early screens for courses and files. Modules associated with this work:
+frontend framework and custom-made design system; file upload was shared with the backend
+owners. As the project went on, Jorge and David took over and finished a large part of the
+frontend in their own domains, so many screens were completed or reworked by them.
 
 ### Viacheslav (vtrofyme) — DevOps
 
@@ -663,12 +665,10 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ## Resources
 
-<!-- TODO(Aloiki): add the frontend references you used (React Router, CSS Modules, …). -->
-
 ### Documentation and references
 
 - 42 subject: `ft_transcendence` v21.1.
-- [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/)
+- [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/) · [React Router](https://reactrouter.com/) · [CSS Modules](https://github.com/css-modules/css-modules) · [TypeScript](https://www.typescriptlang.org/docs/)
 - [Socket.IO documentation](https://socket.io/docs/v4/) · [Passport](https://www.passportjs.org/) and [Google OAuth 2.0 for web server apps](https://developers.google.com/identity/protocols/oauth2/web-server)
 - [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) (account enumeration, session handling) and [argon2](https://github.com/ranisalt/node-argon2)
 - [Docker Compose specification](https://docs.docker.com/compose/compose-file/) and [Compose `depends_on` conditions](https://docs.docker.com/compose/how-tos/startup-order/)
@@ -681,8 +681,8 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ### Use of AI
 
-<!-- TODO(Aloiki): add your bullet (tools used, for which tasks, how you checked the output). -->
-
+- **Team (general):** the team used AI assistants for boilerplate and documentation where noted
+  above; generated code was reviewed by hand and had to pass CI before merging.
 - **Jorge:** Coding assistants (Claude Code and Grok) were used as a pair-programmer for Nest
   modules, Prisma schema/migrations, specs under `docs/superpowers/`, and the unit/E2E tests around
   auth and organizations. Rules: write the design/acceptance criteria first; read and adjust every
