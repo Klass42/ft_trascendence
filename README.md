@@ -46,7 +46,7 @@ monitored deployment (Prometheus + Grafana).
 |---|---|---|---|---|
 | Jorge | `jgomez-d` | [@SrJorgeG](https://github.com/SrJorgeG) | Tech Lead, <!-- PO/PM? --> developer | authentication, roles and permissions, organizations, database schema |
 | David | `dcid-san` | [@dacs-dev](https://github.com/dacs-dev) | developer | assignments, grades, forums, notifications, WebSocket |
-| Aloiki | `ikondrat` | [@illia](https://github.com/illia) | developer | frontend, design system, courses, files |
+| Aloiki | `ikondrat` | [@Aloik1](https://github.com/Aloik1) | developer | frontend, design system, courses, files |
 | Viacheslav | `vtrofyme` | [@ViacheslavTrofymenko](https://github.com/ViacheslavTrofymenko) | DevOps | Docker images and Compose stack, HTTPS, CI/CD, monitoring, deployment, infrastructure docs |
 
 ## Project management
@@ -217,8 +217,15 @@ Modules on top of our own design tokens and component kit (19 components, see
 lessons, lucide-react icons, and jspdf + svg2pdf.js (loaded on demand) for the analytics PDF.
 The production build is static files served by unprivileged nginx.
 
-<!-- TODO(Aloiki): add the *why* behind the frontend choices (React vs. alternatives, CSS Modules
-     vs. a CSS framework, Vite). -->
+*Why:* React was our early consensus, because we had all used it before and its component model fits
+an app with many similar screens (lists, forms, editors); Vue would have been a second thing to
+learn, and Angular repeats the structure NestJS already gives the backend. TypeScript end to end, so
+the API types in `lib/api` are checked against what the backend returns. Vite for near-instant
+reloads in development and a plain static build that nginx serves with no Node at runtime. CSS
+Modules on our own tokens instead of Tailwind or a component library, so we keep our own look, class
+names never collide between features, and there is no runtime CSS-in-JS cost. Data loading uses
+small typed hooks over one `fetch` client instead of React Query, because our needs (load, refetch
+after a change, loading and error states) didn't justify another dependency.
 
 ### Backend
 
@@ -307,9 +314,6 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 
 ## Features list
 
-<!-- TODO(Aloiki): add your rows (courses & subjects, lessons & content, library, frontend shell)
-     with the correct author; only features with a known author are listed below. -->
-
 | Feature | Description | Member(s) |
 |---|---|---|
 | Email/password auth | Register, login, refresh (single-use rotation with reuse detection), logout, email verification, change password; argon2 hashes; JWT access 15m / refresh 7d | Jorge |
@@ -335,6 +339,11 @@ as Prisma migrations in `apps/backend/prisma/migrations` (8 migrations). ER diag
 | Public user profile | `/users/:id` profile page with friendship actions | David |
 | Design system showcase | `/design` page rendering the live tokens and every UI component | David / Aloiki |
 | Auth hardening | Refresh tokens verified before any revocation, signed single-use OAuth `state`, rate limiting with `429 + Retry-After` | David / Jorge |
+| Frontend shell and API client | Vite + React app, router, role-aware layout (sidebar, top bar), typed `fetch` client with token refresh, data hooks with loading/empty/error states | Aloiki (extended by David / Jorge) |
+| Courses, sections and lessons | Org-scoped course CRUD with filters, sections, lessons, enrolment and per-student progress (backend + frontend) | Aloiki (cohort/subject split by Jorge, later extended by David) |
+| Content builder | Teachers build a subject from sections and lessons, reorder them, write lessons in Markdown and attach files (PDF, slides, images, audio, video, max 10 MB) | Aloiki |
+| Student dashboard | A student's courses with their real progress, responsive grid (3/2/1 columns), cards that work with the keyboard | Aloiki |
+| File upload and validation | Drag-and-drop upload with progress and checks in the browser; on the server every upload must pass MIME allowlist, extension and magic-bytes checks | Aloiki |
 
 ## Modules
 
@@ -585,8 +594,6 @@ time limit), `QuestionForm.tsx` / `QuestionContentEditor.tsx` (authoring), `Atte
 
 ## Individual contributions
 
-<!-- TODO(Aloiki): your section below is still missing. Jorge, David and Viacheslav are done. -->
-
 ### Jorge
 
 I owned identity and access end to end: the Prisma schema (steward), email/password auth, Google
@@ -628,9 +635,27 @@ audit found a cross-course clone and an answer-key leak, both fixed with regress
 
 ### Aloiki
 
-<!-- TODO(Aloiki): what you built (frontend shell, design system, courses, files…), which modules
-     you carry (framework, file upload, design system) and the challenges you hit and how you
-     solved them. Be specific: the subject asks for honesty here. -->
+I owned Content & UX as the frontend lead. I built the **frontend foundation**: the Vite + React
+app, the router and role-aware layout, the typed API client and the first data hooks, and the
+**design system** (tokens and the `components/ui` kit, including `FileUpload`) that the rest of the
+team built their screens with. On the backend I wrote the first **courses** module (org-scoped CRUD,
+sections, lessons, enrolments and progress) and the **files** module (storage driver interface with
+a local driver, upload CRUD). In the last phase I finished the **content builder** (reordering
+sections and lessons, lesson attachments, no inline styles, loading/empty/error states everywhere),
+the **student dashboard**, and a responsive pass checked at 1366, 768 and 390 px. Modules I carry:
+File upload (Minor), the frontend half of Use a framework for both frontend and backend (Major,
+shared) and Custom-made design system (Minor).
+
+*Challenges.* (1) **Spoofed files**: the MIME type the browser declares can't be trusted, so the
+server now requires every upload to be on the allowlist, have an extension that fits its type, and
+start with the format's real signature (`%PDF-` and so on); a binary renamed to `notes.pdf` gets a
+400. (2) **Files missing from commits on Windows**: the `.gitignore` rule `Frontend*/` also matched
+`apps/frontend/`, because git on Windows ignores case, so new frontend files were silently left out;
+anchoring it as `/Frontend*/` fixed it. (3) **Flaky E2E tests**: the content-builder specs shared
+state and failed at random, so each test now creates and cleans up its own data and checks the
+result through the API as well as on screen; I re-enabled the 12 skipped or `fixme` tests in my
+three specs and added 6 new ones. (4) **Working before auth existed**: I built against Jorge's
+`DevAuthGuard` and a mock user, so the frontend didn't wait for JWT login.
 
 ### Viacheslav (vtrofyme) — DevOps
 
@@ -663,12 +688,14 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 
 ## Resources
 
-<!-- TODO(Aloiki): add the frontend references you used (React Router, CSS Modules, …). -->
-
 ### Documentation and references
 
 - 42 subject: `ft_transcendence` v21.1.
 - [NestJS documentation](https://docs.nestjs.com/) · [Prisma documentation](https://www.prisma.io/docs) · [React](https://react.dev/) · [Vite](https://vite.dev/guide/)
+- [React Router](https://reactrouter.com/) · [TypeScript handbook](https://www.typescriptlang.org/docs/) · [CSS Modules](https://github.com/css-modules/css-modules) · [Vite: static deploy](https://vite.dev/guide/static-deploy)
+- [react-markdown](https://github.com/remarkjs/react-markdown) and [remark-gfm](https://github.com/remarkjs/remark-gfm) · [lucide icons](https://lucide.dev/)
+- [MDN: drag and drop](https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API) · [File signatures (magic bytes)](https://en.wikipedia.org/wiki/List_of_file_signatures) · [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)
+- [Playwright documentation](https://playwright.dev/docs/intro) · [WAI-ARIA authoring practices](https://www.w3.org/WAI/ARIA/apg/) (keyboard-accessible cards, labels)
 - [Socket.IO documentation](https://socket.io/docs/v4/) · [Passport](https://www.passportjs.org/) and [Google OAuth 2.0 for web server apps](https://developers.google.com/identity/protocols/oauth2/web-server)
 - [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) (account enumeration, session handling) and [argon2](https://github.com/ranisalt/node-argon2)
 - [Docker Compose specification](https://docs.docker.com/compose/compose-file/) and [Compose `depends_on` conditions](https://docs.docker.com/compose/how-tos/startup-order/)
@@ -680,8 +707,6 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
 - [Docker security: non-root containers](https://docs.docker.com/engine/security/), `nginx-unprivileged` image
 
 ### Use of AI
-
-<!-- TODO(Aloiki): add your bullet (tools used, for which tasks, how you checked the output). -->
 
 - **Jorge:** Coding assistants (Claude Code and Grok) were used as a pair-programmer for Nest
   modules, Prisma schema/migrations, specs under `docs/superpowers/`, and the unit/E2E tests around
@@ -705,6 +730,15 @@ endpoint; the OpenTelemetry Collector with Prometheus remote-write solved that. 
   was read, adjusted and verified by hand (`make` from a clean clone, `make smoke`, alert firing
   and resolving, CI runs). Design decisions (Caddy instead of nginx, OTLP push instead of a
   `/metrics` endpoint, what is published, what was removed) were made by the team.
+
+- **Aloiki:** Claude Code (Anthropic) was used as a pair-programmer for the frontend: scaffolding
+  components and hooks, the CSS-module refactor of the content builder, the server-side file
+  validation and its unit tests, and rewriting the E2E specs. It was also used to plan each phase
+  into small steps and to check the work against `AGENTS.md` and the UI rules. GitHub Copilot helped
+  with the responsive and navigation fixes for issues 17, 25 and 31. Every AI-written change was
+  checked against our test suite: backend unit tests and 28 Playwright end-to-end specs, run in CI
+  on every pull request. Each step was also checked by hand in the browser (including the responsive
+  pass at three widths), I read every diff, and nothing was merged until the suite was green.
 
 ## License
 
